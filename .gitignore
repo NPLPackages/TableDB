@@ -265,3 +265,4 @@ log.txt
 npl_packages/main
 *.sln
 *.csproj*
+*.vscode
