@@ -1,0 +1,42 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+  
+    {
+      "name": "launch-lua",
+      "type": "lua",
+      "request": "launch",
+      "workingDirectory": "${workspaceRoot}",
+      "sourceBasePath": "${workspaceRoot}",
+      "executable": "${workspaceRoot}/lua.exe",
+      "arguments": "main.lua",
+      "listenPublicly": false,
+      "listenPort": 56789,
+      "encoding": "UTF-8",
+      "env": {}
+    },
+    {
+      "name": "launch-gideros",
+      "type": "lua",
+      "request": "launch",
+      "workingDirectory": "${workspaceRoot}",
+      "giderosPath": "C:/Program Files (x86)/Gideros",
+      "gprojPath": "${workspaceRoot}/GPROJ.gproj",
+      "jumpToGiderosErrorPosition": false,
+      "stopGiderosWhenDebuggerStops": true,
+      "listenPublicly": false,
+      "listenPort": 56789,
+      "encoding": "UTF-8"
+    },
+    {
+      "name": "wait",
+      "type": "lua",
+      "request": "attach",
+      "workingDirectory": "${workspaceRoot}",
+      "sourceBasePath": "${workspaceRoot}",
+      "listenPublicly": false,
+      "listenPort": 56789,
+      "encoding": "UTF-8"
+    }
+  ]
+}
