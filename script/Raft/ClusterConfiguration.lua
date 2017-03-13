@@ -32,7 +32,7 @@ function ClusterConfiguration:__index(name)
 end
 
 function ClusterConfiguration:__tostring()
-    return format("ClusterConfiguration(term:%d,commitIndex:%d,votedFor:%d)", self.term, self.commitIndex, self.votedFor);
+    -- return format("ClusterConfiguration(term:%d,commitIndex:%d,votedFor:%d)", self.term, self.commitIndex, self.votedFor);
 end
 
 

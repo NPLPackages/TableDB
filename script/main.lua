@@ -23,18 +23,26 @@ logger.info(serverState)
 logger.info(ServerRole.Follower)
 
 
--- test = {}
--- for i=1,10 do
---   table.insert( test,function ( i )
---     print(i)
---   end )
--- end
+test = {
+  -- a = 1,
+  -- b = "tes",
+  -- c = 2.0
+}
+test = nil
 
--- for i,v in ipairs(test) do
---   print(i);
---   v(i);
--- end
+t2 = {
+  a2 = 2,
+  b2 = "3f"
+}
 
+for k,v in pairs(test) do
+  t2[k] = v
+
+end
+
+for k,v in pairs(t2) do
+  print(k,v)
+end
 
 --[[
 local function activate()

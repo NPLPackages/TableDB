@@ -134,6 +134,9 @@ function RaftServer:requestVote()
     end
 
     for _,peer in pairs(self.peers) do
+        request = {
+            messageType = RaftMessageType.RequestVoteRequest,
+        }
         -- request = new RaftRequestMessage();
         -- request.setMessageType(RaftMessageType.RequestVoteRequest);
         -- request.setDestination(peer.getId());
@@ -141,7 +144,7 @@ function RaftServer:requestVote()
         -- request.setLastLogIndex(self.logStore.getFirstAvailableIndex() - 1);
         -- request.setLastLogTerm(self.termForLastLog(self.logStore.getFirstAvailableIndex() - 1));
         -- request.setTerm(self.state.getTerm());
-        self.logger.debug("send %s to server %d with term %d", RaftMessageType.RequestVoteRequest.toString(), peer.getId(), self.state.getTerm());
+        self.logger.debug("send %s to server %d with term %d", RaftMessageType.RequestVoteRequest, peer.getId(), self.state.term);
         -- peer.SendRequest(request).whenCompleteAsync((RaftResponseMessage response, Throwable error) -> {
         --     handlePeerResponse(response, error);
         -- }, self.context.getScheduledExecutor());
