@@ -13,12 +13,14 @@ local PeerServer = commonlib.gettable("Raft.PeerServer");
 ------------------------------------------------------------
 ]]--
 
+local RaftMessageType = NPL.load("(gl)script/Raft.RaftMessageType.lua");
 
 local PeerServer = commonlib.gettable("Raft.PeerServer");
 
 function PeerServer:new(server, ctx, heartbeatTimeoutHandler) 
     local o = {
         clusterConfig = server,
+        rpcClient = nil,
         currentHeartbeatInterval = 0,
         heartbeatInterval = 0,
         rpcBackoffInterval = 0,
@@ -47,5 +49,20 @@ end
 
 
 function PeerServer:toBytes()
+    return ;
+end
+
+
+function PeerServer:getId()
+    return self.clusterConfig.id;
+end
+
+
+function PeerServer:SendRequest(request, callbackFunc)
+    isAppendRequest = request.messageType == RaftMessageType.AppendEntriesRequest or
+                      request.messageType == RaftMessageType.InstallSnapshotRequest;
+
+
+
     return ;
 end

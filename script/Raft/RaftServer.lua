@@ -18,6 +18,7 @@ local ServerRole = commonlib.gettable("Raft.ServerRole");
 NPL.load("(gl)script/Raft.PeerServer.lua");
 local ServerState = commonlib.gettable("Raft.PeerServer");
 NPL.load("(gl)script/ide/timer.lua");
+local RaftMessageType = NPL.load("(gl)script/Raft.RaftMessageType.lua");
 
 
 
@@ -136,25 +137,37 @@ function RaftServer:requestVote()
     for _,peer in pairs(self.peers) do
         request = {
             messageType = RaftMessageType.RequestVoteRequest,
+            destination = peer:getId(),
+            source = self.id,
+            lastLogIndex = self.logStore:getFirstAvailableIndex() - 1,
+            lastLogTerm = self:termForLastLog(self.logStore:getFirstAvailableIndex() - 1),
+            term = self.state.term,
         }
-        -- request = new RaftRequestMessage();
-        -- request.setMessageType(RaftMessageType.RequestVoteRequest);
-        -- request.setDestination(peer.getId());
-        -- request.setSource(self.id);
-        -- request.setLastLogIndex(self.logStore.getFirstAvailableIndex() - 1);
-        -- request.setLastLogTerm(self.termForLastLog(self.logStore.getFirstAvailableIndex() - 1));
-        -- request.setTerm(self.state.getTerm());
+
         self.logger.debug("send %s to server %d with term %d", RaftMessageType.RequestVoteRequest, peer.getId(), self.state.term);
-        -- peer.SendRequest(request).whenCompleteAsync((RaftResponseMessage response, Throwable error) -> {
-        --     handlePeerResponse(response, error);
-        -- }, self.context.getScheduledExecutor());
+        peer:SendRequest(request, function (response, error)
+            handlePeerResponse(response, error);
+        end);
     end
 end
 
 
 
 
+function RaftServer:termForLastLog(logIndex)
+    if(logIndex == 0) then
+        return 0;
+    end
 
+    if(logIndex >= self.logStore:getStartIndex()) then
+        return self.logStore:getLogEntryAt(logIndex):getTerm();
+    end
+    lastSnapshot = self.stateMachine:getLastSnapshot();
+    if(lastSnapshot == nil or logIndex ~= lastSnapshot:getLastLogIndex()) then
+        self.logger.error("logIndex is beyond the range that no term could be retrieved");
+    end
+    return lastSnapshot.getLastLogTerm();
+end
 
 
 
