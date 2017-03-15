@@ -82,6 +82,120 @@ function RaftServer:__tostring()
     -- return format("RaftServer(term:%d,commitIndex:%d,votedFor:%d)", self.term, self.commitIndex, self.votedFor);
 end
 
+function RaftServer:processRequest(request)
+    self.logger.debug(
+            format("Receive a %d message from %d with LastLogIndex=%d, LastLogTerm=%d, EntriesLength=%d, CommitIndex=%d and Term=%d",
+            request.messageType,
+            request.source,
+            request.lastLogIndex,
+            request.lastLogTerm,
+            (request.logEntries == nil and 0) or #request.logEntries,
+            request.commitIndex,
+            request.term));
+    response = nil;
+    if(request.messageType == RaftMessageType.AppendEntriesRequest) then
+        response = self:handleAppendEntriesRequest(request);
+    elseif(request.messageType == RaftMessageType.RequestVoteRequest) then
+        response = self:handleVoteRequest(request);
+    elseif(request.messageType == RaftMessageType.ClientRequest) then
+        response = self:handleClientRequest(request);
+    else
+        -- extended requests
+        response = self:handleExtendedMessages(request);
+    end
+    if(response ~= null) then
+        self.logger.debug(
+                format("Response back a %s message to %d with Accepted=%s, Term=%d, NextIndex=%d",
+                response.messageType,
+                response.destination,
+                response.isAccepted,
+                response.term,
+                response.nextIndex));
+    end
+    return response;
+end
+
+-- synchronized
+function RaftServer:handleAppendEntriesRequest(request)
+    -- we allow the server to be continue after term updated to save a round message
+    self:updateTerm(request.term);
+    -- Reset stepping down value to prevent self server goes down when leader crashes after sending a LeaveClusterRequest
+    if(self.steppingDown > 0) then
+        self.steppingDown = 2;
+    end
+    
+    if(request.term == self.state.term) then
+        if(self.role == ServerRole.Candidate) then
+            self:becomeFollower();
+        else if(self.role == ServerRole.Leader) then
+            self.logger.error("Receive AppendEntriesRequest from another leader(%d) with same term, there must be a bug, server exits", request.source);
+            self.stateMachine.exit(-1);
+        else
+            self.restartElectionTimer();
+        end
+    end
+    response = {
+        messageType = RaftMessageType.AppendEntriesResponse,
+        term = self.state.term,
+        source = self.id,
+        destination = request.destination,
+    }
+
+    -- After a snapshot the request.getLastLogIndex() may less than logStore.getStartingIndex() but equals to logStore.getStartingIndex() -1
+    -- In self case, log is Okay if request.getLastLogIndex() == lastSnapshot.getLastLogIndex() and request.getLastLogTerm() == lastSnapshot.getLastTerm()
+    logOkay = request.getLastLogIndex() == 0 or
+            (request.getLastLogIndex() < self.logStore.getFirstAvailableIndex() and
+                    request.getLastLogTerm() == self.termForLastLog(request.getLastLogIndex()));
+    if(request.term < self.state.term or (not logOkay) )then
+        response.setAccepted(false);
+        response.setNextIndex(self.logStore.getFirstAvailableIndex());
+        return response;
+    end
+    -- The role is Follower and log is okay now
+    if(request.getLogEntries() ~= null and request.getLogEntries().length > 0) then
+        -- write the logs to the store, first of all, check for overlap, and skip them
+        logEntries = request.getLogEntries();
+        index = request.getLastLogIndex() + 1;
+        logIndex = 0;
+        while(index < self.logStore.getFirstAvailableIndex() and
+                logIndex < logEntries.length and
+                logEntries[logIndex].term == self.logStore.getLogEntryAt(index).term) do
+            logIndex = logIndex + 1;
+            index = index + 1;
+        end
+        -- dealing with overwrites
+        while(index < self.logStore.getFirstAvailableIndex() and logIndex < logEntries.length) do
+            oldEntry = self.logStore.getLogEntryAt(index);
+            if(oldEntry.getValueType() == LogValueType.Application) then
+                self.stateMachine.rollback(index, oldEntry.getValue());
+            else if(oldEntry.getValueType() == LogValueType.Configuration) then
+                self.logger.info("revert a previous config change to config at %d", self.config.getLogIndex());
+                self.configChanging = false;
+            end
+            self.logStore.writeAt(index, logEntries[logIndex]);
+            logIndex = logIndex + 1;
+            index = index + 1;
+        end
+        -- append the new log entries
+        while(logIndex < logEntries.length) do
+            logEntry = logEntries[logIndex];
+            logIndex = logIndex + 1;
+            indexForEntry = self.logStore.append(logEntry);
+            if(logEntry.getValueType() == LogValueType.Configuration) then
+                self.logger.info("received a configuration change at index %d from leader", indexForEntry);
+                self.configChanging = true;
+            else
+                self.stateMachine.preCommit(indexForEntry, logEntry.getValue());
+            end
+        end
+    end
+    self.leader = request.source;
+    self.commit(request.commitIndex);
+    response.setAccepted(true);
+    response.setNextIndex(request.getLastLogIndex() + ((request.getLogEntries() == nil and 0 ) or request.getLogEntries().length) + 1);
+    return response;
+end
+
 function RaftServer:handleHeartbeatTimeout(peer)
     -- body
 end
@@ -121,7 +235,7 @@ end
 
 function RaftServer:requestVote()
     -- vote for self
-    self.logger.info("requestVote started with term %d", self.state.getTerm());
+    self.logger.info("requestVote started with term %d", self.state.term);
     self.state.setVotedFor(self.id);
     self.context.serverStateManager():persistState(self.state);
     self.votesGranted = self.votesGranted + 1;

@@ -34,12 +34,21 @@ function RpcListener:__tostring()
 end
 
 
-
+--Starts listening and handle all incoming messages with messageHandler
 function RpcListener:startListening(messageHandler)
-    -- rpc:new():init("Test.testRPC", function(self, msg) 
-    --     LOG.std(nil, "info", "category", msg);
-    --     msg.output=true; 
-    --     ParaEngine.Sleep(1);
-    --     return msg; 
-    -- end)
+    -- use rpc for incoming Request message
+    rpc:new():init("RaftRequestRPC", function(self, msg) 
+        LOG.std(nil, "info", "RaftRequestRPC", msg);
+        msg = messageHandler.processRequest(msg)
+        return msg; 
+    end)
+
+    -- use rpc for incoming Response message
+    rpc:new():init("RaftResponseRPC", function(self, msg) 
+        LOG.std(nil, "info", "RaftResponseRPC", msg);
+        msg = messageHandler.processResponse(msg)
+        return msg; 
+    end)
+
+
 end

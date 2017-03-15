@@ -6,6 +6,7 @@ Desc:
 ]]--
 
 NPL.load("(gl)script/ide/commonlib.lua");
+NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 NPL.load("(gl)script/Raft/ServerState.lua");
 
 local ServerState = commonlib.gettable("Raft.ServerState");
@@ -14,35 +15,48 @@ logger = commonlib.logging.GetLogger("")
 
 local serverState = ServerState:new()
 
-logger.info(serverState)
+-- logger.info(serverState)
 
--- must be colon, to provide the hidden self
-serverState:increaseTerm()
-logger.info(serverState)
+-- -- must be colon, to provide the hidden self
+-- serverState:increaseTerm()
+-- logger.info(serverState)
 
-logger.info(ServerRole.Follower)
+-- logger.info(ServerRole.Follower)
 
 
-test = {
-  -- a = 1,
-  -- b = "tes",
-  -- c = 2.0
-}
-test = nil
 
-t2 = {
-  a2 = 2,
-  b2 = "3f"
-}
+NPL.load("(gl)script/ide/System/Concurrent/rpc.lua");
+local rpc = commonlib.gettable("System.Concurrent.Async.rpc");
+rpc:new():init("Test.testRPC", function(self, msg) 
+	LOG.std(nil, "info", "category", msg);
+	msg.output=true; 
+	-- ParaEngine.Sleep(1);
+	return msg; 
+end)
 
-for k,v in pairs(test) do
-  t2[k] = v
+NPL.StartNetServer("127.0.0.1", 8099);
+Test.testRPC:MakePublic();
+print(Test.testRPC)
 
-end
+-- now we can invoke it anywhere in any thread or remote address.
+Test.testRPC("", {"input"}, function(err, msg) 
+   LOG.std(nil, "info", "category", msg);
+	assert(msg.output == true and msg[1] == "input")
+end);
 
-for k,v in pairs(t2) do
-  print(k,v)
-end
+-- -- time out in 500ms
+-- Test.testRPC("(worker1)", {"input"}, function(err, msg) 
+-- 	assert(err == "timeout" and msg==nil)
+-- 	echo(err);
+-- end, 500);
+
+NPL.activate("rpc/Test.testRPC.lua",{
+		type="run", 
+		msg = {"imputtest"}, 
+		name = "Test.testRPC",
+		-- callbackId = self.next_run_id, 
+		callbackThread="(osAsync)",
+	})
 
 --[[
 local function activate()
