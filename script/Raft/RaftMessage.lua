@@ -35,6 +35,7 @@ function RaftMessage:__index(name)
 end
 
 function RaftMessage:__tostring()
-    return format("RaftMessage(messageType:%d,source:%d,destination:%d,term:%d)",
-     self.messageType, self.source, self.destination, self.term);
+    -- return format("RaftMessage(messageType:%d,source:%d,destination:%d,term:%d)",
+    --  self.messageType, self.source, self.destination, self.term);
+    return util.table_print(self)
 end

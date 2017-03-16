@@ -80,6 +80,7 @@ end
 
 function RaftServer:__tostring()
     -- return format("RaftServer(term:%d,commitIndex:%d,votedFor:%d)", self.term, self.commitIndex, self.votedFor);
+    return util.table_print(self)
 end
 
 function RaftServer:processRequest(request)

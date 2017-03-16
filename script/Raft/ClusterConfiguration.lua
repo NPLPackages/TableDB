@@ -33,6 +33,7 @@ end
 
 function ClusterConfiguration:__tostring()
     -- return format("ClusterConfiguration(term:%d,commitIndex:%d,votedFor:%d)", self.term, self.commitIndex, self.votedFor);
+    return util.table_print(self)
 end
 
 

@@ -13,6 +13,8 @@ local PeerServer = commonlib.gettable("Raft.PeerServer");
 ------------------------------------------------------------
 ]]--
 
+
+
 local RaftMessageType = NPL.load("(gl)script/Raft.RaftMessageType.lua");
 
 local PeerServer = commonlib.gettable("Raft.PeerServer");
@@ -44,12 +46,21 @@ function PeerServer:__index(name)
 end
 
 function PeerServer:__tostring()
-    return format("PeerServer(term:%d,commitIndex:%d,votedFor:%d)", self.term, self.commitIndex, self.votedFor);
+    return util.table_print(self);
 end
 
 
 function PeerServer:toBytes()
     return ;
+end
+
+
+function PeerServer:setFree()
+   self.busyFlag.set(0);
+end
+
+function PeerServer:makeBusy()
+    return self.busyFlag.compareAndSet(0, 1);
 end
 
 
@@ -61,6 +72,15 @@ end
 function PeerServer:SendRequest(request, callbackFunc)
     isAppendRequest = request.messageType == RaftMessageType.AppendEntriesRequest or
                       request.messageType == RaftMessageType.InstallSnapshotRequest;
+
+    -- need to hand exception here, with_timeout???
+    RaftRequestRPC(request.source, request.destination, request, function(err, msg)
+                       if(isAppendRequest) then
+                           self:setFree();
+                       end
+                       
+                       self:resumeHeartbeatingSpeed();
+                   end)
 
 
 

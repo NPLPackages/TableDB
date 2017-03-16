@@ -11,15 +11,20 @@ local RpcListener = commonlib.gettable("Raft.RpcListener");
 ------------------------------------------------------------
 ]]--
 
-NPL.load("(gl)script/ide/System/Concurrent/rpc.lua");
+NPL.load("(gl)script/Raft/rpc.lua");
 local rpc = commonlib.gettable("System.Concurrent.Async.rpc");
-
-
+NPL.load("(gl)script/ide/socket/url.lua");
+local url = commonlib.gettable("commonlib.socket.url")
+NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
+local util = commonlib.gettable("System.Compiler.lib.util")
 
 local RpcListener = commonlib.gettable("Raft.RpcListener");
 
-function RpcListener:new() 
+function RpcListener:new(ip, port, servers) 
     local o = {
+        ip = ip,
+        port = port,
+        servers = servers,
     };
     setmetatable(o, self);
     return o;
@@ -30,7 +35,7 @@ function RpcListener:__index(name)
 end
 
 function RpcListener:__tostring()
-    return format("RpcListener(term:%d,commitIndex:%d,votedFor:%d)", self.term, self.commitIndex, self.votedFor);
+    return util.table_print(self)
 end
 
 
@@ -43,12 +48,27 @@ function RpcListener:startListening(messageHandler)
         return msg; 
     end)
 
+    -- port is need to be string here??
+    NPL.StartNetServer(self.ip, tostring(self.port));
+
+    for _, server in ipairs(self.servers) do
+        local pased_url = url.parse(server.endPoint)
+        NPL.AddNPLRuntimeAddress({host = pased_url.host, port = tostring(pased_url.port), nid = server.endPoint})
+    end
+    RaftRequestRPC:MakePublic();
+
+
+
+
+    -- XXX: need handle response here??
     -- use rpc for incoming Response message
-    rpc:new():init("RaftResponseRPC", function(self, msg) 
-        LOG.std(nil, "info", "RaftResponseRPC", msg);
-        msg = messageHandler.processResponse(msg)
-        return msg; 
-    end)
+    -- rpc:new():init("RaftResponseRPC", function(self, msg) 
+    --     LOG.std(nil, "info", "RaftResponseRPC", msg);
+    --     msg = messageHandler.processResponse(msg)
+    --     return msg; 
+    -- end)
+
+    -- RaftResponseRPC:MakePublic();
 
 
 end

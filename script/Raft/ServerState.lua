@@ -29,7 +29,8 @@ function ServerState:__index(name)
 end
 
 function ServerState:__tostring()
-    return format("ServerState(term:%d,commitIndex:%d,votedFor:%d)", self.term, self.commitIndex, self.votedFor);
+    -- return format("ServerState(term:%d,commitIndex:%d,votedFor:%d)", self.term, self.commitIndex, self.votedFor);
+    return util.table_print(self)
 end
 
 

@@ -11,6 +11,9 @@ NPL.load("(gl)script/Raft/ServerState.lua");
 
 local ServerState = commonlib.gettable("Raft.ServerState");
 local ServerRole = NPL.load("(gl)script/Raft/ServerRole.lua");
+local util = commonlib.gettable("System.Compiler.lib.util")
+
+
 logger = commonlib.logging.GetLogger("")
 
 local serverState = ServerState:new()
@@ -23,27 +26,32 @@ local serverState = ServerState:new()
 
 -- logger.info(ServerRole.Follower)
 
+-- test = {
+--   a = "k",
+--   b ="l"
+-- }
 
+-- util.table_print(test)
 
-NPL.load("(gl)script/Raft/rpc.lua");
-local rpc = commonlib.gettable("System.Concurrent.Async.rpc");
-rpc:new():init("Test.testRPC", function(self, msg) 
-	LOG.std(nil, "info", "category", msg);
-	msg.output=true; 
-	-- ParaEngine.Sleep(1);
-	return msg; 
-end)
+-- NPL.load("(gl)script/Raft/rpc.lua");
+-- local rpc = commonlib.gettable("System.Concurrent.Async.rpc");
+-- rpc:new():init("Test.testRPC", function(self, msg) 
+-- 	LOG.std(nil, "info", "category", msg);
+-- 	msg.output=true; 
+-- 	-- ParaEngine.Sleep(1);
+-- 	return msg; 
+-- end)
 
-NPL.StartNetServer("127.0.0.1", "60001");
-NPL.AddNPLRuntimeAddress({host = "127.0.0.1", port = "60002", nid = "server2"})
-Test.testRPC:MakePublic();
-print(Test.testRPC)
+-- NPL.StartNetServer("127.0.0.1", "60001");
+-- NPL.AddNPLRuntimeAddress({host = "127.0.0.1", port = "60002", nid = "server2"})
+-- Test.testRPC:MakePublic();
+-- print(Test.testRPC)
 
--- now we can invoke it anywhere in any thread or remote address.
-while(Test.testRPC("server1:","server2:", {"input"}, function(err, msg) 
-   LOG.std(nil, "info", "category", msg);
-	assert(msg.output == true and msg[1] == "input")
-end) ~= 0) do end;
+-- -- now we can invoke it anywhere in any thread or remote address.
+-- while(Test.testRPC("server1:","server2:", {"input"}, function(err, msg) 
+--    LOG.std(nil, "info", "category", msg);
+-- 	assert(msg.output == true and msg[1] == "input")
+-- end) ~= 0) do end;
 
 -- -- time out in 500ms
 -- Test.testRPC("(worker1)", {"input"}, function(err, msg) 

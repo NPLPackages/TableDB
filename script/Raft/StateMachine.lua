@@ -29,7 +29,8 @@ function StateMachine:__index(name)
 end
 
 function StateMachine:__tostring()
-    return format("StateMachine(term:%d,commitIndex:%d,votedFor:%d)", self.term, self.commitIndex, self.votedFor);
+    -- return format("StateMachine(term:%d,commitIndex:%d,votedFor:%d)", self.term, self.commitIndex, self.votedFor);
+    return util.table_print(self)
 end
 
 

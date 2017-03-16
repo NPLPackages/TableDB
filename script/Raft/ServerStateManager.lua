@@ -35,6 +35,7 @@ end
 
 function ServerStateManager:__tostring()
     -- return format("ServerStateManager(term:%d,commitIndex:%d,votedFor:%d)", self.term, self.commitIndex, self.votedFor);
+    return util.table_print(self)
 end
 
 

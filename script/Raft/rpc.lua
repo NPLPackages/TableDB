@@ -94,6 +94,8 @@ end
 
 -- private: whenever a message arrives
 function rpc:OnActivated(msg)
+
+	-- TODO: accept the connection
 	if(msg.name) then
 		local rpc_ = rpc.GetInstance(msg.name);
 		if(type(rpc_) == "table" and rpc_.OnActivated) then
@@ -103,7 +105,11 @@ function rpc:OnActivated(msg)
 	end
 	if(msg.type=="run") then
 		local result = self:handle_request(msg.msg);
-		print(format("%s%s%s", msg.callbackThread, msg.remoteAddress, self.filename))
+		-- print(format("%s%s%s", msg.callbackThread, msg.remoteAddress, self.filename))
+
+
+		-- call back on the remote
+		-- TODO: should deal with error, activate_with_timeout??
 		while(NPL.activate(format("%s%s%s", msg.callbackThread, msg.remoteAddress, self.filename),
 		 {type="result", result = result, err=nil, callbackId = msg.callbackId}) ~= 0) do end;
 	elseif(msg.type== "result" and msg.callbackId) then
@@ -178,6 +184,8 @@ function rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
 		end});
 		callback.timer:Change(timeout, nil)
 	end
+
+	-- TODO: handle error
 	return NPL.activate(format("%s%s", self.remoteAddress or "", self.filename), {
 		type="run", 
 		msg = msg, 
