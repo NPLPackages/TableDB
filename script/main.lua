@@ -25,7 +25,7 @@ local serverState = ServerState:new()
 
 
 
-NPL.load("(gl)script/ide/System/Concurrent/rpc.lua");
+NPL.load("(gl)script/Raft/rpc.lua");
 local rpc = commonlib.gettable("System.Concurrent.Async.rpc");
 rpc:new():init("Test.testRPC", function(self, msg) 
 	LOG.std(nil, "info", "category", msg);
@@ -34,15 +34,16 @@ rpc:new():init("Test.testRPC", function(self, msg)
 	return msg; 
 end)
 
-NPL.StartNetServer("127.0.0.1", 8099);
+NPL.StartNetServer("127.0.0.1", "60001");
+NPL.AddNPLRuntimeAddress({host = "127.0.0.1", port = "60002", nid = "server2"})
 Test.testRPC:MakePublic();
 print(Test.testRPC)
 
 -- now we can invoke it anywhere in any thread or remote address.
-Test.testRPC("", {"input"}, function(err, msg) 
+while(Test.testRPC("server1:","server2:", {"input"}, function(err, msg) 
    LOG.std(nil, "info", "category", msg);
 	assert(msg.output == true and msg[1] == "input")
-end);
+end) ~= 0) do end;
 
 -- -- time out in 500ms
 -- Test.testRPC("(worker1)", {"input"}, function(err, msg) 
@@ -50,13 +51,17 @@ end);
 -- 	echo(err);
 -- end, 500);
 
-NPL.activate("rpc/Test.testRPC.lua",{
-		type="run", 
-		msg = {"imputtest"}, 
-		name = "Test.testRPC",
-		-- callbackId = self.next_run_id, 
-		callbackThread="(osAsync)",
-	})
+-- NPL.activate("rpc/Test.testRPC.lua",{
+-- 		type="run", 
+-- 		msg = {"imputtest"}, 
+-- 		name = "Test.testRPC",
+-- 		-- callbackId = self.next_run_id, 
+-- 		callbackThread="(osAsync)",
+-- 	})
+
+
+-- NPL.load("(gl)script/test/network/TestSimpleServer.lua");
+-- test_start_simple_server();
 
 --[[
 local function activate()
