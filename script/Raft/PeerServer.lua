@@ -55,12 +55,14 @@ function PeerServer:toBytes()
 end
 
 
+-- make sure this happens in one NPL thread(state)
 function PeerServer:setFree()
-   self.busyFlag.set(0);
+   self.busyFlag = 0;
 end
 
 function PeerServer:makeBusy()
-    return self.busyFlag.compareAndSet(0, 1);
+    -- return self.busyFlag.compareAndSet(0, 1);
+    self.busyFlag = 1;
 end
 
 
@@ -69,11 +71,13 @@ function PeerServer:getId()
 end
 
 
-function PeerServer:SendRequest(request, callbackFunc)
+function PeerServer:SendRequest(request)
     isAppendRequest = request.messageType == RaftMessageType.AppendEntriesRequest or
                       request.messageType == RaftMessageType.InstallSnapshotRequest;
 
-    -- need to hand exception here, with_timeout???
+    -- need to handle exception here, use with_timeout???
+    -- this is sync..., if so should we solve this?
+    -- RaftRequestRPC is init in the RpcListener, suppose we could directly use here
     RaftRequestRPC(request.source, request.destination, request, function(err, msg)
                        if(isAppendRequest) then
                            self:setFree();
@@ -85,4 +89,17 @@ function PeerServer:SendRequest(request, callbackFunc)
 
 
     return ;
+end
+
+
+
+
+function PeerServer:slowDownHeartbeating()
+    self.currentHeartbeatInterval = math.min(self.maxHeartbeatInterval, self.currentHeartbeatInterval + self.rpcBackoffInterval);
+end
+
+function PeerServer:resumeHeartbeatingSpeed()
+    if(self.currentHeartbeatInterval > self.heartbeatInterval) then
+        self.currentHeartbeatInterval = self.heartbeatInterval;
+    end
 end

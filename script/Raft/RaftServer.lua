@@ -43,7 +43,15 @@ function RaftServer:new(ctx)
         logger = commonlib.logging.GetLogger(""),
         electionTimer = commonlib.Timer:new({callbackFunc = function(timer)
             RaftServer:handleElectionTimeout()
-        end})
+        end}),
+        
+        -- fields for extended messages
+        serverToJoin = nil;
+        configChanging = false;
+        catchingUp = false;
+        steppingDown = 0;
+        snapshotInProgress = 0;
+        -- end fields for extended messages
     };
     if not o.state then
         o.state = ServerState:new()
@@ -128,11 +136,11 @@ function RaftServer:handleAppendEntriesRequest(request)
     if(request.term == self.state.term) then
         if(self.role == ServerRole.Candidate) then
             self:becomeFollower();
-        else if(self.role == ServerRole.Leader) then
+        elseif(self.role == ServerRole.Leader) then
             self.logger.error("Receive AppendEntriesRequest from another leader(%d) with same term, there must be a bug, server exits", request.source);
             self.stateMachine.exit(-1);
         else
-            self.restartElectionTimer();
+            self:restartElectionTimer();
         end
     end
     response = {
@@ -148,7 +156,7 @@ function RaftServer:handleAppendEntriesRequest(request)
             (request.getLastLogIndex() < self.logStore.getFirstAvailableIndex() and
                     request.getLastLogTerm() == self.termForLastLog(request.getLastLogIndex()));
     if(request.term < self.state.term or (not logOkay) )then
-        response.setAccepted(false);
+        response.accepted = false;
         response.setNextIndex(self.logStore.getFirstAvailableIndex());
         return response;
     end
@@ -169,7 +177,7 @@ function RaftServer:handleAppendEntriesRequest(request)
             oldEntry = self.logStore.getLogEntryAt(index);
             if(oldEntry.getValueType() == LogValueType.Application) then
                 self.stateMachine.rollback(index, oldEntry.getValue());
-            else if(oldEntry.getValueType() == LogValueType.Configuration) then
+            elseif(oldEntry.getValueType() == LogValueType.Configuration) then
                 self.logger.info("revert a previous config change to config at %d", self.config.getLogIndex());
                 self.configChanging = false;
             end
@@ -192,10 +200,39 @@ function RaftServer:handleAppendEntriesRequest(request)
     end
     self.leader = request.source;
     self.commit(request.commitIndex);
-    response.setAccepted(true);
+    response.accepted = true;
     response.setNextIndex(request.getLastLogIndex() + ((request.getLogEntries() == nil and 0 ) or request.getLogEntries().length) + 1);
     return response;
 end
+
+-- synchronized
+function RaftServer:handleVoteRequest(request)
+    -- we allow the server to be continue after term updated to save a round message
+    self.updateTerm(request.getTerm());
+    -- Reset stepping down value to prevent this server goes down when leader crashes after sending a LeaveClusterRequest
+    if(self.steppingDown > 0) then
+        self.steppingDown = 2;
+    end
+    
+    response = {
+        messageType = RaftMessageType.RequestVoteResponse,
+        source=self.id,
+        destination = request.source,
+        term = self.state.term,
+    }
+    logOkay = request.lastLogTerm > self.logStore.getLastLogEntry().getTerm() or
+            (request.lastLogTerm == self.logStore.getLastLogEntry().getTerm() and
+             self.logStore.getFirstAvailableIndex() - 1 <= request.getLastLogIndex());
+    grant = request.term == self.state.term and logOkay and (self.state.getVotedFor() == request.getSource() or self.state.getVotedFor() == -1);
+    response.accepted = grant;
+    if(grant) then
+        self.state.setVotedFor(request.getSource());
+        self.context.getServerStateManager().persistState(self.state);
+    end
+    return response;
+end
+
+
 
 function RaftServer:handleHeartbeatTimeout(peer)
     -- body
@@ -259,14 +296,38 @@ function RaftServer:requestVote()
             term = self.state.term,
         }
 
-        self.logger.debug("send %s to server %d with term %d", RaftMessageType.RequestVoteRequest, peer.getId(), self.state.term);
-        peer:SendRequest(request, function (response, error)
-            handlePeerResponse(response, error);
-        end);
+        self.logger.debug("send %s to server %d with term %d", RaftMessageType.RequestVoteRequest, peer:getId(), self.state.term);
+        peer:SendRequest(request);
     end
 end
 
+function RaftServer:becomeFollower()
+    -- stop heartbeat for all peers
+    for _, server in ipairs(self.peers) do
+        if(server.getHeartbeatTask() ~= null) then
+            server.getHeartbeatTask().cancel(false);
+        end
+        server.enableHeartbeat(false);
+    end
+    self.serverToJoin = null;
+    self.role = ServerRole.Follower;
+    self.restartElectionTimer();
+end
 
+function RaftServer:updateTerm(term)
+    if(term > self.state.getTerm()) then
+        self.state.term = term;
+        self.state.votedFor= -1;
+        self.electionCompleted = false;
+        self.votesGranted = 0;
+        self.votesResponded = 0;
+        self.context.getServerStateManager().persistState(self.state);
+        self:becomeFollower();
+        return true;
+    end
+
+    return false;
+end    
 
 
 function RaftServer:termForLastLog(logIndex)
