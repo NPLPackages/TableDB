@@ -7,7 +7,7 @@ Desc:
 Cluster server configuration 
 a class to hold the configuration information for a server in a cluster
 ------------------------------------------------------------
-NPL.load("(gl)script/Raft.ClusterServer.lua");
+NPL.load("(gl)script/Raft/ClusterServer.lua");
 local ClusterServer = commonlib.gettable("Raft.ClusterServer");
 ------------------------------------------------------------
 ]]--

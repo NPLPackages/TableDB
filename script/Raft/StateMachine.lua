@@ -6,7 +6,7 @@ Desc:
 
 
 ------------------------------------------------------------
-NPL.load("(gl)script/Raft.StateMachine.lua");
+NPL.load("(gl)script/Raft/StateMachine.lua");
 local StateMachine = commonlib.gettable("Raft.StateMachine");
 ------------------------------------------------------------
 ]]--

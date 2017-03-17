@@ -6,19 +6,19 @@ Desc:
 
 
 ------------------------------------------------------------
-NPL.load("(gl)script/Raft.RaftServer.lua");
+NPL.load("(gl)script/Raft/RaftServer.lua");
 local RaftServer = commonlib.gettable("Raft.RaftServer");
 ------------------------------------------------------------
 ]]--
 
-NPL.load("(gl)script/Raft.ServerState.lua");
+NPL.load("(gl)script/Raft/ServerState.lua");
 local ServerState = commonlib.gettable("Raft.ServerState");
-NPL.load("(gl)script/Raft.ServerRole.lua");
+NPL.load("(gl)script/Raft/ServerRole.lua");
 local ServerRole = commonlib.gettable("Raft.ServerRole");
-NPL.load("(gl)script/Raft.PeerServer.lua");
+NPL.load("(gl)script/Raft/PeerServer.lua");
 local ServerState = commonlib.gettable("Raft.PeerServer");
 NPL.load("(gl)script/ide/timer.lua");
-local RaftMessageType = NPL.load("(gl)script/Raft.RaftMessageType.lua");
+local RaftMessageType = NPL.load("(gl)script/Raft/RaftMessageType.lua");
 
 
 
@@ -28,21 +28,21 @@ local RaftServer = commonlib.gettable("Raft.RaftServer");
 function RaftServer:new(ctx) 
     local o = {
         contex = ctx,
-        id = ctx.serverStateManager.serverStateManager.getServerId,
-        state = ctx.serverStateManager.serverStateManager.readState(),
-        logStore = ctx.serverStateManager.serverStateManager.loadLogStore(),
-        config = ctx.serverStateManager.serverStateManager.loadClusterConfiguration(),
+        id = ctx.serverStateManager.getServerId,
+        state = ctx.serverStateManager.readState(),
+        logStore = ctx.serverStateManager.loadLogStore(),
+        config = ctx.serverStateManager.loadClusterConfiguration(),
         stateMachine = ctx.stateMachine,
         votesGranted = 0,
         votesResponded = 0,
         leader = -1,
         electionCompleted = false,
-        snapshotInProgress = 0, --atomic need lock??
+        snapshotInProgress = 0, --atomic
         role = ServerRole.Follower,
         peers = {},
         logger = commonlib.logging.GetLogger(""),
         electionTimer = commonlib.Timer:new({callbackFunc = function(timer)
-            RaftServer:handleElectionTimeout()
+            o:handleElectionTimeout()
         end}),
         
         -- fields for extended messages
@@ -61,12 +61,12 @@ function RaftServer:new(ctx)
     for _,server in ipairs(o.config.servers) do
         if server.id ~= o.id then
             table.insert(o.peers, server.id, PeerServer:new(server, o.context,
-            function (peerServer)
-                o:handleHeartbeatTimeout(peerServer)
-            end))
+                                                            function (peerServer)
+                                                                o:handleHeartbeatTimeout(peerServer)
+                                                            end))
         end
     end
-    -- o.quickCommitIndex = o.state.getCommitIndex();
+    o.quickCommitIndex = o.state.commitIndex;
 
     -- dedicated commit thread
      o.commitingThreadName = "commitingThread"..o.id;
@@ -235,8 +235,87 @@ end
 
 
 function RaftServer:handleHeartbeatTimeout(peer)
-    -- body
+    self.logger.debug("Heartbeat timeout for %d", peer.getId());
+    if(self.role == ServerRole.Leader) then
+        self:requestAppendEntries(peer);
+        -- synchronized(peer){
+        if(peer.heartbeatEnabled) then
+            -- Schedule another heartbeat if heartbeat is still enabled
+            peer.heartbeatTimer:Change(peer.getCurrentHeartbeatInterval(), nil);
+        else
+            self.logger.debug("heartbeat is disabled for peer %d", peer.getId());
+        end
+    else
+        self.logger.info("Receive a heartbeat event for %d while no longer as a leader", peer:getId());
+    end
 end
+
+function RaftServer:requestAppendEntries(peer)
+    if(peer:makeBusy()) then
+        peer:SendRequest(self:createAppendEntriesRequest(peer))
+        --     .whenCompleteAsync((RaftResponseMessage response, Throwable error) -> {
+        --         try{
+        --             handlePeerResponse(response, error);
+        --         }catch(Throwable err){
+        --             self.logger.error("Uncaught exception %s", err.toString());
+        --         }
+        --     }, self.context.getScheduledExecutor());
+        return true;
+    end
+
+    self.logger.debug("Server %d is busy, skip the request", peer.getId());
+    return false;
+end
+
+
+function RaftServer:createAppendEntriesRequest(peer)
+    lastLogIndex = 0;
+    -- synchronized(this){
+    startingIndex = self.logStore.getStartIndex();
+    currentNextIndex = self.logStore.getFirstAvailableIndex();
+    commitIndex = self.quickCommitIndex;
+    term = self.state.getTerm();
+    -- }
+    -- synchronized(peer){
+    if(peer.getNextLogIndex() == 0) then
+        peer.setNextLogIndex(currentNextIndex);
+    end
+    lastLogIndex = peer.getNextLogIndex() - 1;
+    -- }
+    if(lastLogIndex >= currentNextIndex) then
+        self.logger.error("Peer's lastLogIndex is too large %d v.s. %d, server exits", lastLogIndex, currentNextIndex);
+        self.stateMachine.exit(-1);
+    end
+    -- -- for syncing the snapshots, if the lastLogIndex == lastSnapshot.getLastLogIndex, we could get the term from the snapshot
+    -- if(lastLogIndex > 0 and lastLogIndex < startingIndex - 1) then
+    --     return self:createSyncSnapshotRequest(peer, lastLogIndex, term, commitIndex);
+    -- end
+    lastLogTerm = self:termForLastLog(lastLogIndex);
+    endIndex = math.min(currentNextIndex, lastLogIndex + 1 + context.getRaftParameters().getMaximumAppendingSize());
+    logEntries = self.logStore.getLogEntries(lastLogIndex + 1, endIndex);
+    if not ((lastLogIndex + 1) >= endIndex) then
+         logEntries = nil
+    end
+    self.logger.debug(
+            "An AppendEntries Request for %d with LastLogIndex=%d, LastLogTerm=%d, EntriesLength=%d, CommitIndex=%d and Term=%d",
+            peer.getId(),
+            lastLogIndex,
+            lastLogTerm,
+            (logEntries == nil and 0 ) or #logEntries,
+            commitIndex,
+            term);
+    requestMessage = {
+        messageType = RaftMessageType.AppendEntriesRequest,
+        source = self.id,
+        destination = peer.getId(),
+        lastLogIndex = lastLogIndex,
+        logEntries = logEntries,
+        commitIndex = commitIndex,
+        term = term,
+    }
+    return requestMessage;
+end
+
 
 function RaftServer:handleElectionTimeout()
     -- TODO: add extra
@@ -264,10 +343,28 @@ function RaftServer:handleElectionTimeout()
 end
 
 function RaftServer:restartElectionTimer()
+    -- don't start the election timer while this server is still catching up the logs
+    if(self.catchingUp) then
+        return;
+    end
+
+    -- do not need to kill timer
+    if self.electionTimer:IsEnabled() then
+        self.electionTimer:Change()
+    end
+    
     raftParameters = self.context.raftParameters
     delta = raftParameters.electionTimeoutUpperBound - raftParameters.electionTimeoutLowerBound
     electionTimeout = raftParameters.electionTimeoutLowerBound + math.random(0, delta)
     self.electionTimer:Change(0, electionTimeout)
+end
+
+function RaftServer:stopElectionTimer()
+    if not self.electionTimer:IsEnabled() then
+        self.logger.error("Election Timer is never started but is requested to stop, protential a bug");
+    end
+
+    self.electionTimer:Change()
 end
 
 

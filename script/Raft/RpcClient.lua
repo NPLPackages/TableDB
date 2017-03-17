@@ -6,7 +6,7 @@ Desc:
 
 
 ------------------------------------------------------------
-NPL.load("(gl)script/Raft.RpcClient.lua");
+NPL.load("(gl)script/Raft/RpcClient.lua");
 local RpcClient = commonlib.gettable("Raft.RpcClient");
 ------------------------------------------------------------
 ]]--

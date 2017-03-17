@@ -6,7 +6,7 @@ Desc:
 
 
 ------------------------------------------------------------
-NPL.load("(gl)script/Raft.RaftParameters.lua");
+NPL.load("(gl)script/Raft/RaftParameters.lua");
 local RaftParameters = commonlib.gettable("Raft.RaftParameters");
 ------------------------------------------------------------
 ]]--

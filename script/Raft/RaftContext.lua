@@ -6,7 +6,7 @@ Desc:
 
 
 ------------------------------------------------------------
-NPL.load("(gl)script/Raft.RaftContext.lua");
+NPL.load("(gl)script/Raft/RaftContext.lua");
 local RaftContext = commonlib.gettable("Raft.RaftContext");
 ------------------------------------------------------------
 ]]--
@@ -14,12 +14,13 @@ local RaftContext = commonlib.gettable("Raft.RaftContext");
 
 local RaftContext = commonlib.gettable("Raft.RaftContext");
 
-function RaftContext:new(ctx) 
+function RaftContext:new(stateManager, stateMachine, raftParameters, rpcListener) 
     local o = {
-        serverStateManager = ctx.serverStateManager,
-        stateMachine = ctx.stateMachine,
-        raftParameters = ctx.stateMachine,
+        serverStateManager = stateManager,
+        stateMachine = stateMachine,
+        raftParameters = raftParameters,
         -- logger factory
+        rpcListener = rpcListener,
     };
     setmetatable(o, self);
     return o;
@@ -30,7 +31,6 @@ function RaftContext:__index(name)
 end
 
 function RaftContext:__tostring()
-    -- return format("RaftContext(term:%d,commitIndex:%d,votedFor:%d)", self.term, self.commitIndex, self.votedFor);
     return util.table_print(self)
 end
 

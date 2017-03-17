@@ -8,16 +8,30 @@ Desc:
 NPL.load("(gl)script/ide/commonlib.lua");
 NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 NPL.load("(gl)script/Raft/ServerState.lua");
+NPL.load("(gl)script/Raft/ServerStateManager.lua");
+NPL.load("(gl)script/Raft/RaftParameters.lua");
 
 -- local ServerState = commonlib.gettable("Raft.ServerState");
 -- local ServerRole = NPL.load("(gl)script/Raft/ServerRole.lua");
--- local util = commonlib.gettable("System.Compiler.lib.util")
+local ServerStateManager = commonlib.gettable("Raft.ServerStateManager");
+local RaftParameters = commonlib.gettable("Raft.RaftParameters");
+local util = commonlib.gettable("System.Compiler.lib.util")
+local logger = commonlib.logging.GetLogger("")
+
+local configDir = "script/config/"
+
+-- this server id, should load from config
+local serverId = 1
+stateManager = ServerStateManager:new(configDir);
+config = stateManager:loadClusterConfiguration();
+
+local localEndpoint = config:getServer(serverId).endpoint
+logger.info(format("localEndpoint:%s", localEndpoint))
 
 
--- logger = commonlib.logging.GetLogger("")
+
 
 -- local serverState = ServerState:new()
-
 
 -- NPL.load("(gl)script/ide/timer.lua");
 

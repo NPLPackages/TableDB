@@ -6,7 +6,7 @@ Desc:
 
 
 ------------------------------------------------------------
-local RaftMessageType = NPL.load("(gl)script/Raft.RaftMessageType.lua");
+local RaftMessageType = NPL.load("(gl)script/Raft/RaftMessageType.lua");
 ------------------------------------------------------------
 ]]--
 

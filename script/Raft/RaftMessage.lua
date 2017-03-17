@@ -6,7 +6,7 @@ Desc:
 
 
 ------------------------------------------------------------
-NPL.load("(gl)script/Raft.RaftMessage.lua");
+NPL.load("(gl)script/Raft/RaftMessage.lua");
 local RaftMessage = commonlib.gettable("Raft.RaftMessage");
 ------------------------------------------------------------
 ]]--

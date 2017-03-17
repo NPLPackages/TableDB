@@ -6,7 +6,7 @@ Desc:
 
 
 ------------------------------------------------------------
-NPL.load("(gl)script/Raft.ServerState.lua");
+NPL.load("(gl)script/Raft/ServerState.lua");
 local ServerState = commonlib.gettable("Raft.ServerState");
 ------------------------------------------------------------
 ]]--

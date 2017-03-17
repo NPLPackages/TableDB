@@ -6,7 +6,7 @@ Desc:
 
 
 ------------------------------------------------------------
-local ServerRole = NPL.load("(gl)script/Raft.ServerRole.lua");
+local ServerRole = NPL.load("(gl)script/Raft/ServerRole.lua");
 ------------------------------------------------------------
 ]]--
 
