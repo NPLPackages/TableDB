@@ -43,8 +43,7 @@ function RaftServer:new(ctx)
         snapshotInProgress = 0, --atomic
         role = ServerRole.Follower,
         peers = {},
-        logger = commonlib.logging.GetLogger(""),
-
+        logger = ctx.loggerFactory.getLogger("RaftServer"),
         
         -- fields for extended messages
         serverToJoin = nil;
@@ -121,7 +120,7 @@ function RaftServer:processRequest(request)
         -- extended requests
         response = self:handleExtendedMessages(request);
     end
-    if(response ~= null) then
+    if(response ~= nil) then
         self.logger.debug(
                 format("Response back a %s message to %d with Accepted=%s, Term=%d, NextIndex=%d",
                 response.messageType,
@@ -170,7 +169,7 @@ function RaftServer:handleAppendEntriesRequest(request)
         return response;
     end
     -- The role is Follower and log is okay now
-    if(request.getLogEntries() ~= null and request.getLogEntries().length > 0) then
+    if(request.getLogEntries() ~= nil and request.getLogEntries().length > 0) then
         -- write the logs to the store, first of all, check for overlap, and skip them
         logEntries = request.getLogEntries();
         index = request.getLastLogIndex() + 1;
@@ -410,12 +409,12 @@ end
 function RaftServer:becomeFollower()
     -- stop heartbeat for all peers
     for _, server in ipairs(self.peers) do
-        if(server.getHeartbeatTask() ~= null) then
+        if(server.getHeartbeatTask() ~= nil) then
             server.getHeartbeatTask().cancel(false);
         end
         server.enableHeartbeat(false);
     end
-    self.serverToJoin = null;
+    self.serverToJoin = nil;
     self.role = ServerRole.Follower;
     self.restartElectionTimer();
 end

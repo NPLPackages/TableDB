@@ -28,7 +28,9 @@ NPL.load("(gl)script/Raft/RpcClient.lua");
 local RpcClient = commonlib.gettable("Raft.RpcClient");
 local MessagePrinter = commonlib.gettable("Raft.MessagePrinter");
 local util = commonlib.gettable("System.Compiler.lib.util")
-local logger = commonlib.logging.GetLogger("")
+local LoggerFactory = NPL.load("(gl)script/Raft/LoggerFactory.lua");
+
+local logger = LoggerFactory.getLogger("App")
 
 local configDir = "script/config/"
 local mpDir = "script/mpDir/"
@@ -61,7 +63,8 @@ mp = MessagePrinter:new(mpDir, parsed_url.host, parsed_url.port)
 context = RaftContext:new(stateManager,
                           mp,
                           raftParameters,
-                          RpcListener:new(parsed_url.host, parsed_url.port, config.servers));
+                          RpcListener:new(parsed_url.host, parsed_url.port, config.servers),
+                          LoggerFactory);
 RaftConsensus.run(context);
 
 

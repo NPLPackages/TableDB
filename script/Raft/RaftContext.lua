@@ -14,13 +14,14 @@ local RaftContext = commonlib.gettable("Raft.RaftContext");
 
 local RaftContext = commonlib.gettable("Raft.RaftContext");
 
-function RaftContext:new(stateManager, stateMachine, raftParameters, rpcListener) 
+function RaftContext:new(stateManager, stateMachine, raftParameters, rpcListener,loggerFactory) 
     local o = {
         serverStateManager = stateManager,
         stateMachine = stateMachine,
         raftParameters = raftParameters,
         -- logger factory
         rpcListener = rpcListener,
+        loggerFactory = loggerFactory,
     };
     setmetatable(o, self);
     return o;

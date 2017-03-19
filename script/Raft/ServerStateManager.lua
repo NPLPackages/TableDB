@@ -16,11 +16,11 @@ NPL.load("(gl)script/ide/Json.lua");
 NPL.load("(gl)script/Raft/ClusterConfiguration.lua");
 NPL.load("(gl)script/Raft/ServerState.lua");
 NPL.load("(gl)script/Raft/SequentialLogStore.lua");
+local LoggerFactory = NPL.load("(gl)script/Raft/LoggerFactory.lua");
 local SequentialLogStore = commonlib.gettable("Raft.SequentialLogStore");
 local ServerState = commonlib.gettable("Raft.ServerState");
 local ClusterConfiguration = commonlib.gettable("Raft.ClusterConfiguration");
 local ServerStateManager = commonlib.gettable("Raft.ServerStateManager");
-local logger = commonlib.logging.GetLogger("")
 
 local STATE_FILE = "server.state";
 local CONFIG_FILE = "config.properties";
@@ -31,6 +31,7 @@ function ServerStateManager:new(dataDirectory)
     local o = {
         container = dataDirectory,
         logStore = SequentialLogStore:new(dataDirectory),
+        logger = LoggerFactory.getLogger("ServerStateManager")
     };
     setmetatable(o, self);
 
@@ -73,7 +74,7 @@ function ServerStateManager:loadClusterConfiguration()
         local config = commonlib.Json.Decode(text);
         return ClusterConfiguration:new(config);
     else
-        logger.error("%s path error", filename)
+        self.logger.error("%s path error", filename)
     end
 end
 
@@ -85,13 +86,13 @@ function ServerStateManager:saveClusterConfiguration(configuration)
     if configFile:IsValid() then
         configFile:WriteString(config);
     else
-        logger.error("%s path error", filename)
+        self.logger.error("%s path error", filename)
     end
 end
 
 
 function ServerStateManager:persistState(serverState)
-    logger.info("persistState:".. serverState.term .. serverState.commitIndex .. serverState.votedFor)
+    self.logger.info("persistState:".. serverState.term .. serverState.commitIndex .. serverState.votedFor)
     self.serverStateFile:WriteUInt(serverState.term)
     self.serverStateFile:WriteUInt(serverState.commitIndex)
     self.serverStateFile:WriteInt(serverState.votedFor)

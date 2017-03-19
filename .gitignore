@@ -268,3 +268,6 @@ npl_packages/main
 *.vscode
 *.state
 *.properties
+*.data
+*.idx
+*.sti

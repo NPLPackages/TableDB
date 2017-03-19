@@ -11,6 +11,7 @@ local SequentialLogStore = commonlib.gettable("Raft.SequentialLogStore");
 ------------------------------------------------------------
 ]]--
 
+local LoggerFactory = NPL.load("(gl)script/Raft/LoggerFactory.lua");
 
 local SequentialLogStore = commonlib.gettable("Raft.SequentialLogStore");
 
@@ -25,8 +26,7 @@ local LOG_START_INDEX_FILE_BAK = "store.sti.bak";
 function SequentialLogStore:new(logContainer) 
     local o = {
         logContainer = logContainer,
-        logger = commonlib.logging.GetLogger(""),
-
+        logger = LoggerFactory.getLogger("SequentialLogStore"),
     };
     setmetatable(o, self);
 
@@ -58,17 +58,17 @@ function SequentialLogStore:new(logContainer)
     o.startIndexFile = ParaIO.open(startIndexFileName, "rw");
     assert(o.startIndexFile:IsValid(), "startIndexFile not Valid")
 
-    if(self.startIndexFile:GetFileSize() == 0) then
-        self.startIndex = 1;
-        self.startIndexFile:WriteUint(self.startIndex);
+    if(o.startIndexFile:GetFileSize() == 0) then
+        o.startIndex = 1;
+        o.startIndexFile:WriteUInt(o.startIndex);
     else
-        self.startIndex = self.startIndexFile:ReadUint();
+        o.startIndex = o.startIndexFile:ReadUInt();
     end
 
     local UintBytes = 4; -- 32 bits
-    self.entriesInStore = self.indexFile:GetFileSize() / UintBytes;
+    o.entriesInStore = o.indexFile:GetFileSize() / UintBytes;
 
-    self.logger.debug(String.format("log store started with entriesInStore=%d, startIndex=%d", self.entriesInStore, self.startIndex));
+    o.logger.debug(string.format("log store started with entriesInStore=%d, startIndex=%d", o.entriesInStore, o.startIndex));
 
     return o;
 end
@@ -78,7 +78,6 @@ function SequentialLogStore:__index(name)
 end
 
 function SequentialLogStore:__tostring()
-    -- return format("SequentialLogStore(term:%d,commitIndex:%d,votedFor:%d)", self.term, self.commitIndex, self.votedFor);
     return util.table_tostring(self)
 end
 
@@ -87,6 +86,7 @@ end
  * @return value >= 1
 ]]--
 function SequentialLogStore:getFirstAvailableIndex()
+    return self.entriesInStore + self.startIndex;
 end
 
 --[[
@@ -95,6 +95,7 @@ end
  * @return start index of the log store
 ]]--
 function SequentialLogStore:getStartIndex()
+    return self.startIndex
 end
 
 --[[
