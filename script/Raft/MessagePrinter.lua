@@ -11,8 +11,8 @@ local MessagePrinter = commonlib.gettable("Raft.MessagePrinter");
 ------------------------------------------------------------
 ]]--
 
-NPL.load("(gl)script/Raft/rpc.lua");
-local rpc = commonlib.gettable("System.Concurrent.Async.rpc");
+NPL.load("(gl)script/Raft/Rpc.lua");
+local Rpc = commonlib.gettable("Raft.Rpc");
 local MessagePrinter = commonlib.gettable("Raft.MessagePrinter");
 
 function MessagePrinter:new(baseDir, ip, listeningPort) 
@@ -53,8 +53,8 @@ end
 function MessagePrinter:start(raftMessageSender)
     self.messageSender = messageSender;
 
-    -- use rpc for incoming Request message
-    rpc:new():init("MPRequestRPC", function(self, msg) 
+    -- use Rpc for incoming Request message
+    Rpc:new():init("MPRequestRPC", function(self, msg) 
         LOG.std(nil, "info", "MPRequestRPC", msg);
         msg = messageHandler.processRequest(msg)
         return msg; 

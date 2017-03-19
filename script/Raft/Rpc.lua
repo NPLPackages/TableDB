@@ -5,9 +5,9 @@ Date: 2017/2/8
 Desc: Create RPC in current NPL thread. Internally it will use an existing or a virtual NPL activation file that can be invoked from any thread.
 use the lib:
 ------------------------------------------------------------
-NPL.load("(gl)script/ide/System/Concurrent/rpc.lua");
-local rpc = commonlib.gettable("System.Concurrent.Async.rpc");
-rpc:new():init("Test.testRPC", function(self, msg) 
+NPL.load("(gl)script/ide/System/Concurrent/Rpc.lua");
+local Rpc = commonlib.gettable("Raft.Rpc");
+Rpc:new():init("Test.testRPC", function(self, msg) 
 	LOG.std(nil, "info", "category", msg);
 	msg.output=true; 
 	ParaEngine.Sleep(1);
@@ -29,23 +29,23 @@ Test.testRPC("(worker1)", {"input"}, function(err, msg)
 end, 500);
 ------------------------------------------------------------
 ]]
-local rpc = commonlib.gettable("System.Concurrent.Async.rpc");
+local Rpc = commonlib.gettable("Raft.Rpc");
 
 local rpc_instances = {};
 
-function rpc:new(o)
+function Rpc:new(o)
 	o = o or {};
 	o.run_callbacks = {};
 	o.next_run_id = 0;
 	o.thread_name = format("(%s)", __rts__:GetName());
-	setmetatable(o, rpc);
+	setmetatable(o, Rpc);
 	return o;
 end
 
 -- @param funcName: global function name, such as "API.Auth"
--- @param handle_request_func: rpc handler function of function(self, msg)  end
+-- @param handle_request_func: Rpc handler function of function(self, msg)  end
 -- @param publicFileName: the activation file, if nil, it defaults to current file
-function rpc:init(funcName, handle_request_func, publicFileName)
+function Rpc:init(funcName, handle_request_func, publicFileName)
 	self:SetFuncName(funcName);
 	self.handle_request = handle_request_func or echo;
 	self:SetPublicFile(publicFileName);
@@ -53,51 +53,51 @@ function rpc:init(funcName, handle_request_func, publicFileName)
 end
 
 -- @param funcName: global function name, such as "API.Auth"
-function rpc:SetFuncName(funcName)
+function Rpc:SetFuncName(funcName)
 	self.fullname = funcName;
-	self.filename = format("rpc/%s.lua", self.fullname);
+	self.filename = format("Rpc/%s.lua", self.fullname);
 	if(commonlib.getfield(funcName)) then
-		LOG.std(nil, "warn", "rpc", "%s is overwritten", funcName);
+		LOG.std(nil, "warn", "Rpc", "%s is overwritten", funcName);
 	end
 	commonlib.setfield(funcName, self);
 
-	rpc.AddInstance(funcName, self);
+	Rpc.AddInstance(funcName, self);
 end
 
 -- @param filename: the activation file, if nil, it defaults to current file
-function rpc:SetPublicFile(filename)
-	filename = filename or format("rpc/%s.lua", self.fullname);
+function Rpc:SetPublicFile(filename)
+	filename = filename or format("Rpc/%s.lua", self.fullname);
 	self.filename = filename;
 
 	NPL.this(function() 
 		self:OnActivated(msg);
 	end, {filename = self.filename});
 
-	LOG.std(nil, "debug", "rpc", "%s installed to file %s", self.fullname, self.filename);
+	LOG.std(nil, "debug", "Rpc", "%s installed to file %s", self.fullname, self.filename);
 end
 
-function rpc:__tostring()
-	return format("%s: (rpc defined in %s)", self.fullname or "", self.filename or "");
+function Rpc:__tostring()
+	return format("%s: (Rpc defined in %s)", self.fullname or "", self.filename or "");
 end
 
 -- static
-function rpc.AddInstance(name, o)
+function Rpc.AddInstance(name, o)
 	if(name)then
 		rpc_instances[name] = o;
 	end
 end
 
 -- static
-function rpc.GetInstance(name)
+function Rpc.GetInstance(name)
 	return rpc_instances[name or ""];
 end
 
 -- private: whenever a message arrives
-function rpc:OnActivated(msg)
+function Rpc:OnActivated(msg)
 
 	-- TODO: accept the connection
 	if(msg.name) then
-		local rpc_ = rpc.GetInstance(msg.name);
+		local rpc_ = Rpc.GetInstance(msg.name);
 		if(type(rpc_) == "table" and rpc_.OnActivated) then
 			msg.name = nil;
 			return rpc_:OnActivated(msg);
@@ -118,7 +118,7 @@ function rpc:OnActivated(msg)
 end
 
 -- private invoke callback and remove from queue, 
-function rpc:InvokeCallback(callbackId, err, msg)
+function Rpc:InvokeCallback(callbackId, err, msg)
 	local callback = self.run_callbacks[callbackId];
 	if(callback) then
 		if(callback.timer) then
@@ -134,9 +134,9 @@ end
 -- smallest short value to avoid conflicts with manual id. 
 local min_short_value = 100000;
 
--- by default, rpc can only be called from threads in the current process. 
+-- by default, Rpc can only be called from threads in the current process. 
 -- in order to expose the API via NPL tcp protocol, one needs to call this function. 
-function rpc:MakePublic()
+function Rpc:MakePublic()
 	NPL.load("(gl)script/ide/System/Encoding/crc32.lua");
 	local Encoding = commonlib.gettable("System.Encoding");
 	local shortValue = Encoding.crc32(self.filename);
@@ -151,10 +151,10 @@ end
 -- Because NPL thread is reused, it is good practice to use only limited number of NPL threads per process.
 -- for complete format, please see NPL.activate function. 
 -- @param msg: any table object
--- @param callbackFunc: result from the rpc, function(err, msg) end
+-- @param callbackFunc: result from the Rpc, function(err, msg) end
 -- @param timeout:  time out in milliseconds. if nil, there is no timeout
 -- if timed out callbackFunc("timeout", nil) is invoked on timeout
-function rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
+function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
 	-- if(type(address) == "string") then
 	-- 	local thread_name = address:match("^%((.+)%)$");
 	-- 	if (thread_name) then
@@ -196,5 +196,5 @@ function rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
 	});
 end
 
-rpc.__call = rpc.activate;
-rpc.__index = rpc;
+Rpc.__call = Rpc.activate;
+Rpc.__index = Rpc;

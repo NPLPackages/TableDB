@@ -11,8 +11,8 @@ local RpcListener = commonlib.gettable("Raft.RpcListener");
 ------------------------------------------------------------
 ]]--
 
-NPL.load("(gl)script/Raft/rpc.lua");
-local rpc = commonlib.gettable("System.Concurrent.Async.rpc");
+NPL.load("(gl)script/Raft/Rpc.lua");
+local Rpc = commonlib.gettable("Raft.Rpc");
 NPL.load("(gl)script/ide/socket/url.lua");
 local url = commonlib.gettable("commonlib.socket.url")
 NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
@@ -41,8 +41,8 @@ end
 
 --Starts listening and handle all incoming messages with messageHandler
 function RpcListener:startListening(messageHandler)
-    -- use rpc for incoming Request message
-    rpc:new():init("RaftRequestRPC", function(self, msg) 
+    -- use Rpc for incoming Request message
+    Rpc:new():init("RaftRequestRPC", function(self, msg) 
         LOG.std(nil, "info", "RaftRequestRPC", msg);
         msg = messageHandler.processRequest(msg)
         return msg; 
@@ -61,8 +61,8 @@ function RpcListener:startListening(messageHandler)
 
 
     -- XXX: need handle response here??
-    -- use rpc for incoming Response message
-    -- rpc:new():init("RaftResponseRPC", function(self, msg) 
+    -- use Rpc for incoming Response message
+    -- Rpc:new():init("RaftResponseRPC", function(self, msg) 
     --     LOG.std(nil, "info", "RaftResponseRPC", msg);
     --     msg = messageHandler.processResponse(msg)
     --     return msg; 

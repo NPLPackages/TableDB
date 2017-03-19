@@ -11,8 +11,8 @@ local RaftMessageSender = commonlib.gettable("Raft.RaftMessageSender");
 ------------------------------------------------------------
 ]]--
 
-NPL.load("(gl)script/Raft/rpc.lua");
-local rpc = commonlib.gettable("System.Concurrent.Async.rpc");
+NPL.load("(gl)script/Raft/Rpc.lua");
+local Rpc = commonlib.gettable("Raft.Rpc");
 local RaftMessageSender = commonlib.gettable("Raft.RaftMessageSender");
 
 function RaftMessageSender:new(server) 
@@ -78,7 +78,7 @@ function RaftMessageSender:sendMessageToLeader(request)
 
     -- rpcClient.send(request).whenCompleteAsync((RaftResponseMessage response, Throwable err) -> {
     --     if(err != null){
-    --         this.server.logger.info("Received an rpc error %s while sending a request to server (%d)", err.getMessage(), leaderId);
+    --         this.server.logger.info("Received an Rpc error %s while sending a request to server (%d)", err.getMessage(), leaderId);
     --         result.complete(false);
     --     }else{
     --         result.complete(response.isAccepted());

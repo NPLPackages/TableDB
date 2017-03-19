@@ -19,7 +19,7 @@ function Logger:new(modname)
     local function appender(level, ...)
         logger.std(nil, level, module_name, ...)
     end
-    
+
     logger.setAppender(appender)
     local o = logger;
     setmetatable(o, self);
@@ -32,10 +32,4 @@ end
 
 function Logger:__tostring()
     return util.table_tostring(self)
-end
-
-
-
-function Logger:send(request)
-
 end
