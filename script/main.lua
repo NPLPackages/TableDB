@@ -10,11 +10,11 @@ NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 NPL.load("(gl)script/Raft/ServerState.lua");
 
 -- local ServerState = commonlib.gettable("Raft.ServerState");
--- local ServerRole = NPL.load("(gl)script/Raft/ServerRole.lua");
+local ServerRole = NPL.load("(gl)script/Raft/ServerRole.lua");
 -- local util = commonlib.gettable("System.Compiler.lib.util")
 
 
--- logger = commonlib.logging.GetLogger("")
+logger = commonlib.logging.GetLogger("")
 
 -- local serverState = ServerState:new()
 
@@ -44,7 +44,7 @@ NPL.load("(gl)script/Raft/ServerState.lua");
 -- serverState:increaseTerm()
 -- logger.info(serverState)
 
--- logger.info(ServerRole.Follower)
+logger.info(ServerRole.Follower)
 
 -- test = {
 --   a = "k",

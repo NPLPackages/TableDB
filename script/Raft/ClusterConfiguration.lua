@@ -30,7 +30,7 @@ function ClusterConfiguration:__index(name)
 end
 
 function ClusterConfiguration:__tostring()
-    return util.table_print(self)
+    return util.table_tostring(self)
 end
 
 

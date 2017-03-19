@@ -11,12 +11,15 @@ local RaftServer = commonlib.gettable("Raft.RaftServer");
 ------------------------------------------------------------
 ]]--
 
+NPL.load("(gl)script/ide/commonlib.lua");
+NPL.load("(gl)script/Raft/RaftMessageSender.lua");
+local RaftMessageSender = commonlib.gettable("Raft.RaftMessageSender");
 NPL.load("(gl)script/Raft/ServerState.lua");
 local ServerState = commonlib.gettable("Raft.ServerState");
-NPL.load("(gl)script/Raft/ServerRole.lua");
-local ServerRole = commonlib.gettable("Raft.ServerRole");
+
+local ServerRole = NPL.load("(gl)script/Raft/ServerRole.lua");
 NPL.load("(gl)script/Raft/PeerServer.lua");
-local ServerState = commonlib.gettable("Raft.PeerServer");
+local PeerServer = commonlib.gettable("Raft.PeerServer");
 NPL.load("(gl)script/ide/timer.lua");
 local RaftMessageType = NPL.load("(gl)script/Raft/RaftMessageType.lua");
 
@@ -27,11 +30,11 @@ local RaftServer = commonlib.gettable("Raft.RaftServer");
 
 function RaftServer:new(ctx) 
     local o = {
-        contex = ctx,
-        id = ctx.serverStateManager.getServerId,
-        state = ctx.serverStateManager.readState(),
-        logStore = ctx.serverStateManager.loadLogStore(),
-        config = ctx.serverStateManager.loadClusterConfiguration(),
+        context = ctx,
+        id = ctx.serverStateManager.serverId,
+        state = ctx.serverStateManager:readState(),
+        logStore = ctx.serverStateManager.logStore,
+        config = ctx.serverStateManager:loadClusterConfiguration(),
         stateMachine = ctx.stateMachine,
         votesGranted = 0,
         votesResponded = 0,
@@ -41,9 +44,7 @@ function RaftServer:new(ctx)
         role = ServerRole.Follower,
         peers = {},
         logger = commonlib.logging.GetLogger(""),
-        electionTimer = commonlib.Timer:new({callbackFunc = function(timer)
-            o:handleElectionTimeout()
-        end}),
+
         
         -- fields for extended messages
         serverToJoin = nil;
@@ -56,6 +57,10 @@ function RaftServer:new(ctx)
     if not o.state then
         o.state = ServerState:new()
     end
+
+    o.electionTimer = commonlib.Timer:new({callbackFunc = function(timer)
+                                               o:handleElectionTimeout()
+                                           end}),
     setmetatable(o, self);
 
     for _,server in ipairs(o.config.servers) do
@@ -87,8 +92,12 @@ function RaftServer:__index(name)
 end
 
 function RaftServer:__tostring()
-    -- return format("RaftServer(term:%d,commitIndex:%d,votedFor:%d)", self.term, self.commitIndex, self.votedFor);
-    return util.table_print(self)
+    return util.table_tostring(self)
+end
+
+
+function RaftServer:createMessageSender()
+    return RaftMessageSender:new(self)
 end
 
 function RaftServer:processRequest(request)
@@ -153,11 +162,11 @@ function RaftServer:handleAppendEntriesRequest(request)
     -- After a snapshot the request.getLastLogIndex() may less than logStore.getStartingIndex() but equals to logStore.getStartingIndex() -1
     -- In self case, log is Okay if request.getLastLogIndex() == lastSnapshot.getLastLogIndex() and request.getLastLogTerm() == lastSnapshot.getLastTerm()
     logOkay = request.getLastLogIndex() == 0 or
-            (request.getLastLogIndex() < self.logStore.getFirstAvailableIndex() and
+            (request.getLastLogIndex() < self.logStore:getFirstAvailableIndex() and
                     request.getLastLogTerm() == self.termForLastLog(request.getLastLogIndex()));
     if(request.term < self.state.term or (not logOkay) )then
         response.accepted = false;
-        response.setNextIndex(self.logStore.getFirstAvailableIndex());
+        response.setNextIndex(self.logStore:getFirstAvailableIndex());
         return response;
     end
     -- The role is Follower and log is okay now
@@ -166,22 +175,22 @@ function RaftServer:handleAppendEntriesRequest(request)
         logEntries = request.getLogEntries();
         index = request.getLastLogIndex() + 1;
         logIndex = 0;
-        while(index < self.logStore.getFirstAvailableIndex() and
+        while(index < self.logStore:getFirstAvailableIndex() and
                 logIndex < logEntries.length and
-                logEntries[logIndex].term == self.logStore.getLogEntryAt(index).term) do
+                logEntries[logIndex].term == self.logStore:getLogEntryAt(index).term) do
             logIndex = logIndex + 1;
             index = index + 1;
         end
         -- dealing with overwrites
-        while(index < self.logStore.getFirstAvailableIndex() and logIndex < logEntries.length) do
-            oldEntry = self.logStore.getLogEntryAt(index);
+        while(index < self.logStore:getFirstAvailableIndex() and logIndex < logEntries.length) do
+            oldEntry = self.logStore:getLogEntryAt(index);
             if(oldEntry.getValueType() == LogValueType.Application) then
                 self.stateMachine.rollback(index, oldEntry.getValue());
             elseif(oldEntry.getValueType() == LogValueType.Configuration) then
                 self.logger.info("revert a previous config change to config at %d", self.config.getLogIndex());
                 self.configChanging = false;
             end
-            self.logStore.writeAt(index, logEntries[logIndex]);
+            self.logStore:writeAt(index, logEntries[logIndex]);
             logIndex = logIndex + 1;
             index = index + 1;
         end
@@ -189,7 +198,7 @@ function RaftServer:handleAppendEntriesRequest(request)
         while(logIndex < logEntries.length) do
             logEntry = logEntries[logIndex];
             logIndex = logIndex + 1;
-            indexForEntry = self.logStore.append(logEntry);
+            indexForEntry = self.logStore:append(logEntry);
             if(logEntry.getValueType() == LogValueType.Configuration) then
                 self.logger.info("received a configuration change at index %d from leader", indexForEntry);
                 self.configChanging = true;
@@ -220,13 +229,13 @@ function RaftServer:handleVoteRequest(request)
         destination = request.source,
         term = self.state.term,
     }
-    logOkay = request.lastLogTerm > self.logStore.getLastLogEntry().getTerm() or
-            (request.lastLogTerm == self.logStore.getLastLogEntry().getTerm() and
+    logOkay = request.lastLogTerm > self.logStore:getLastLogEntry().getTerm() or
+            (request.lastLogTerm == self.logStore:getLastLogEntry().getTerm() and
              self.logStore.getFirstAvailableIndex() - 1 <= request.getLastLogIndex());
     grant = request.term == self.state.term and logOkay and (self.state.getVotedFor() == request.getSource() or self.state.getVotedFor() == -1);
     response.accepted = grant;
     if(grant) then
-        self.state.setVotedFor(request.getSource());
+        self.state.votedFor= request.getSource();
         self.context.getServerStateManager().persistState(self.state);
     end
     return response;
@@ -271,10 +280,10 @@ end
 function RaftServer:createAppendEntriesRequest(peer)
     lastLogIndex = 0;
     -- synchronized(this){
-    startingIndex = self.logStore.getStartIndex();
-    currentNextIndex = self.logStore.getFirstAvailableIndex();
+    startingIndex = self.logStore:getStartIndex();
+    currentNextIndex = self.logStore:getFirstAvailableIndex();
     commitIndex = self.quickCommitIndex;
-    term = self.state.getTerm();
+    term = self.state.term;
     -- }
     -- synchronized(peer){
     if(peer.getNextLogIndex() == 0) then
@@ -292,7 +301,7 @@ function RaftServer:createAppendEntriesRequest(peer)
     -- end
     lastLogTerm = self:termForLastLog(lastLogIndex);
     endIndex = math.min(currentNextIndex, lastLogIndex + 1 + context.getRaftParameters().getMaximumAppendingSize());
-    logEntries = self.logStore.getLogEntries(lastLogIndex + 1, endIndex);
+    logEntries = self.logStore:getLogEntries(lastLogIndex + 1, endIndex);
     if not ((lastLogIndex + 1) >= endIndex) then
          logEntries = nil
     end
@@ -328,7 +337,7 @@ function RaftServer:handleElectionTimeout()
 
     self.logger.debug("Election timeout, change to Candidate");
     self.state:increaseTerm();
-    self.state:setVotedFor(-1);
+    self.state.votedFor = -1;
     self.role = ServerRole.Candidate;
     self.votesGranted = 0;
     self.votesResponded = 0;
@@ -371,13 +380,13 @@ end
 function RaftServer:requestVote()
     -- vote for self
     self.logger.info("requestVote started with term %d", self.state.term);
-    self.state.setVotedFor(self.id);
-    self.context.serverStateManager():persistState(self.state);
+    self.state.votedFor = self.id;
+    self.context.serverStateManager:persistState(self.state);
     self.votesGranted = self.votesGranted + 1;
     self.votesResponded = self.votesResponded + 1;
 
     -- this is the only server?
-    if(self.votesGranted > (self.peers.size() + 1) / 2) then
+    if(self.votesGranted > (#self.peers + 1) / 2) then
         self.electionCompleted = true;
         self.becomeLeader();
         return;

@@ -11,7 +11,7 @@ local RaftParameters = commonlib.gettable("Raft.RaftParameters");
 ------------------------------------------------------------
 ]]--
 
-
+local util = commonlib.gettable("System.Compiler.lib.util")
 local RaftParameters = commonlib.gettable("Raft.RaftParameters");
 
 function RaftParameters:new() 
@@ -36,7 +36,7 @@ end
 
 function RaftParameters:__tostring()
     -- return format("RaftParameters(term:%d,commitIndex:%d,votedFor:%d)", self.term, self.commitIndex, self.votedFor);
-    return util.table_print(self)
+    return util.table_tostring(self)
 end
 
 

@@ -10,23 +10,60 @@ NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 NPL.load("(gl)script/Raft/ServerState.lua");
 NPL.load("(gl)script/Raft/ServerStateManager.lua");
 NPL.load("(gl)script/Raft/RaftParameters.lua");
+NPL.load("(gl)script/Raft/RaftContext.lua");
+NPL.load("(gl)script/Raft/RpcListener.lua");
+NPL.load("(gl)script/Raft/MessagePrinter.lua");
 
 -- local ServerState = commonlib.gettable("Raft.ServerState");
 -- local ServerRole = NPL.load("(gl)script/Raft/ServerRole.lua");
 local ServerStateManager = commonlib.gettable("Raft.ServerStateManager");
 local RaftParameters = commonlib.gettable("Raft.RaftParameters");
+local RaftContext = commonlib.gettable("Raft.RaftContext");
+local RpcListener = commonlib.gettable("Raft.RpcListener");
+NPL.load("(gl)script/ide/socket/url.lua");
+local url = commonlib.gettable("commonlib.socket.url")
+NPL.load("(gl)script/Raft/RaftConsensus.lua");
+local RaftConsensus = commonlib.gettable("Raft.RaftConsensus");
+NPL.load("(gl)script/Raft/RpcClient.lua");
+local RpcClient = commonlib.gettable("Raft.RpcClient");
+local MessagePrinter = commonlib.gettable("Raft.MessagePrinter");
 local util = commonlib.gettable("System.Compiler.lib.util")
 local logger = commonlib.logging.GetLogger("")
 
 local configDir = "script/config/"
+local mpDir = "script/mpDir/"
 
 -- this server id, should load from config
-local serverId = 1
 stateManager = ServerStateManager:new(configDir);
 config = stateManager:loadClusterConfiguration();
 
-local localEndpoint = config:getServer(serverId).endpoint
-logger.info(format("localEndpoint:%s", localEndpoint))
+local localEndpoint = config:getServer(stateManager.serverId).endpoint
+local parsed_url = url.parse(localEndpoint)
+logger.info("local server info"..util.table_tostring(parsed_url))
+
+raftParameters = RaftParameters:new()
+raftParameters.electionTimeoutUpper = 5000;
+raftParameters.electionTimeoutLower = 3000;
+raftParameters.heartbeatInterval = 1500;
+raftParameters.rpcFailureBackoff = 500;
+raftParameters.maximumAppendingSize = 200;
+raftParameters.logSyncBatchSize = 5;
+raftParameters.logSyncStoppingGap = 5;
+raftParameters.snapshotEnabled = 5000;
+raftParameters.syncSnapshotBlockSize = 0;
+
+-- logger.debug(raftParameters)
+
+
+-- message printer
+mp = MessagePrinter:new(mpDir, parsed_url.host, parsed_url.port)
+
+context = RaftContext:new(stateManager,
+                          mp,
+                          raftParameters,
+                          RpcListener:new(parsed_url.host, parsed_url.port, config.servers));
+RaftConsensus.run(context);
+
 
 
 

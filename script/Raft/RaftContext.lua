@@ -31,6 +31,6 @@ function RaftContext:__index(name)
 end
 
 function RaftContext:__tostring()
-    return util.table_print(self)
+    return util.table_tostring(self)
 end
 

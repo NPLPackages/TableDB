@@ -49,7 +49,7 @@ function PeerServer:__index(name)
 end
 
 function PeerServer:__tostring()
-    return util.table_print(self);
+    return util.table_tostring(self);
 end
 
 

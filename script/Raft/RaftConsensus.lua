@@ -26,13 +26,13 @@ function RaftConsensus.run(context)
     end
 
     server = raftServer:new(context);
-    -- messageSender = server:createMessageSender();
-    -- context.getStateMachine().start(messageSender);
-    context.getRpcListener().startListening(server);
+    messageSender = server:createMessageSender();
+    context.stateMachine:start(messageSender);
+    context.rpcListener:startListening(server);
     return messageSender;
 end
 
 
 function RaftConsensus:__tostring()
-    return util.table_print(self)
+    return util.table_tostring(self)
 end

@@ -35,7 +35,7 @@ function RpcListener:__index(name)
 end
 
 function RpcListener:__tostring()
-    return util.table_print(self)
+    return util.table_tostring(self)
 end
 
 
@@ -52,8 +52,8 @@ function RpcListener:startListening(messageHandler)
     NPL.StartNetServer(self.ip, tostring(self.port));
 
     for _, server in ipairs(self.servers) do
-        local pased_url = url.parse(server.endPoint)
-        NPL.AddNPLRuntimeAddress({host = pased_url.host, port = tostring(pased_url.port), nid = server.endPoint})
+        local parsed_url = url.parse(server.endpoint)
+        NPL.AddNPLRuntimeAddress({host = parsed_url.host, port = tostring(parsed_url.port), nid = server.endpoint})
     end
     RaftRequestRPC:MakePublic();
 
