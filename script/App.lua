@@ -35,6 +35,8 @@ local logger = LoggerFactory.getLogger("App")
 local configDir = "script/config/"
 local mpDir = "script/mpDir/"
 
+logger.info("app arg:"..util.table_tostring(arg))
+
 -- this server id, should load from config
 stateManager = ServerStateManager:new(configDir);
 config = stateManager:loadClusterConfiguration();
@@ -55,8 +57,6 @@ raftParameters.snapshotEnabled = 5000;
 raftParameters.syncSnapshotBlockSize = 0;
 
 -- logger.debug(raftParameters)
-
-
 -- message printer
 mp = MessagePrinter:new(mpDir, parsed_url.host, parsed_url.port)
 

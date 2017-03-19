@@ -326,7 +326,32 @@ end
 
 
 function RaftServer:handleElectionTimeout()
-    -- TODO: add extra
+    if(self.steppingDown > 0) then
+        self.steppingDown = self.steppingDown - 1
+        if(self.steppingDown == 0) then
+            self.logger.info("no hearing further news from leader, remove this server from config and step down");
+            server = self.config:getServer(self.id);
+            if(server ~= nil) then
+                self.config.servers[server] = nil;
+                self.context.serverStateManager.saveClusterConfiguration(self.config);
+            end
+            
+            self.stateMachine.exit(0);
+            return;
+        end
+
+        self.logger.info("stepping down (cycles left: %d), skip this election timeout event", self.steppingDown);
+        self:restartElectionTimer();
+        return;
+    end
+
+    if(self.catchingUp) then
+        -- this is a new server for the cluster, will not send out vote request until the config that includes this server is committed
+        self.logger.info("election timeout while joining the cluster, ignore it.");
+        self:restartElectionTimer();
+        return;
+    end
+
 
     if(self.role == ServerRole.Leader) then
         self.logger.error("A leader should never encounter election timeout, illegal application state, stop the application");
@@ -387,7 +412,7 @@ function RaftServer:requestVote()
     -- this is the only server?
     if(self.votesGranted > (#self.peers + 1) / 2) then
         self.electionCompleted = true;
-        self.becomeLeader();
+        self:becomeLeader();
         return;
     end
 

@@ -13,6 +13,7 @@ local RaftMessageType = NPL.load("(gl)script/Raft/RaftMessageType.lua");
 
 local RaftMessageType = NPL.export();
 
+--TODO: turn the type into table, LIKE:{int = 0, string = "RequestVoteRequest"}
 RaftMessageType.RequestVoteRequest  = 0
 RaftMessageType.RequestVoteResponse = 1
 RaftMessageType.AppendEntriesRequest       = 2
