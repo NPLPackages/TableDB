@@ -185,6 +185,8 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
 		callback.timer:Change(timeout, nil)
 	end
 
+	-- print(format("%s%s", self.remoteAddress or "", self.filename))
+
 	-- TODO: handle error
 	return NPL.activate(format("%s%s", self.remoteAddress or "", self.filename), {
 		type="run", 

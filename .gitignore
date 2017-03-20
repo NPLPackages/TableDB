@@ -271,3 +271,4 @@ npl_packages/main
 *.data
 *.idx
 *.sti
+server*/

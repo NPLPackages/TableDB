@@ -13,7 +13,8 @@ local PeerServer = commonlib.gettable("Raft.PeerServer");
 ------------------------------------------------------------
 ]]--
 
-
+NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
+local util = commonlib.gettable("System.Compiler.lib.util")
 
 local RaftMessageType = NPL.load("(gl)script/Raft/RaftMessageType.lua");
 
@@ -36,10 +37,10 @@ function PeerServer:new(server, ctx, heartbeatTimeoutHandler)
         nextLogIndex = 0,
         matchedIndex = 0,
         heartbeatEnabled = false,
-        heartbeatTimer = commonlib.Timer:new({callbackFunc = function(timer)
-                                                heartbeatTimeoutHandler()
-                                              end}),
     };
+    o.heartbeatTimer = commonlib.Timer:new({callbackFunc = function(timer)
+                                               heartbeatTimeoutHandler(o)
+                                           end}),
     setmetatable(o, self);
     return o;
 end
@@ -81,7 +82,7 @@ function PeerServer:SendRequest(request)
     -- need to handle exception here, use with_timeout???
     -- this is sync..., if so should we solve this?
     -- RaftRequestRPC is init in the RpcListener, suppose we could directly use here
-    RaftRequestRPC(request.source..":", request.destination..":", request, function(err, msg)
+    RaftRequestRPC("server"..request.source..":", "server"..request.destination..":", request, function(err, msg)
                        if(isAppendRequest) then
                            self:setFree();
                        end

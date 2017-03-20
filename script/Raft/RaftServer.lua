@@ -100,15 +100,19 @@ function RaftServer:createMessageSender()
 end
 
 function RaftServer:processRequest(request)
-    self.logger.debug(
-            format("Receive a %d message from %d with LastLogIndex=%d, LastLogTerm=%d, EntriesLength=%d, CommitIndex=%d and Term=%d",
+    local entriesLength = 0
+    if request.logEntries ~= nil then
+        entriesLength = #request.logEntries
+    end
+
+    self.logger.debug("Receive a %d message from %d with LastLogIndex=%d, LastLogTerm=%d, EntriesLength=%d, CommitIndex=%d and Term=%d",
             request.messageType,
             request.source,
             request.lastLogIndex,
             request.lastLogTerm,
-            (request.logEntries == nil and 0) or #request.logEntries,
-            request.commitIndex,
-            request.term));
+            entriesLength,
+            request.commitIndex or 0,
+            request.term);
     response = nil;
     if(request.messageType == RaftMessageType.AppendEntriesRequest) then
         response = self:handleAppendEntriesRequest(request);
@@ -216,7 +220,7 @@ end
 -- synchronized
 function RaftServer:handleVoteRequest(request)
     -- we allow the server to be continue after term updated to save a round message
-    self.updateTerm(request.getTerm());
+    self:updateTerm(request.term);
     -- Reset stepping down value to prevent this server goes down when leader crashes after sending a LeaveClusterRequest
     if(self.steppingDown > 0) then
         self.steppingDown = 2;
@@ -235,7 +239,7 @@ function RaftServer:handleVoteRequest(request)
     response.accepted = grant;
     if(grant) then
         self.state.votedFor= request.getSource();
-        self.context.getServerStateManager().persistState(self.state);
+        self.context.serverStateManager:persistState(self.state);
     end
     return response;
 end
@@ -434,24 +438,24 @@ end
 function RaftServer:becomeFollower()
     -- stop heartbeat for all peers
     for _, server in ipairs(self.peers) do
-        if(server.getHeartbeatTask() ~= nil) then
-            server.getHeartbeatTask().cancel(false);
+        if server.heartbeatTimer:IsEnabled() then
+            server.heartbeatTimer:Change()
         end
-        server.enableHeartbeat(false);
+        server.heartbeatEnabled = false;
     end
     self.serverToJoin = nil;
     self.role = ServerRole.Follower;
-    self.restartElectionTimer();
+    self:restartElectionTimer();
 end
 
 function RaftServer:updateTerm(term)
-    if(term > self.state.getTerm()) then
+    if(term > self.state.term) then
         self.state.term = term;
         self.state.votedFor= -1;
         self.electionCompleted = false;
         self.votesGranted = 0;
         self.votesResponded = 0;
-        self.context.getServerStateManager().persistState(self.state);
+        self.context.serverStateManager:persistState(self.state);
         self:becomeFollower();
         return true;
     end

@@ -61,7 +61,7 @@ function MessagePrinter:start(raftMessageSender)
     end)
 
     -- port is need to be string here??
-    NPL.StartNetServer(self.ip, tostring(self.port));
+    -- NPL.StartNetServer(self.ip, tostring(self.port));
 
     -- for _, server in ipairs(self.servers) do
     --     local pased_url = url.parse(server.endPoint)

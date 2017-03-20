@@ -17,6 +17,7 @@ NPL.load("(gl)script/ide/socket/url.lua");
 local url = commonlib.gettable("commonlib.socket.url")
 NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 local util = commonlib.gettable("System.Compiler.lib.util")
+local LoggerFactory = NPL.load("(gl)script/Raft/LoggerFactory.lua");
 
 local RpcListener = commonlib.gettable("Raft.RpcListener");
 
@@ -25,6 +26,7 @@ function RpcListener:new(ip, port, servers)
         ip = ip,
         port = port,
         servers = servers,
+        logger = LoggerFactory.getLogger("RpcListener"),
     };
     setmetatable(o, self);
     return o;
@@ -41,10 +43,12 @@ end
 
 --Starts listening and handle all incoming messages with messageHandler
 function RpcListener:startListening(messageHandler)
+    self.logger.info("startListening")
     -- use Rpc for incoming Request message
     Rpc:new():init("RaftRequestRPC", function(self, msg) 
         LOG.std(nil, "info", "RaftRequestRPC", msg);
-        msg = messageHandler.processRequest(msg)
+        -- self.logger.info("RaftRequestRPC:%s",util.table_tostring(msg));
+        msg = messageHandler:processRequest(msg)
         return msg; 
     end)
 
@@ -53,7 +57,7 @@ function RpcListener:startListening(messageHandler)
 
     for _, server in ipairs(self.servers) do
         local parsed_url = url.parse(server.endpoint)
-        NPL.AddNPLRuntimeAddress({host = parsed_url.host, port = tostring(parsed_url.port), nid = server.endpoint})
+        NPL.AddNPLRuntimeAddress({host = parsed_url.host, port = tostring(parsed_url.port), nid = "server"..server.id})
     end
     RaftRequestRPC:MakePublic();
 

@@ -32,13 +32,16 @@ local LoggerFactory = NPL.load("(gl)script/Raft/LoggerFactory.lua");
 
 local logger = LoggerFactory.getLogger("App")
 
-local configDir = "script/config/"
-local mpDir = "script/mpDir/"
+-- local configDir = "script/config/"
+-- local mpDir = "script/mpDir/"
 
-logger.info("app arg:"..util.table_tostring(arg))
 
--- this server id, should load from config
-stateManager = ServerStateManager:new(configDir);
+local baseDir = ParaEngine.GetAppCommandLineByParam("baseDir", "1");
+local mpPort = ParaEngine.GetAppCommandLineByParam("mpPort", "8090");
+
+logger.info("app arg:"..baseDir..mpPort)
+
+stateManager = ServerStateManager:new(baseDir);
 config = stateManager:loadClusterConfiguration();
 
 local localEndpoint = config:getServer(stateManager.serverId).endpoint
@@ -58,7 +61,7 @@ raftParameters.syncSnapshotBlockSize = 0;
 
 -- logger.debug(raftParameters)
 -- message printer
-mp = MessagePrinter:new(mpDir, parsed_url.host, parsed_url.port)
+mp = MessagePrinter:new(baseDir, parsed_url.host, mpPort)
 
 context = RaftContext:new(stateManager,
                           mp,
