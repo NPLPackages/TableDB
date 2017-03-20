@@ -16,6 +16,14 @@ local ServerRole = NPL.load("(gl)script/Raft/ServerRole.lua");
 
 logger = commonlib.logging.GetLogger("")
 
+local RaftMessageType = NPL.load("(gl)script/Raft/RaftMessageType.lua");
+
+local o = {
+  t = RaftMessageType.RequestVoteRequest,
+}
+logger.debug(o)
+logger.debug(o.t == RaftMessageType.RequestVoteRequest )
+
 -- local serverState = ServerState:new()
 
 

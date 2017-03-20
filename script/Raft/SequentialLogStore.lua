@@ -11,6 +11,9 @@ local SequentialLogStore = commonlib.gettable("Raft.SequentialLogStore");
 ------------------------------------------------------------
 ]]--
 
+NPL.load("(gl)script/Raft/LogEntry.lua");
+local LogEntry = commonlib.gettable("Raft.LogEntry");
+
 local LoggerFactory = NPL.load("(gl)script/Raft/LoggerFactory.lua");
 
 local SequentialLogStore = commonlib.gettable("Raft.SequentialLogStore");
@@ -27,6 +30,7 @@ function SequentialLogStore:new(logContainer)
     local o = {
         logContainer = logContainer,
         logger = LoggerFactory.getLogger("SequentialLogStore"),
+        zeroEntry = LogEntry:new(),
     };
     setmetatable(o, self);
 
@@ -103,6 +107,7 @@ end
  * @return a dummy constant entry with value set to null and term set to zero if no log entry in store
 ]]--
 function SequentialLogStore:getLastLogEntry()
+    return self.zeroEntry;
 end
 
 --[[

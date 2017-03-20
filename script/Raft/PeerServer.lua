@@ -39,6 +39,7 @@ function PeerServer:new(server, ctx, heartbeatTimeoutHandler)
         heartbeatEnabled = false,
     };
     o.heartbeatTimer = commonlib.Timer:new({callbackFunc = function(timer)
+                                               util.table_print(timer)
                                                heartbeatTimeoutHandler(o)
                                            end}),
     setmetatable(o, self);
@@ -75,19 +76,26 @@ function PeerServer:getId()
 end
 
 
-function PeerServer:SendRequest(request)
+function PeerServer:SendRequest(request, callbackFunc)
     isAppendRequest = request.messageType == RaftMessageType.AppendEntriesRequest or
                       request.messageType == RaftMessageType.InstallSnapshotRequest;
 
     -- need to handle exception here, use with_timeout???
     -- this is sync..., if so should we solve this?
     -- RaftRequestRPC is init in the RpcListener, suppose we could directly use here
+
+    local o = self
     RaftRequestRPC("server"..request.source..":", "server"..request.destination..":", request, function(err, msg)
+                    --    LOG.std(nil, "debug", "RaftResponseRPC", msg);
                        if(isAppendRequest) then
-                           self:setFree();
+                           o:setFree();
                        end
                        
-                       self:resumeHeartbeatingSpeed();
+                       o:resumeHeartbeatingSpeed();
+
+                       if callbackFunc then
+                           callbackFunc(msg)
+                       end
                    end)
 
 
