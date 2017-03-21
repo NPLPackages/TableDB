@@ -33,15 +33,14 @@ function PeerServer:new(server, ctx, heartbeatTimeoutHandler)
         -- atomic
         pendingCommitFlag = 0,
         heartbeatTimeoutHandler = heartbeatTimeoutHandler,
-        heartbeatTask = nil,
         nextLogIndex = 0,
         matchedIndex = 0,
         heartbeatEnabled = false,
     };
-    o.heartbeatTimer = commonlib.Timer:new({callbackFunc = function(timer)
-                                               util.table_print(timer)
-                                               heartbeatTimeoutHandler(o)
-                                           end}),
+
+    o.heartbeatTask = function(timer) o.heartbeatTimeoutHandler(o) end;
+    o.heartbeatTimer = commonlib.Timer:new({callbackFunc = o.heartbeatTask})
+    -- util.table_print(o)
     setmetatable(o, self);
     return o;
 end
@@ -67,7 +66,12 @@ end
 
 function PeerServer:makeBusy()
     -- return self.busyFlag.compareAndSet(0, 1);
-    self.busyFlag = 1;
+    if self.busyFlag == 0 then
+        -- body
+        self.busyFlag = 1;
+        return true;
+    end
+    return false;
 end
 
 

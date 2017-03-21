@@ -22,11 +22,18 @@ NPL.load("(gl)script/Raft/PeerServer.lua");
 local PeerServer = commonlib.gettable("Raft.PeerServer");
 NPL.load("(gl)script/ide/timer.lua");
 local RaftMessageType = NPL.load("(gl)script/Raft/RaftMessageType.lua");
+NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
+local util = commonlib.gettable("System.Compiler.lib.util")
 
 
 
 local RaftServer = commonlib.gettable("Raft.RaftServer");
 
+
+local indexComparator = function (arg0, arg1)
+    -- body
+    return arg1 - arg0;
+end
 
 function RaftServer:new(ctx) 
     local o = {
@@ -64,14 +71,17 @@ function RaftServer:new(ctx)
 
     for _,server in ipairs(o.config.servers) do
         if server.id ~= o.id then
-            table.insert(o.peers, server.id, PeerServer:new(server, o.context,
-                                                            function (peerServer)
-                                                                util.table_print(peerServer)
-                                                                o:handleHeartbeatTimeout(peerServer)
-                                                            end))
+            local peer = PeerServer:new(server, o.context,function (s)
+                                                        o:handleHeartbeatTimeout(s)
+                                                    end)
+            o.peers[server.id] = peer
         end
     end
     o.quickCommitIndex = o.state.commitIndex;
+    -- FIXME: why???
+    -- what's wrong with o.logger.debug
+    -- o.logger.debug(o.peers)
+    -- util.table_print(o.peers)
 
     -- dedicated commit thread
      o.commitingThreadName = "commitingThread"..o.id;
@@ -159,14 +169,14 @@ function RaftServer:handleAppendEntriesRequest(request)
         messageType = RaftMessageType.AppendEntriesResponse,
         term = self.state.term,
         source = self.id,
-        destination = request.destination,
+        destination = request.source,
     }
 
     -- After a snapshot the request.getLastLogIndex() may less than logStore.getStartingIndex() but equals to logStore.getStartingIndex() -1
     -- In self case, log is Okay if request.getLastLogIndex() == lastSnapshot.getLastLogIndex() and request.getLastLogTerm() == lastSnapshot.getLastTerm()
     logOkay = request.lastLogIndex == 0 or
             (request.lastLogIndex < self.logStore:getFirstAvailableIndex() and
-                    request.getLastLogTerm() == self:termForLastLog(request.lastLogIndex));
+                    request.lastLogTerm == self:termForLastLog(request.lastLogIndex));
     if(request.term < self.state.term or (not logOkay) )then
         response.accepted = false;
         response.nextIndex= self.logStore:getFirstAvailableIndex();
@@ -211,9 +221,9 @@ function RaftServer:handleAppendEntriesRequest(request)
         end
     end
     self.leader = request.source;
-    self.commit(request.commitIndex);
+    self:commit(request.commitIndex);
     response.accepted = true;
-    response.setNextIndex(request.lastLogIndex + ((request.logEntries == nil and 0 ) or #request.logEntries) + 1);
+    response.nextIndex = request.lastLogIndex + ((request.logEntries == nil and 0 ) or #request.logEntries) + 1;
     return response;
 end
 
@@ -298,10 +308,10 @@ function RaftServer:createAppendEntriesRequest(peer)
     term = self.state.term;
     -- }
     -- synchronized(peer){
-    if(peer.getNextLogIndex() == 0) then
-        peer.setNextLogIndex(currentNextIndex);
+    if(peer.nextLogIndex == 0) then
+        peer.nextLogIndex = currentNextIndex;
     end
-    lastLogIndex = peer.getNextLogIndex() - 1;
+    lastLogIndex = peer.nextLogIndex - 1;
     -- }
     if(lastLogIndex >= currentNextIndex) then
         self.logger.error("Peer's lastLogIndex is too large %d v.s. %d, server exits", lastLogIndex, currentNextIndex);
@@ -312,7 +322,7 @@ function RaftServer:createAppendEntriesRequest(peer)
     --     return self:createSyncSnapshotRequest(peer, lastLogIndex, term, commitIndex);
     -- end
     lastLogTerm = self:termForLastLog(lastLogIndex);
-    endIndex = math.min(currentNextIndex, lastLogIndex + 1 + context.getRaftParameters().getMaximumAppendingSize());
+    endIndex = math.min(currentNextIndex, lastLogIndex + 1 + context.raftParameters.maximumAppendingSize);
     logEntries = self.logStore:getLogEntries(lastLogIndex + 1, endIndex);
     if not ((lastLogIndex + 1) >= endIndex) then
          logEntries = nil
@@ -330,6 +340,7 @@ function RaftServer:createAppendEntriesRequest(peer)
         source = self.id,
         destination = peer:getId(),
         lastLogIndex = lastLogIndex,
+        lastLogTerm = lastLogTerm,
         logEntries = logEntries,
         commitIndex = commitIndex,
         term = term,
@@ -402,6 +413,7 @@ function RaftServer:restartElectionTimer()
     raftParameters = self.context.raftParameters
     delta = raftParameters.electionTimeoutUpperBound - raftParameters.electionTimeoutLowerBound
     electionTimeout = raftParameters.electionTimeoutLowerBound + math.random(0, delta)
+    -- self.logger.debug("electionTimeout:%d,%d,%d,%d", electionTimeout, delta, raftParameters.electionTimeoutUpperBound, raftParameters.electionTimeoutLowerBound)
     self.electionTimer:Change(electionTimeout, nil)
 end
 
@@ -474,6 +486,54 @@ function RaftServer:handlePeerResponse(response)
 end
 
 
+function RaftServer:handleAppendEntriesResponse(response)
+    peer = self.peers[response.source];
+    if(peer == nil) then
+        self.logger.info("the response is from an unkonw peer %d", response.source);
+        return;
+    end
+
+    -- If there are pending logs to be synced or commit index need to be advanced, continue to send appendEntries to this peer
+    needToCatchup = true;
+    if(response.accepted) then
+        -- synchronized(peer){
+            peer.nextLogIndex = response.nextIndex;
+            peer.matchedIndex = response.nextIndex - 1;
+        -- }
+
+        -- FIXME:
+        -- try to commit with this response
+        matchedIndexes = {};
+        table.insert( matchedIndexes, 0, self.logStore:getFirstAvailableIndex() - 1 )
+        for i,p in ipairs(self.peers) do
+            table.insert( matchedIndexes, i, p.matchedIndex)
+        end
+
+        table.sort(matchedIndexes, indexComparator);
+        self.logger.debug(matchedIndexes);
+        -- self:commit(matchedIndexes[(#self.peers + 1) / 2]);
+        -- needToCatchup = peer.clearPendingCommit() || response.nextIndex < self.logStore.getFirstAvailableIndex();
+        needToCatchup = response.nextIndex < self.logStore:getFirstAvailableIndex();
+    else
+        -- synchronized(peer){
+            -- Improvement: if peer's real log length is less than was assumed, reset to that length directly
+            if(response.nextIndex > 0 and peer.nextLogIndex > response.nextIndex) then
+                peer.nextLogIndex = response.nextIndex;
+            else
+                peer.nextLogIndex = peer.nextLogIndex - 1;
+            end
+        -- }
+    end
+
+    -- This may not be a leader anymore, such as the response was sent out long time ago
+    -- and the role was updated by UpdateTerm call
+    -- Try to match up the logs for this peer
+    if(self.role == ServerRole.Leader and needToCatchup) then
+        self:requestAppendEntries(peer);
+    end
+end
+
+
 function RaftServer:handleVotingResponse(response)
     self.votesResponded = self.votesResponded + 1;
     if(self.electionCompleted) then
@@ -504,6 +564,7 @@ function RaftServer:stopElectionTimer()
     end
 
     self.electionTimer:Change()
+    assert(not self.electionTimer:IsEnabled(), "stopElectionTimer error")
 end
 
 function RaftServer:becomeLeader()
@@ -533,6 +594,8 @@ function RaftServer:enableHeartbeatForPeer(peer)
     peer.heartbeatEnabled = true;
     peer:resumeHeartbeatingSpeed();
     peer.heartbeatTimer:Change(peer.currentHeartbeatInterval, nil);
+   assert(peer.heartbeatTimer:IsEnabled(), "start heartbeatTimer error")
+    -- assert(false, "what's wrong'")
 end
 
 function RaftServer:becomeFollower()
@@ -540,6 +603,7 @@ function RaftServer:becomeFollower()
     for _, server in ipairs(self.peers) do
         if server.heartbeatTimer:IsEnabled() then
             server.heartbeatTimer:Change()
+            assert(not server.heartbeatTimer:IsEnabled(), "stop heartbeatTimer error")
         end
         server.heartbeatEnabled = false;
     end
@@ -564,19 +628,39 @@ function RaftServer:updateTerm(term)
 end    
 
 
+function RaftServer:commit(targetIndex)
+    if(targetIndex > self.quickCommitIndex) then
+        self.quickCommitIndex = targetIndex;
+
+        -- if this is a leader notify peers to commit as well
+        -- for peers that are free, send the request, otherwise, set pending commit flag for that peer
+        if(self.role == ServerRole.Leader) then
+            for _,peer in ipairs(self.peers) do
+                if( not self:requestAppendEntries(peer)) then
+                    peer:setPendingCommit();
+                end
+            end
+        end
+    end
+
+    if(self.logStore:getFirstAvailableIndex() - 1 > self.state.commitIndex and self.quickCommitIndex > self.state.commitIndex) then
+        -- self.commitingThread.moreToCommit();
+    end
+end
+
 function RaftServer:termForLastLog(logIndex)
     if(logIndex == 0) then
         return 0;
     end
 
     if(logIndex >= self.logStore:getStartIndex()) then
-        return self.logStore:getLogEntryAt(logIndex):getTerm();
+        return self.logStore:getLogEntryAt(logIndex).term;
     end
     lastSnapshot = self.stateMachine:getLastSnapshot();
     if(lastSnapshot == nil or logIndex ~= lastSnapshot:getLastLogIndex()) then
         self.logger.error("logIndex is beyond the range that no term could be retrieved");
     end
-    return lastSnapshot.getLastLogTerm();
+    return lastSnapshot.lastLogTerm;
 end
 
 

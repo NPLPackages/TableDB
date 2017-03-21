@@ -49,8 +49,8 @@ local parsed_url = url.parse(localEndpoint)
 logger.info("local server info"..util.table_tostring(parsed_url))
 
 raftParameters = RaftParameters:new()
-raftParameters.electionTimeoutUpper = 5000;
-raftParameters.electionTimeoutLower = 3000;
+raftParameters.electionTimeoutUpperBound = 5000;
+raftParameters.electionTimeoutLowerBound = 3000;
 raftParameters.heartbeatInterval = 1500;
 raftParameters.rpcFailureBackoff = 500;
 raftParameters.maximumAppendingSize = 200;

@@ -11,18 +11,22 @@ NPL.load("(gl)script/Raft/ServerState.lua");
 
 -- local ServerState = commonlib.gettable("Raft.ServerState");
 local ServerRole = NPL.load("(gl)script/Raft/ServerRole.lua");
--- local util = commonlib.gettable("System.Compiler.lib.util")
+local util = commonlib.gettable("System.Compiler.lib.util")
 
+NPL.load("(gl)script/Raft/PeerServer.lua");
+local PeerServer = commonlib.gettable("Raft.PeerServer");
 
 logger = commonlib.logging.GetLogger("")
 
 local RaftMessageType = NPL.load("(gl)script/Raft/RaftMessageType.lua");
 
-local o = {
-  t = RaftMessageType.RequestVoteRequest,
-}
-logger.debug(o)
-logger.debug(o.t == RaftMessageType.RequestVoteRequest )
+-- assert(false,"assert is working")
+
+-- local o = {
+--   t = RaftMessageType.RequestVoteRequest,
+-- }
+-- logger.debug(o)
+-- logger.debug(o.t == RaftMessageType.RequestVoteRequest )
 
 -- local serverState = ServerState:new()
 
@@ -53,6 +57,51 @@ logger.debug(o.t == RaftMessageType.RequestVoteRequest )
 -- logger.info(serverState)
 
 logger.info(ServerRole.Follower)
+
+
+
+
+-- local t = {
+--   id = 1,
+
+--   handler = function () 
+--     print("kkkk")
+--   end,
+  
+-- }
+
+-- local q = {
+--   c = function ()
+
+--     print("c")
+--   end,
+--   ts = {}
+-- }
+
+-- t.heartbeatTimer = commonlib.Timer:new({callbackFunc = function(timer)
+--                                             q.c()
+
+--                                            end})
+-- util.table_print(t.heartbeatTimer)
+
+local q = {
+  ts = {}
+}
+
+-- table.insert( q.ts,t.id,t )
+
+-- util.table_print(q.ts)
+
+-- t.heartbeatTimer:Change(2, nil)
+
+
+for i=1,2 do
+  local p = PeerServer:new(nil,nil,nil)
+  q.ts[i] = p
+end
+
+util.table_print(q)
+
 
 -- test = {
 --   a = "k",
