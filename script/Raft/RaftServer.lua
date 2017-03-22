@@ -5,6 +5,8 @@ Date:
 Desc: 
 
 
+
+FIXME: make the variables local
 ------------------------------------------------------------
 NPL.load("(gl)script/Raft/RaftServer.lua");
 local RaftServer = commonlib.gettable("Raft.RaftServer");
@@ -424,7 +426,8 @@ function RaftServer:handleAppendEntriesResponse(response)
 
         table.sort(matchedIndexes, indexComparator);
         -- majority is a float without math.floor
-        local majority = math.floor((#self.peers + 1) / 2);
+        -- lua index start form 1
+        local majority = math.floor((#self.peers + 1) / 2) + 1;
         self:commit(matchedIndexes[majority]);
         needToCatchup = peer:clearPendingCommit() or response.nextIndex < self.logStore:getFirstAvailableIndex();
     else

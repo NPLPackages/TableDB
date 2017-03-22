@@ -16,6 +16,7 @@ local LogEntry = commonlib.gettable("Raft.LogEntry");
 
 function LogEntry:new(term, value, valueType) 
     local o = {
+        -- byte array
         value = value or nil,
         term = term or 0,
         valueType = valueType or LogValueType.Application,

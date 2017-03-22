@@ -26,7 +26,6 @@ function RpcClient:__index(name)
 end
 
 function RpcClient:__tostring()
-    -- return format("RpcClient(term:%d,commitIndex:%d,votedFor:%d)", self.term, self.commitIndex, self.votedFor);
     return util.table_tostring(self)
 end
 

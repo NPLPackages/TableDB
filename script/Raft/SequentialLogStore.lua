@@ -13,6 +13,8 @@ local SequentialLogStore = commonlib.gettable("Raft.SequentialLogStore");
 
 NPL.load("(gl)script/Raft/LogEntry.lua");
 local LogEntry = commonlib.gettable("Raft.LogEntry");
+NPL.load("(gl)script/Raft/LogBuffer.lua");
+local LogBuffer = commonlib.gettable("Raft.LogBuffer");
 
 local LoggerFactory = NPL.load("(gl)script/Raft/LoggerFactory.lua");
 
@@ -25,12 +27,15 @@ local LOG_START_INDEX_FILE = "store.sti";
 local LOG_INDEX_FILE_BAK = "store.idx.bak";
 local LOG_STORE_FILE_BAK = "store.data.bak";
 local LOG_START_INDEX_FILE_BAK = "store.sti.bak";
+local BUFFER_SIZE = 1000;
 
 function SequentialLogStore:new(logContainer) 
     local o = {
         logContainer = logContainer,
         logger = LoggerFactory.getLogger("SequentialLogStore"),
         zeroEntry = LogEntry:new(),
+        bufferSize = BUFFER_SIZE,
+
     };
     setmetatable(o, self);
 
@@ -71,6 +76,8 @@ function SequentialLogStore:new(logContainer)
 
     local UintBytes = 4; -- 32 bits
     o.entriesInStore = o.indexFile:GetFileSize() / UintBytes;
+
+    o.buffer = LogBuffer:new((o.entriesInStore > o.bufferSize and (o.entriesInStore + o.startIndex - o.bufferSize)) or o.startIndex, o.bufferSize);
 
     o.logger.debug(string.format("log store started with entriesInStore=%d, startIndex=%d", o.entriesInStore, o.startIndex));
 
@@ -166,4 +173,30 @@ end
  * @return compact successfully or not
 ]]--
 function SequentialLogStore:compact(lastLogIndex)
+end
+
+function SequentialLogStore:fillBuffer()
+    local startIndex = self.buffer:firstIndex();
+    local indexFileSize = self.indexFile:GetFileSize();
+    if(indexFileSize > 0) then
+        local UintBytes = 4; -- 32 bits
+        local indexPosition = (startIndex - self.startIndex) * UintBytes;
+        self.indexFile:seek(indexPosition);
+        local indexData = {};
+        self.indexFile:read(indexFileSize - indexPosition, indexData);
+        
+        -- convert bytes to UInt...
+        -- self.indexFile:seek(indexPosition);
+        -- local dataStart = self.indexFile:ReadUInt();
+        -- self.dataFile:seek(dataStart);
+        -- while(indexBuffer.hasRemaining()) do
+        --     local dataEnd = self.indexFile:ReadUInt();
+        --     self.buffer:append(self.readEntry((int)(dataEnd - dataStart)));
+        --     dataStart = dataEnd;
+        -- end
+        
+        -- a little ugly, load last entry into buffer
+        local dataEnd = self.dataFile.length();
+        self.buffer:append(self.readEntry((int)(dataEnd - dataStart)));
+    end
 end
