@@ -272,3 +272,4 @@ npl_packages/main
 *.idx
 *.sti
 server*/
+main.lua
