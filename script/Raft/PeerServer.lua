@@ -75,6 +75,22 @@ function PeerServer:makeBusy()
 end
 
 
+-- make sure this happens in one NPL thread(state)
+function PeerServer:setPendingCommit()
+   self.pendingCommitFlag = 1;
+end
+
+function PeerServer:clearPendingCommit()
+    -- return this.pendingCommitFlag.compareAndSet(1, 0);
+    if self.pendingCommitFlag == 1 then
+        -- body
+        self.pendingCommitFlag = 0;
+        return true;
+    end
+    return false;
+end
+
+
 function PeerServer:getId()
     return self.clusterConfig.id;
 end

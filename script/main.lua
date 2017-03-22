@@ -85,7 +85,6 @@ logger.info(ServerRole.Follower)
 -- util.table_print(t.heartbeatTimer)
 
 local q = {
-  ts = {}
 }
 
 -- table.insert( q.ts,t.id,t )
@@ -96,11 +95,22 @@ local q = {
 
 
 for i=1,2 do
-  local p = PeerServer:new(nil,nil,nil)
-  q.ts[i] = p
+  local p = {matchedIndex = 0}
+  q[#q+1] = p
 end
 
+local majority = math.floor( (#q+1)/2);
+print(majority)
+
 util.table_print(q)
+
+for i=1,#q do
+  print(i)
+  util.table_print(q[i])
+end
+
+print(q[tonumber(majority)].matchedIndex)
+
 
 
 -- test = {

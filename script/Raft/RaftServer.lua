@@ -32,7 +32,7 @@ local RaftServer = commonlib.gettable("Raft.RaftServer");
 
 local indexComparator = function (arg0, arg1)
     -- body
-    return arg1 - arg0;
+    return arg1 > arg0;
 end
 
 function RaftServer:new(ctx) 
@@ -501,19 +501,18 @@ function RaftServer:handleAppendEntriesResponse(response)
             peer.matchedIndex = response.nextIndex - 1;
         -- }
 
-        -- FIXME:
         -- try to commit with this response
-        matchedIndexes = {};
-        table.insert( matchedIndexes, 0, self.logStore:getFirstAvailableIndex() - 1 )
-        for i,p in ipairs(self.peers) do
-            table.insert( matchedIndexes, i, p.matchedIndex)
+        local matchedIndexes = {};
+        matchedIndexes[#matchedIndexes + 1] = self.logStore:getFirstAvailableIndex() - 1
+        for _,p in ipairs(self.peers) do
+            matchedIndexes[#matchedIndexes + 1] = p.matchedIndex
         end
 
         table.sort(matchedIndexes, indexComparator);
-        self.logger.debug(matchedIndexes);
-        -- self:commit(matchedIndexes[(#self.peers + 1) / 2]);
-        -- needToCatchup = peer.clearPendingCommit() || response.nextIndex < self.logStore.getFirstAvailableIndex();
-        needToCatchup = response.nextIndex < self.logStore:getFirstAvailableIndex();
+        -- majority is a float without math.floor
+        local majority = math.floor((#self.peers + 1) / 2);
+        self:commit(matchedIndexes[majority]);
+        needToCatchup = peer:clearPendingCommit() or response.nextIndex < self.logStore:getFirstAvailableIndex();
     else
         -- synchronized(peer){
             -- Improvement: if peer's real log length is less than was assumed, reset to that length directly
@@ -629,6 +628,7 @@ end
 
 
 function RaftServer:commit(targetIndex)
+    -- self.logger.debug("commit:%d, %d", targetIndex, self.quickCommitIndex)
     if(targetIndex > self.quickCommitIndex) then
         self.quickCommitIndex = targetIndex;
 
