@@ -94,26 +94,48 @@ end
 
 -- private: whenever a message arrives
 function Rpc:OnActivated(msg)
-
-	-- TODO: accept the connection
-	if(msg.name) then
-		local rpc_ = Rpc.GetInstance(msg.name);
-		if(type(rpc_) == "table" and rpc_.OnActivated) then
-			msg.name = nil;
-			return rpc_:OnActivated(msg);
-		end
+  if(msg.tid) then
+     -- unauthenticated? reject as early as possible or accept it. 
+     if(msg.msg.messageType) then
+        NPL.accept(msg.tid, msg.remoteAddress or "default_user");
+     else
+        NPL.reject(msg.tid);
+     end
 	end
-	if(msg.type=="run") then
-		local result = self:handle_request(msg.msg);
-		-- print(format("%s%s%s", msg.callbackThread, msg.remoteAddress, self.filename))
+  if(msg.nid) then
+    -- only respond to authenticated messages. 
+		if(msg.name) then
+			local rpc_ = Rpc.GetInstance(msg.name);
+			if(type(rpc_) == "table" and rpc_.OnActivated) then
+				msg.name = nil;
+				return rpc_:OnActivated(msg);
+			end
+		end
+		if(msg.type=="run") then
+			local result = self:handle_request(msg.msg);
+			-- print(format("%s%s%s", msg.callbackThread, msg.remoteAddress, self.filename))
 
 
-		-- call back on the remote
-		-- TODO: should deal with error, activate_with_timeout??
-		while(NPL.activate(format("%s%s%s", msg.callbackThread, msg.remoteAddress, self.filename),
-		 {type="result", result = result, err=nil, callbackId = msg.callbackId}) ~= 0) do end;
-	elseif(msg.type== "result" and msg.callbackId) then
-		self:InvokeCallback(msg.callbackId, msg.err, msg.result);
+			-- call back on the remote
+			-- TODO: should deal with error, activate_with_timeout??
+			-- while(NPL.activate(format("%s%s%s", msg.callbackThread, msg.remoteAddress, self.filename),
+			-- 													{type="result", result = result, err=nil, callbackId = msg.callbackId}) ~= 0) do
+			-- end;
+
+			local activate_result = NPL.activate(format("%s%s%s", msg.callbackThread, msg.remoteAddress, self.filename),
+																						{type="result", result = result, err=nil, callbackId = msg.callbackId})
+
+			-- handle memory leak
+			if activate_result ~= 0 then
+				-- FIXME:
+				-- this will cause remote side memory leak, how to handle this
+				-- should give run_callbacks a TTL
+				-- self.run_callbacks[callbackId] = nil
+			end											
+
+		elseif(msg.type== "result" and msg.callbackId) then
+			self:InvokeCallback(msg.callbackId, msg.err, msg.result);
+		end
 	end
 end
 
@@ -187,15 +209,25 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
 
 	-- print(format("%s%s", self.remoteAddress or "", self.filename))
 
-	-- TODO: handle error
-	return NPL.activate(format("%s%s", self.remoteAddress or "", self.filename), {
-		type="run", 
-		msg = msg, 
-		name = self.fullname,
-		callbackId = self.next_run_id, 
-		callbackThread=self.thread_name,
-		remoteAddress=self.localAddress,
-	});
+	
+	local activate_result = NPL.activate(format("%s%s", self.remoteAddress or "", self.filename), {
+																						type="run", 
+																						msg = msg, 
+																						name = self.fullname,
+																						callbackId = self.next_run_id, 
+																						callbackThread=self.thread_name,
+																						remoteAddress=self.localAddress,
+																					});
+	-- handle memory leak
+	if activate_result ~= 0 then
+		self.run_callbacks[callbackId] = nil
+	else
+		-- FIXME:
+		-- to avoid memory leak, we 
+		-- should give self.run_callbacks a TTL
+		-- self.run_callbacks[callbackId] = nil
+	end
+	return activate_result
 end
 
 Rpc.__call = Rpc.activate;

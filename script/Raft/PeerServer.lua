@@ -89,21 +89,22 @@ function PeerServer:SendRequest(request, callbackFunc)
     -- RaftRequestRPC is init in the RpcListener, suppose we could directly use here
 
     local o = self
-    RaftRequestRPC("server"..request.source..":", "server"..request.destination..":", request, function(err, msg)
+
+    if (RaftRequestRPC("server"..request.source..":", "server"..request.destination..":", request, function(err, msg)
                     --    LOG.std(nil, "debug", "RaftResponseRPC", msg);
-                       if(isAppendRequest) then
-                           o:setFree();
-                       end
-                       
                        o:resumeHeartbeatingSpeed();
 
                        if callbackFunc then
                            callbackFunc(msg)
                        end
-                   end)
-
-
-
+                   end) ~= 0) then
+        self:slowDownHeartbeating()
+    end
+    
+    if(isAppendRequest) then
+        self:setFree();
+    end
+                       
     return ;
 end
 
