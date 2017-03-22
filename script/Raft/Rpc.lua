@@ -117,13 +117,8 @@ function Rpc:OnActivated(msg)
 
 
 			-- call back on the remote
-			-- TODO: should deal with error, activate_with_timeout??
-			-- while(NPL.activate(format("%s%s%s", msg.callbackThread, msg.remoteAddress, self.filename),
-			-- 													{type="result", result = result, err=nil, callbackId = msg.callbackId}) ~= 0) do
-			-- end;
-
 			local activate_result = NPL.activate(format("%s%s%s", msg.callbackThread, msg.remoteAddress, self.filename),
-																						{type="result", result = result, err=nil, callbackId = msg.callbackId})
+																						{type="result", msg = result, err=nil, callbackId = msg.callbackId})
 
 			-- handle memory leak
 			if activate_result ~= 0 then
@@ -134,7 +129,7 @@ function Rpc:OnActivated(msg)
 			end											
 
 		elseif(msg.type== "result" and msg.callbackId) then
-			self:InvokeCallback(msg.callbackId, msg.err, msg.result);
+			self:InvokeCallback(msg.callbackId, msg.err, msg.msg);
 		end
 	end
 end
