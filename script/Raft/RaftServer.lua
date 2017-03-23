@@ -18,7 +18,9 @@ NPL.load("(gl)script/Raft/RaftMessageSender.lua");
 local RaftMessageSender = commonlib.gettable("Raft.RaftMessageSender");
 NPL.load("(gl)script/Raft/ServerState.lua");
 local ServerState = commonlib.gettable("Raft.ServerState");
-
+NPL.load("(gl)script/Raft/LogEntry.lua");
+local LogEntry = commonlib.gettable("Raft.LogEntry");
+local LogValueType = NPL.load("(gl)script/Raft/LogValueType.lua");
 local ServerRole = NPL.load("(gl)script/Raft/ServerRole.lua");
 NPL.load("(gl)script/Raft/PeerServer.lua");
 local PeerServer = commonlib.gettable("Raft.PeerServer");
@@ -36,6 +38,8 @@ local indexComparator = function (arg0, arg1)
     -- body
     return arg1 > arg0;
 end
+
+local real_commit -- 'forward' declarations
 
 function RaftServer:new(ctx) 
     local o = {
@@ -83,7 +87,6 @@ function RaftServer:new(ctx)
     -- FIXME: why???
     -- what's wrong with o.logger.debug
     -- o.logger.debug(o.peers)
-    -- util.table_print(o.peers)
 
     -- dedicated commit thread
      o.commitingThreadName = "commitingThread"..o.id;
@@ -199,10 +202,10 @@ function RaftServer:handleAppendEntriesRequest(request)
         -- dealing with overwrites
         while(index < self.logStore:getFirstAvailableIndex() and logIndex < #logEntries) do
             oldEntry = self.logStore:getLogEntryAt(index);
-            if(oldEntry.getValueType() == LogValueType.Application) then
-                self.stateMachine.rollback(index, oldEntry.getValue());
-            elseif(oldEntry.getValueType() == LogValueType.Configuration) then
-                self.logger.info("revert a previous config change to config at %d", self.config.getLogIndex());
+            if(oldEntry.valueType == LogValueType.Application) then
+                self.stateMachine.rollback(index, oldEntry.value);
+            elseif(oldEntry.valueType == LogValueType.Configuration) then
+                self.logger.info("revert a previous config change to config at %d", self.config.logIndex);
                 self.configChanging = false;
             end
             self.logStore:writeAt(index, logEntries[logIndex]);
@@ -214,11 +217,11 @@ function RaftServer:handleAppendEntriesRequest(request)
             logEntry = logEntries[logIndex];
             logIndex = logIndex + 1;
             indexForEntry = self.logStore:append(logEntry);
-            if(logEntry.getValueType() == LogValueType.Configuration) then
+            if(logEntry.valueType == LogValueType.Configuration) then
                 self.logger.info("received a configuration change at index %d from leader", indexForEntry);
                 self.configChanging = true;
             else
-                self.stateMachine.preCommit(indexForEntry, logEntry.getValue());
+                self.stateMachine.preCommit(indexForEntry, logEntry.value);
             end
         end
     end
@@ -413,8 +416,8 @@ function RaftServer:handleAppendEntriesResponse(response)
     needToCatchup = true;
     if(response.accepted) then
         -- synchronized(peer){
-            peer.nextLogIndex = response.nextIndex;
-            peer.matchedIndex = response.nextIndex - 1;
+        peer.nextLogIndex = response.nextIndex;
+        peer.matchedIndex = response.nextIndex - 1;
         -- }
 
         -- try to commit with this response
@@ -424,10 +427,13 @@ function RaftServer:handleAppendEntriesResponse(response)
             matchedIndexes[#matchedIndexes + 1] = p.matchedIndex
         end
 
+        -- self.logger.debug("matchedIndexes:%s",util.table_tostring(matchedIndexes))
         table.sort(matchedIndexes, indexComparator);
+        -- self.logger.debug("sorted matchedIndexes:%s",util.table_tostring(matchedIndexes))
         -- majority is a float without math.floor
         -- lua index start form 1
         local majority = math.floor((#self.peers + 1) / 2) + 1;
+        -- self.logger.debug("total:%d, major:%d", #self.peers, majority)
         self:commit(matchedIndexes[majority]);
         needToCatchup = peer:clearPendingCommit() or response.nextIndex < self.logStore:getFirstAvailableIndex();
     else
@@ -531,10 +537,10 @@ function RaftServer:becomeLeader()
 
     -- if current config is not committed, try to commit it
     if(self.config.logIndex == 0) then
-        self.config.logIndex= self.logStore:getFirstAvailableIndex();
+        -- self.config.logIndex= self.logStore:getFirstAvailableIndex();
         -- self.logStore:append(LogEntry:new(self.state.term, self.config:toBytes(), LogValueType.Configuration));
-        self.logger.info("add initial configuration to log store");
-        self.configChanging = true;
+        -- self.logger.info("add initial configuration to log store");
+        -- self.configChanging = true;
     end
 
     self:requestAllAppendEntries();
@@ -595,6 +601,7 @@ function RaftServer:commit(targetIndex)
 
     if(self.logStore:getFirstAvailableIndex() - 1 > self.state.commitIndex and self.quickCommitIndex > self.state.commitIndex) then
         -- self.commitingThread.moreToCommit();
+        real_commit(self);
     end
 end
 
@@ -670,6 +677,44 @@ end
 
 
 -- TODO: resemble IOThread in TableDB
+
+function real_commit(server)
+    local currentCommitIndex = server.state.commitIndex;
+    while(currentCommitIndex < server.quickCommitIndex and currentCommitIndex < server.logStore:getFirstAvailableIndex() - 1) do
+        currentCommitIndex = currentCommitIndex + 1;
+        -- server.logger.debug("currentCommitIndex:%d, quickCommitIndex%d, logStoreFirstAvailableIndex%d", currentCommitIndex, server.quickCommitIndex, server.logStore:getFirstAvailableIndex())
+        local logEntry = server.logStore:getLogEntryAt(currentCommitIndex);
+
+        -- FIXME:
+        -- how can a LogEntry be nil ??
+        -- perhaps on the start up, self commitIndex is -1, logStore's StartIndex is 1
+        -- need more test here
+        if logEntry == nil then
+            -- do nothing
+        elseif(logEntry.valueType == LogValueType.Application) then
+            server.stateMachine:commit(currentCommitIndex, logEntry.value);
+        elseif(logEntry.valueType == LogValueType.Configuration) then
+            local newConfig = ClusterConfiguration:fromBytes(logEntry.value);
+            server.logger.info("configuration at index %d is committed", newConfig.logIndex);
+            server.context.serverStateManager:saveClusterConfiguration(newConfig);
+            server.configChanging = false;
+            if(server.config.logIndex < newConfig.logIndex) then
+                server:reconfigure(newConfig);
+            end
+            
+            if(server.catchingUp and newConfig:getServer(server.id) ~= nil) then
+                server.logger.info("this server is committed as one of cluster members");
+                server.catchingUp = false;
+            end
+        end
+
+        server.state.commitIndex = currentCommitIndex;
+        -- server:snapshotAndCompact(currentCommitIndex);
+    end
+
+    server.context.serverStateManager:persistState(server.state);
+end
+
 
 -- commiting thread
 local function activate()

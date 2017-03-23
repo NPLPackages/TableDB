@@ -110,9 +110,3 @@ function ServerStateManager:readState()
 
     return ServerState:new(term, commitIndex, votedFor);
 end
-
-function ServerStateManager:loadLogStore()
-    -- json config
-    return ;
-end
-
