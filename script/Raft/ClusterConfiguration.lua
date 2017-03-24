@@ -33,7 +33,6 @@ function ClusterConfiguration:__tostring()
     return util.table_tostring(self)
 end
 
-
 function ClusterConfiguration:getServer(id)
     for _,server in ipairs(self.servers) do
         if(server.id == id) then

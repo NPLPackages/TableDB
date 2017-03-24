@@ -100,10 +100,7 @@ function PeerServer:SendRequest(request, callbackFunc)
     isAppendRequest = request.messageType == RaftMessageType.AppendEntriesRequest or
                       request.messageType == RaftMessageType.InstallSnapshotRequest;
 
-    -- need to handle exception here, use with_timeout???
-    -- this is sync..., if so should we solve this?
     -- RaftRequestRPC is init in the RpcListener, suppose we could directly use here
-
     local o = self
 
     if (RaftRequestRPC("server"..request.source..":", "server"..request.destination..":", request, function(err, msg)
@@ -120,8 +117,6 @@ function PeerServer:SendRequest(request, callbackFunc)
     if(isAppendRequest) then
         self:setFree();
     end
-                       
-    return ;
 end
 
 

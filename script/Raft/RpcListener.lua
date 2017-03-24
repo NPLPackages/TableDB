@@ -28,6 +28,13 @@ function RpcListener:new(ip, port, servers)
         servers = servers,
         logger = LoggerFactory.getLogger("RpcListener"),
     };
+    
+    for _, server in ipairs(o.servers) do
+        local parsed_url = url.parse(server.endpoint)
+        NPL.AddNPLRuntimeAddress({host = parsed_url.host, port = tostring(parsed_url.port), nid = "server"..server.id})
+    end
+    NPL.AddNPLRuntimeAddress({host = "localhost", port = "9004", nid = "server4"})
+
     setmetatable(o, self);
     return o;
 end
@@ -55,24 +62,10 @@ function RpcListener:startListening(messageHandler)
     -- port is need to be string here??
     NPL.StartNetServer(self.ip, tostring(self.port));
 
-    for _, server in ipairs(self.servers) do
-        local parsed_url = url.parse(server.endpoint)
-        NPL.AddNPLRuntimeAddress({host = parsed_url.host, port = tostring(parsed_url.port), nid = "server"..server.id})
-    end
+    -- for _, server in ipairs(self.servers) do
+    --     local parsed_url = url.parse(server.endpoint)
+    --     NPL.AddNPLRuntimeAddress({host = parsed_url.host, port = tostring(parsed_url.port), nid = "server"..server.id})
+    -- end
     RaftRequestRPC:MakePublic();
-
-
-
-
-    -- XXX: need handle response here??
-    -- use Rpc for incoming Response message
-    -- Rpc:new():init("RaftResponseRPC", function(self, msg) 
-    --     LOG.std(nil, "info", "RaftResponseRPC", msg);
-    --     msg = messageHandler.processResponse(msg)
-    --     return msg; 
-    -- end)
-
-    -- RaftResponseRPC:MakePublic();
-
 
 end

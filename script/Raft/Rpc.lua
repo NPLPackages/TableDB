@@ -29,7 +29,12 @@ Test.testRPC("(worker1)", {"input"}, function(err, msg)
 end, 500);
 ------------------------------------------------------------
 ]]
+
+NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
+local util = commonlib.gettable("System.Compiler.lib.util")
+
 local Rpc = commonlib.gettable("Raft.Rpc");
+
 
 local rpc_instances = {};
 
@@ -94,15 +99,20 @@ end
 
 -- private: whenever a message arrives
 function Rpc:OnActivated(msg)
+	util.table_print(msg)
   if(msg.tid) then
      -- unauthenticated? reject as early as possible or accept it. 
      if(msg.msg.messageType) then
         NPL.accept(msg.tid, msg.remoteAddress or "default_user");
+				msg.nid = msg.remoteAddress or "default_user"
      else
         NPL.reject(msg.tid);
      end
 	end
-  if(msg.nid) then
+	print("--------")
+	util.table_print(msg)
+	
+  if(msg.nid or msg.tid) then
     -- only respond to authenticated messages. 
 		if(msg.name) then
 			local rpc_ = Rpc.GetInstance(msg.name);
@@ -111,9 +121,14 @@ function Rpc:OnActivated(msg)
 				return rpc_:OnActivated(msg);
 			end
 		end
+	print("--------2")
+		
 		if(msg.type=="run") then
+	print("--------3")
+		
 			local result = self:handle_request(msg.msg);
-			-- print(format("%s%s%s", msg.callbackThread, msg.remoteAddress, self.filename))
+	print(result)
+			print(format("%s%s%s", msg.callbackThread, msg.remoteAddress, self.filename))
 
 
 			-- call back on the remote
@@ -129,6 +144,8 @@ function Rpc:OnActivated(msg)
 			end											
 
 		elseif(msg.type== "result" and msg.callbackId) then
+	print("--------4")
+		
 			self:InvokeCallback(msg.callbackId, msg.err, msg.msg);
 		end
 	end

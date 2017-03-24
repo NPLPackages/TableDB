@@ -123,12 +123,12 @@ function RaftServer:processRequest(request)
 
     self.logger.debug("Receive a %s message from %d with LastLogIndex=%d, LastLogTerm=%d, EntriesLength=%d, CommitIndex=%d and Term=%d",
             request.messageType.string,
-            request.source,
-            request.lastLogIndex,
-            request.lastLogTerm,
+            request.source or -1,
+            request.lastLogIndex or -1,
+            request.lastLogTerm or -1,
             entriesLength,
             request.commitIndex or 0,
-            request.term);
+            request.term or -1);
     response = nil;
     if(request.messageType.int == RaftMessageType.AppendEntriesRequest.int) then
         response = self:handleAppendEntriesRequest(request);
@@ -260,7 +260,35 @@ function RaftServer:handleVoteRequest(request)
     return response;
 end
 
+function RaftServer:handleClientRequest(request)
 
+    local response = {
+        messageType = RaftMessageType.AppendEntriesResponse,
+        source = self.id,
+        destination = self.leader,
+        term = self.state.term,
+    }
+
+    if self.role ~= ServerRole.Leader then
+        response.accepted = false
+        return response
+    end
+
+    local term = self.state.term
+
+    -- FIXME:
+    -- print(self.stateMachine)
+    -- if request.logEntries and #request.logEntries > 0 then
+    --     for i=1,#request.logEntries do
+    --         self.stateMachine:preCommit(self.logStore:append(LogEntry:new(term, logEntries[i].value)), logEntries[i].value);
+    --     end
+    -- end
+
+    self:requestAllAppendEntries();
+    response.accepted = true;
+    response.nextIndex = self.logStore:getFirstAvailableIndex();
+    return response
+end
 
 function RaftServer:handleElectionTimeout()
     if(self.steppingDown > 0) then

@@ -273,3 +273,5 @@ npl_packages/main
 *.sti
 server*/
 main.lua
+client/*
+client/

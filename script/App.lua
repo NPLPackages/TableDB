@@ -13,6 +13,9 @@ NPL.load("(gl)script/Raft/RaftParameters.lua");
 NPL.load("(gl)script/Raft/RaftContext.lua");
 NPL.load("(gl)script/Raft/RpcListener.lua");
 NPL.load("(gl)script/Raft/MessagePrinter.lua");
+NPL.load("(gl)script/Raft/RaftClient.lua");
+
+local RaftClient = commonlib.gettable("Raft.RaftClient");
 
 -- local ServerState = commonlib.gettable("Raft.ServerState");
 -- local ServerRole = NPL.load("(gl)script/Raft/ServerRole.lua");
@@ -36,117 +39,85 @@ local logger = LoggerFactory.getLogger("App")
 -- local mpDir = "script/mpDir/"
 
 
-local baseDir = ParaEngine.GetAppCommandLineByParam("baseDir", "1");
+local baseDir = ParaEngine.GetAppCommandLineByParam("baseDir", "./");
 local mpPort = ParaEngine.GetAppCommandLineByParam("mpPort", "8090");
+local raftMode = ParaEngine.GetAppCommandLineByParam("raftMode", "server");
 
-logger.info("app arg:"..baseDir..mpPort)
+logger.info("app arg:"..baseDir..mpPort..raftMode)
 
 stateManager = ServerStateManager:new(baseDir);
 config = stateManager:loadClusterConfiguration();
 
 local localEndpoint = config:getServer(stateManager.serverId).endpoint
 local parsed_url = url.parse(localEndpoint)
-logger.info("local server info"..util.table_tostring(parsed_url))
+logger.info("local state info"..util.table_tostring(parsed_url))
+local rpcListener = RpcListener:new(parsed_url.host, parsed_url.port, config.servers)
 
-raftParameters = RaftParameters:new()
-raftParameters.electionTimeoutUpperBound = 5000;
-raftParameters.electionTimeoutLowerBound = 3000;
-raftParameters.heartbeatInterval = 1500;
-raftParameters.rpcFailureBackoff = 500;
-raftParameters.maximumAppendingSize = 200;
-raftParameters.logSyncBatchSize = 5;
-raftParameters.logSyncStoppingGap = 5;
-raftParameters.snapshotEnabled = 5000;
-raftParameters.syncSnapshotBlockSize = 0;
-
--- logger.debug(raftParameters)
 -- message printer
 mp = MessagePrinter:new(baseDir, parsed_url.host, mpPort)
 
-context = RaftContext:new(stateManager,
-                          mp,
-                          raftParameters,
-                          RpcListener:new(parsed_url.host, parsed_url.port, config.servers),
-                          LoggerFactory);
-RaftConsensus.run(context);
+local function executeInServerMode(...)
+  -- body
+
+    raftParameters = RaftParameters:new()
+    raftParameters.electionTimeoutUpperBound = 5000;
+    raftParameters.electionTimeoutLowerBound = 3000;
+    raftParameters.heartbeatInterval = 1500;
+    raftParameters.rpcFailureBackoff = 500;
+    raftParameters.maximumAppendingSize = 200;
+    raftParameters.logSyncBatchSize = 5;
+    raftParameters.logSyncStoppingGap = 5;
+    raftParameters.snapshotEnabled = 5000;
+    raftParameters.syncSnapshotBlockSize = 0;
+
+    -- logger.debug(raftParameters)
 
 
+    context = RaftContext:new(stateManager,
+                              mp,
+                              raftParameters,
+                              rpcListener,
+                              LoggerFactory);
+    RaftConsensus.run(context);
+end
 
 
+local function executeAsClient(localId, configuration, loggerFactory)
+    local raftClient = RaftClient:new(localId, configuration, loggerFactory)
 
--- local serverState = ServerState:new()
+    local values = {
+      "test:1111",
+      "test:1112",
+      "test:1113",
+      "test:1114",
+      "test:1115",
+    }
 
--- NPL.load("(gl)script/ide/timer.lua");
+    raftClient:appendEntries(values)
+    
+    -- while(true) do
+    --     printf("Message:");
 
--- local mytimer = commonlib.Timer:new({callbackFunc = function(timer)
--- 	logger({"ontimer", timer.id, timer.delta, timer.lastTick})
---   mytimer:Change()
--- end})
-
--- -- start the timer after 0 milliseconds, and signal every 1000 millisecond
--- logger.error("here")
--- mytimer:Change(0, 1000)
--- -- ParaEngine.Sleep(2);
--- -- 
--- -- mytimer:Change()
--- -- ParaEngine.Sleep(1);
--- logger.error("here2")
--- mytimer:Change(0, 1000)
--- logger.error("here")
-
-
--- logger.info(serverState)
-
--- -- must be colon, to provide the hidden self
--- serverState:increaseTerm()
--- logger.info(serverState)
-
--- logger.info(ServerRole.Follower)
-
--- test = {
---   a = "k",
---   b ="l"
--- }
-
--- util.table_print(test)
-
--- NPL.load("(gl)script/Raft/rpc.lua");
--- local rpc = commonlib.gettable("System.Concurrent.Async.rpc");
--- rpc:new():init("Test.testRPC", function(self, msg) 
--- 	LOG.std(nil, "info", "category", msg);
--- 	msg.output=true; 
--- 	-- ParaEngine.Sleep(1);
--- 	return msg; 
--- end)
-
--- NPL.StartNetServer("127.0.0.1", "60001");
--- NPL.AddNPLRuntimeAddress({host = "127.0.0.1", port = "60002", nid = "server2"})
--- Test.testRPC:MakePublic();
--- print(Test.testRPC)
-
--- -- now we can invoke it anywhere in any thread or remote address.
--- while(Test.testRPC("server1:","server2:", {"input"}, function(err, msg) 
---    LOG.std(nil, "info", "category", msg);
--- 	assert(msg.output == true and msg[1] == "input")
--- end) ~= 0) do end;
-
--- -- time out in 500ms
--- Test.testRPC("(worker1)", {"input"}, function(err, msg) 
--- 	assert(err == "timeout" and msg==nil)
--- 	echo(err);
--- end, 500);
-
--- NPL.activate("rpc/Test.testRPC.lua",{
--- 		type="run", 
--- 		msg = {"imputtest"}, 
--- 		name = "Test.testRPC",
--- 		-- callbackId = self.next_run_id, 
--- 		callbackThread="(osAsync)",
--- 	})
+        -- for(int i = 1; i <= count; ++i){
+        --     String msg = String.format(format, i);
+        --     boolean accepted = client.appendEntries(new byte[][]{ msg.getBytes() }).get();
+        --     printf("Accepted: " + String.valueOf(accepted));
+        -- }
 
 
--- NPL.load("(gl)script/test/network/TestSimpleServer.lua");
--- test_start_simple_server();
+        -- boolean accepted = client.appendEntries(new byte[][]{ message.getBytes() }).get();
+        -- printf("Accepted: " + String.valueOf(accepted));
+    -- end
+end
+
+if raftMode:lower() == "server" then
+  executeInServerMode()
+elseif raftMode:lower() == "client" then
+  NPL.StartNetServer("localhost", "9004");
+  mp:start()
+  executeAsClient(4, config, LoggerFactory)
+end
+
 
 
 local function activate()

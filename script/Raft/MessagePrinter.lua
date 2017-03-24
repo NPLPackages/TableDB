@@ -10,6 +10,8 @@ NPL.load("(gl)script/Raft/MessagePrinter.lua");
 local MessagePrinter = commonlib.gettable("Raft.MessagePrinter");
 ------------------------------------------------------------
 ]]--
+NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
+local util = commonlib.gettable("System.Compiler.lib.util")
 
 NPL.load("(gl)script/Raft/Rpc.lua");
 local Rpc = commonlib.gettable("Raft.Rpc");
@@ -51,22 +53,18 @@ end
  * @param raftMessageSender
  ]]--
 function MessagePrinter:start(raftMessageSender)
-    self.messageSender = messageSender;
+    self.messageSender = raftMessageSender;
+    local o = self;
 
     -- use Rpc for incoming Request message
     Rpc:new():init("MPRequestRPC", function(self, msg) 
         LOG.std(nil, "info", "MPRequestRPC", msg);
-        msg = messageHandler.processRequest(msg)
+        msg = o:processMessage(msg)
         return msg; 
     end)
 
     -- port is need to be string here??
     -- NPL.StartNetServer(self.ip, tostring(self.port));
-
-    -- for _, server in ipairs(self.servers) do
-    --     local pased_url = url.parse(server.endPoint)
-    --     NPL.AddNPLRuntimeAddress({host = pased_url.host, port = tostring(pased_url.port), nid = server.endPoint})
-    -- end
     MPRequestRPC:MakePublic();
 
 end
@@ -78,7 +76,7 @@ end
  ]]--
 function MessagePrinter:commit(logIndex, data)
     local message = tostring(data);
-    printf(format("commit: %d\t%s\n", logIndex, message));
+    print(format("commit: %d\t%s\n", logIndex, message));
     self.commitIndex = logIndex;
     self:addMessage(message);
 end
@@ -97,10 +95,10 @@ end
  * @param data
  ]]--
 function MessagePrinter:preCommit(logIndex, data)
-    message = tostring(data);
-    printf(string.format("PreCommit:%s at %d", message, logIndex));
+    local message = tostring(data);
+    print(string.format("PreCommit:%s at %d", message, logIndex));
 
-    index = string.find(message, ':');
+    local index = string.find(message, ':');
     if(index ~= nil) then
         key = string.sub(message, 0, index);
         self.pendingMessages[key] = message;
@@ -160,6 +158,10 @@ function MessagePrinter:exit(code)
 end
 
 
+function MessagePrinter:processMessage(message)
+    print("Got message " .. util.table_tostring(message));
+    return self.messageSender:appendEntries(message);
+end
 
 
 function MessagePrinter:addMessage(message)
