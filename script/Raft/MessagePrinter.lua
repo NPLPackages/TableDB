@@ -100,7 +100,7 @@ function MessagePrinter:preCommit(logIndex, data)
 
     local index = string.find(message, ':');
     if(index ~= nil) then
-        key = string.sub(message, 0, index);
+        key = string.sub(message, 1, index - 1);
         self.pendingMessages[key] = message;
     end
 end
@@ -170,7 +170,7 @@ function MessagePrinter:addMessage(message)
         return;
     end
     
-    key = string.sub(message, 0, index);
+    key = string.sub(message, 1, index-1);
     self.messages[key] = message;
     self.pendingMessages[key] = nil;
 
