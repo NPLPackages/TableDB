@@ -16,7 +16,7 @@ local Logger = commonlib.gettable("Raft.Logger");
 function Logger:new(modname)
     local module_name = modname or ""
     local logger = commonlib.logging.GetLogger(module_name);
-    logger.level = "debug"
+    logger.level = "info"
     local function appender(level, ...)
         logger.std(nil, level, module_name, ...)
     end

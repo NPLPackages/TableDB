@@ -32,7 +32,7 @@ function MessagePrinter:new(baseDir, ip, listeningPort)
     setmetatable(o, self);
 
     if not ParaIO.CreateDirectory(baseDir) then
-        self.logger.error("%s create error", baseDir)
+        o.logger.error("%s create error", baseDir)
     end
     return o;
 end

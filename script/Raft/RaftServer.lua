@@ -194,14 +194,14 @@ function RaftServer:handleAppendEntriesRequest(request)
         local logIndex = 1;
         self.logger.trace("initial->entry len:%d, index:%d, logIndex:%d", #logEntries, index, logIndex)
         while(index < self.logStore:getFirstAvailableIndex() and
-                logIndex < #logEntries and
+                logIndex < #logEntries + 1 and
                 logEntries[logIndex].term == self.logStore:getLogEntryAt(index).term) do
             logIndex = logIndex + 1;
             index = index + 1;
         end
         self.logger.trace("checked overlap->entry len:%d, index:%d, logIndex:%d", #logEntries, index, logIndex)
         -- dealing with overwrites
-        while(index < self.logStore:getFirstAvailableIndex() and logIndex < #logEntries) do
+        while(index < self.logStore:getFirstAvailableIndex() and logIndex < #logEntries + 1) do
             local oldEntry = self.logStore:getLogEntryAt(index);
             if(oldEntry.valueType == LogValueType.Application) then
                 self.stateMachine:rollback(index, oldEntry.value);
@@ -215,7 +215,7 @@ function RaftServer:handleAppendEntriesRequest(request)
         end
         self.logger.trace("dealed overwrite->entry len:%d, index:%d, logIndex:%d", #logEntries, index, logIndex)
         -- append the new log entries
-        while(logIndex < #logEntries) do
+        while(logIndex < #logEntries + 1) do
             local logEntry = logEntries[logIndex];
             self.logger.trace("dealing with logEntry:"..util.table_tostring(logEntry))
             logIndex = logIndex + 1;
@@ -278,8 +278,6 @@ function RaftServer:handleClientRequest(request)
 
     local term = self.state.term
 
-    -- FIXME:
-    -- print(self.stateMachine)
     if request.logEntries and #request.logEntries > 0 then
         for i=1,#request.logEntries do
             local logEntry = LogEntry:new(term, request.logEntries[i].value)

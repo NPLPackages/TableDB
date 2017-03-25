@@ -77,7 +77,7 @@ end
 function LogBuffer:trim(fromIndex)
     local index = fromIndex - self.startIndex;
     
-    if index < #self.buffer then
+    if index < #self.buffer + 1 then
         for i=index, #self.buffer do
             self.buffer[self.startIndex+i] = nil
         end
@@ -88,7 +88,7 @@ function LogBuffer:append(entry)
     self.buffer[#self.buffer+1] = entry
 
     -- maxSize
-    if self.maxSize < #self.buffer then
+    if self.maxSize < #self.buffer + 1 then
         self.buffer[self.startIndex] = nil
         self.startIndex = self.startIndex + 1
     end

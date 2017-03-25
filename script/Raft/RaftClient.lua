@@ -79,7 +79,7 @@ function RaftClient:tryCurrentLeader(request, rpcBackoff, retry)
     end
     local activate_result = MPRequestRPC("server"..self.id..":", "server"..self.leaderId..":", request, function(err, response)
                        if not err then
-                           o.logger.debug("response from remote server, leader: %d, accepted: %s",
+                           o.logger.info("response from remote server, leader: %d, accepted: %s",
                                            response.destination, response.accepted and "true" or "false");
                            if(not response.accepted) then
                                -- set the leader return from the server
