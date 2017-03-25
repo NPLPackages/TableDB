@@ -1,7 +1,7 @@
 --[[
 Title: 
-Author: 
-Date: 
+Author: liuluheng
+Date: 2017.03.25
 Desc: 
 
 Peer server in the same cluster for local server

@@ -1,7 +1,7 @@
 --[[
 Title: remote procedure call
 Author(s): LiXizhi@yeah.net
-Date: 2017/2/8
+Date: 2017.03.252017/2/8
 Desc: Create RPC in current NPL thread. Internally it will use an existing or a virtual NPL activation file that can be invoked from any thread.
 use the lib:
 ------------------------------------------------------------

@@ -1,7 +1,7 @@
 --[[
 Title: 
-Author: 
-Date: 
+Author: liuluheng
+Date: 2017.03.25
 Desc: 
 the LogBuffer is startIndex based
 ------------------------------------------------------------
@@ -15,8 +15,6 @@ NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 local util = commonlib.gettable("System.Compiler.lib.util")
 local LogBuffer = commonlib.gettable("Raft.LogBuffer");
 
-
--- local LOGENTRY_SIZE = ;
 
 function LogBuffer:new(startIndex, maxSize) 
     local o = {
