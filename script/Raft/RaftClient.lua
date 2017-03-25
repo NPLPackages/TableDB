@@ -19,9 +19,10 @@ local RaftMessageType = NPL.load("(gl)script/Raft/RaftMessageType.lua");
 
 local RaftClient = commonlib.gettable("Raft.RaftClient");
 
-function RaftClient:new(id, configuration, loggerFactory) 
+function RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory) 
     local o = {
-        id = id,
+        localAddress = localAddress,
+        RequestRPC = RequestRPC,
         configuration = configuration,
         leaderId = configuration.servers[math.random(#configuration.servers)].id,
         randomLeader = true,
@@ -77,7 +78,7 @@ function RaftClient:tryCurrentLeader(request, rpcBackoff, retry)
             o:tryCurrentLeader(request, rpcBackoff + 500, retry + 1);
         end
     end
-    local activate_result = MPRequestRPC("server"..self.id..":", "server"..self.leaderId..":", request, function(err, response)
+    local activate_result = self.RequestRPC(self.localAddress, "server"..self.leaderId..":", request, function(err, response)
                        if not err then
                            o.logger.info("response from remote server, leader: %d, accepted: %s",
                                            response.destination, response.accepted and "true" or "false");

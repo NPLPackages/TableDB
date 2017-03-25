@@ -31,6 +31,7 @@ end, 500);
 ]]
 
 NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
+local RaftMessageType = NPL.load("(gl)script/Raft/RaftMessageType.lua");
 local util = commonlib.gettable("System.Compiler.lib.util")
 local LoggerFactory = NPL.load("(gl)script/Raft/LoggerFactory.lua");
 
@@ -99,16 +100,32 @@ function Rpc.GetInstance(name)
 	return rpc_instances[name or ""];
 end
 
+local added_runtime = {}
 -- private: whenever a message arrives
 function Rpc:OnActivated(msg)
-	if msg.name == "MPRequestRPC" then
+	if type(self.localAddress) == "table" then
 		self.logger.trace(msg)
 	end
   if(msg.tid) then
-     -- unauthenticated? reject as early as possible or accept it. 
-     if(msg.msg.messageType) then
-        NPL.accept(msg.tid, msg.remoteAddress or "default_user");
-				msg.nid = msg.remoteAddress or "default_user"
+     -- unauthenticated? reject as early as possible or accept it.
+		 local messageType = msg.msg.messageType
+     if(messageType) then
+				local remoteAddress = msg.remoteAddress
+				if messageType.int == RaftMessageType.ClientRequest.int then
+					-- we got a client request
+					if not added_runtime[remoteAddress.id] then
+						added_runtime[remoteAddress.id] = true
+						local nid = string.sub(remoteAddress.id, 1, #remoteAddress.id-1);
+						self.logger.trace("accepted nid is %s", nid)
+					  NPL.AddNPLRuntimeAddress({host = remoteAddress.host, port = remoteAddress.port, nid = nid})
+					end
+					NPL.accept(msg.tid, remoteAddress.id or "default_user");
+					msg.nid = remoteAddress.id or "default_user"
+        else
+					-- body
+				  NPL.accept(msg.tid, remoteAddress or "default_user");
+				  msg.nid = remoteAddress or "default_user"
+				end
      else
         NPL.reject(msg.tid);
      end
@@ -129,8 +146,11 @@ function Rpc:OnActivated(msg)
 			if not result then
 				return
 			end
+			if type(msg.remoteAddress) == "table" and msg.remoteAddress.id then
+				msg.remoteAddress = msg.remoteAddress.id
+			end
 			local vFileId = format("%s%s%s", msg.callbackThread, msg.remoteAddress, self.filename)
-			local msg = {
+			local response = {
 				name = self.fullname,
 				type="result",
 				msg = result, 
@@ -138,10 +158,10 @@ function Rpc:OnActivated(msg)
 				remoteAddress = self.localAddress, -- on the server side the local address is nil
 				callbackId = msg.callbackId
 			}
-			if self.fullname == "MPRequestRPC" then
-				self.logger.debug("activate on %s, msg:%s", vFileId, util.table_tostring(msg))
+			if type(self.localAddress) == "table" then
+				self.logger.debug("activate on %s, msg:%s", vFileId, util.table_tostring(response))
 			end
-			local activate_result = NPL.activate(vFileId, msg)
+			local activate_result = NPL.activate(vFileId, response)
 
 			-- handle memory leak
 			if activate_result ~= 0 then
@@ -236,7 +256,7 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
 		callbackThread = self.thread_name,
 		remoteAddress = self.localAddress,
 	}
-	if self.fullname == "MPRequestRPC" then
+	if type(self.localAddress) == "table" then
 		self.logger.debug("activate on %s, msg:%s", vFileId, util.table_tostring(msg))
 	end
 	local activate_result = NPL.activate(vFileId, msg);

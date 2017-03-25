@@ -38,11 +38,11 @@ function MessagePrinter:new(baseDir, ip, listeningPort)
 end
 
 function MessagePrinter:__index(name)
-return rawget(self, name) or MessagePrinter[name];
+    return rawget(self, name) or MessagePrinter[name];
 end
 
 function MessagePrinter:__tostring()
-return util.table_tostring(self)
+    return util.table_tostring(self)
 end
 
 

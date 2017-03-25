@@ -34,9 +34,6 @@ function RpcListener:new(ip, port, servers)
         NPL.AddNPLRuntimeAddress({host = parsed_url.host, port = tostring(parsed_url.port), nid = "server"..server.id})
     end
 
-    -- FIXME: mv to RPC
-    NPL.AddNPLRuntimeAddress({host = "localhost", port = "9004", nid = "server4"})
-
     setmetatable(o, self);
     return o;
 end
@@ -53,8 +50,8 @@ end
 --Starts listening and handle all incoming messages with messageHandler
 function RpcListener:startListening(messageHandler)
     self.logger.info("startListening")
-    -- use Rpc for incoming Request message
     local o = self
+    -- use Rpc for incoming Request message
     Rpc:new():init("RaftRequestRPC", function(self, msg) 
         o.logger.trace("RaftRequestRPC:%s",util.table_tostring(msg));
         msg = messageHandler:processRequest(msg)
@@ -64,10 +61,6 @@ function RpcListener:startListening(messageHandler)
     -- port is need to be string here??
     NPL.StartNetServer(self.ip, tostring(self.port));
 
-    -- for _, server in ipairs(self.servers) do
-    --     local parsed_url = url.parse(server.endpoint)
-    --     NPL.AddNPLRuntimeAddress({host = parsed_url.host, port = tostring(parsed_url.port), nid = "server"..server.id})
-    -- end
     RaftRequestRPC:MakePublic();
 
 end

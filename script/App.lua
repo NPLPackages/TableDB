@@ -77,8 +77,8 @@ local function executeInServerMode(...)
 end
 
 
-local function executeAsClient(localId, configuration, loggerFactory)
-    local raftClient = RaftClient:new(localId, configuration, loggerFactory)
+local function executeAsClient(localAddress, RequestRPC, configuration, loggerFactory)
+    local raftClient = RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory)
 
     local values = {
       "test:1111",
@@ -108,9 +108,14 @@ end
 if raftMode:lower() == "server" then
   executeInServerMode()
 elseif raftMode:lower() == "client" then
-  NPL.StartNetServer("localhost", "9004");
+  local localAddress = {
+    host = "localhost",
+    port = "9004",
+    id = "server4:",
+  }
+  NPL.StartNetServer(localAddress.host, localAddress.port);
   mp:start()
-  executeAsClient(4, config, LoggerFactory)
+  executeAsClient(localAddress, MPRequestRPC, config, LoggerFactory)
 end
 
 

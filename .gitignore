@@ -275,3 +275,4 @@ server*/
 main.lua
 client/*
 client/
+start*.bat
