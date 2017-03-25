@@ -259,3 +259,21 @@ paket-files/
 # Python Tools for Visual Studio (PTVS)
 __pycache__/
 *.pyc
+
+# npl
+log.txt
+npl_packages/main
+*.sln
+*.csproj*
+*.vscode
+*.state
+*.properties
+*.data
+*.idx
+*.sti
+server*/
+main.lua
+client/*
+client/
+start*.bat
+RpcClient.lua
