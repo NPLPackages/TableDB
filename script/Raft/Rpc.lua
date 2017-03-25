@@ -99,7 +99,6 @@ end
 
 -- private: whenever a message arrives
 function Rpc:OnActivated(msg)
-	util.table_print(msg)
   if(msg.tid) then
      -- unauthenticated? reject as early as possible or accept it. 
      if(msg.msg.messageType) then
@@ -109,10 +108,8 @@ function Rpc:OnActivated(msg)
         NPL.reject(msg.tid);
      end
 	end
-	print("--------")
-	util.table_print(msg)
 	
-  if(msg.nid or msg.tid) then
+  if(msg.nid) then
     -- only respond to authenticated messages. 
 		if(msg.name) then
 			local rpc_ = Rpc.GetInstance(msg.name);
@@ -121,19 +118,15 @@ function Rpc:OnActivated(msg)
 				return rpc_:OnActivated(msg);
 			end
 		end
-	print("--------2")
 		
 		if(msg.type=="run") then
-	print("--------3")
 		
-			local result = self:handle_request(msg.msg);
-	print(result)
-			print(format("%s%s%s", msg.callbackThread, msg.remoteAddress, self.filename))
-
+			local result, err = self:handle_request(msg.msg);
+			-- util.table_print(result)
 
 			-- call back on the remote
 			local activate_result = NPL.activate(format("%s%s%s", msg.callbackThread, msg.remoteAddress, self.filename),
-																						{type="result", msg = result, err=nil, callbackId = msg.callbackId})
+																						{type="result", msg = result, err=err, callbackId = msg.callbackId})
 
 			-- handle memory leak
 			if activate_result ~= 0 then
@@ -141,11 +134,10 @@ function Rpc:OnActivated(msg)
 				-- this will cause remote side memory leak, how to handle this
 				-- should give run_callbacks a TTL
 				-- self.run_callbacks[callbackId] = nil
+				print(format("activate on %s%s%s failed %d", msg.callbackThread, msg.remoteAddress, self.filename, activate_result))
 			end											
 
 		elseif(msg.type== "result" and msg.callbackId) then
-	print("--------4")
-		
 			self:InvokeCallback(msg.callbackId, msg.err, msg.msg);
 		end
 	end

@@ -129,7 +129,7 @@ function RaftServer:processRequest(request)
             entriesLength,
             request.commitIndex or 0,
             request.term or -1);
-    response = nil;
+    local response = nil;
     if(request.messageType.int == RaftMessageType.AppendEntriesRequest.int) then
         response = self:handleAppendEntriesRequest(request);
     elseif(request.messageType.int == RaftMessageType.RequestVoteRequest.int) then
@@ -165,12 +165,12 @@ function RaftServer:handleAppendEntriesRequest(request)
             self:becomeFollower();
         elseif(self.role == ServerRole.Leader) then
             self.logger.error("Receive AppendEntriesRequest from another leader(%d) with same term, there must be a bug, server exits", request.source);
-            self.stateMachine.exit(-1);
+            self.stateMachine:exit(-1);
         else
             self:restartElectionTimer();
         end
     end
-    response = {
+    local response = {
         messageType = RaftMessageType.AppendEntriesResponse,
         term = self.state.term,
         source = self.id,
@@ -178,8 +178,8 @@ function RaftServer:handleAppendEntriesRequest(request)
     }
 
     -- After a snapshot the request.getLastLogIndex() may less than logStore.getStartingIndex() but equals to logStore.getStartingIndex() -1
-    -- In self case, log is Okay if request.getLastLogIndex() == lastSnapshot.getLastLogIndex() and request.getLastLogTerm() == lastSnapshot.getLastTerm()
-    logOkay = request.lastLogIndex == 0 or
+    -- In this case, log is Okay if request.getLastLogIndex() == lastSnapshot.getLastLogIndex() and request.getLastLogTerm() == lastSnapshot.getLastTerm()
+    local logOkay = request.lastLogIndex == 0 or
             (request.lastLogIndex < self.logStore:getFirstAvailableIndex() and
                     request.lastLogTerm == self:termForLastLog(request.lastLogIndex));
     if(request.term < self.state.term or (not logOkay) )then
@@ -190,20 +190,22 @@ function RaftServer:handleAppendEntriesRequest(request)
     -- The role is Follower and log is okay now
     if(request.logEntries ~= nil and #request.logEntries > 0) then
         -- write the logs to the store, first of all, check for overlap, and skip them
-        logEntries = request.logEntries;
-        index = request.lastLogIndex + 1;
-        logIndex = 0;
+        local logEntries = request.logEntries;
+        local index = request.lastLogIndex + 1;
+        local logIndex = 1;
+        -- self.logger.debug("entry len:%d, index:%d, logIndex:%d", #logEntries, index, logIndex)
         while(index < self.logStore:getFirstAvailableIndex() and
                 logIndex < #logEntries and
                 logEntries[logIndex].term == self.logStore:getLogEntryAt(index).term) do
             logIndex = logIndex + 1;
             index = index + 1;
         end
+        -- self.logger.debug("entry len:%d, index:%d, logIndex:%d", #logEntries, index, logIndex)
         -- dealing with overwrites
         while(index < self.logStore:getFirstAvailableIndex() and logIndex < #logEntries) do
             oldEntry = self.logStore:getLogEntryAt(index);
             if(oldEntry.valueType == LogValueType.Application) then
-                self.stateMachine.rollback(index, oldEntry.value);
+                self.stateMachine:rollback(index, oldEntry.value);
             elseif(oldEntry.valueType == LogValueType.Configuration) then
                 self.logger.info("revert a previous config change to config at %d", self.config.logIndex);
                 self.configChanging = false;
@@ -212,16 +214,18 @@ function RaftServer:handleAppendEntriesRequest(request)
             logIndex = logIndex + 1;
             index = index + 1;
         end
+        -- self.logger.debug("entry len:%d, index:%d, logIndex:%d", #logEntries, index, logIndex)
         -- append the new log entries
         while(logIndex < #logEntries) do
-            logEntry = logEntries[logIndex];
+            local logEntry = logEntries[logIndex];
+            self.logger.debug(logEntries)
             logIndex = logIndex + 1;
-            indexForEntry = self.logStore:append(logEntry);
+            local indexForEntry = self.logStore:append(logEntry);
             if(logEntry.valueType == LogValueType.Configuration) then
                 self.logger.info("received a configuration change at index %d from leader", indexForEntry);
                 self.configChanging = true;
             else
-                self.stateMachine.preCommit(indexForEntry, logEntry.value);
+                self.stateMachine:preCommit(indexForEntry, logEntry.value);
             end
         end
     end
@@ -278,11 +282,13 @@ function RaftServer:handleClientRequest(request)
 
     -- FIXME:
     -- print(self.stateMachine)
-    -- if request.logEntries and #request.logEntries > 0 then
-    --     for i=1,#request.logEntries do
-    --         self.stateMachine:preCommit(self.logStore:append(LogEntry:new(term, logEntries[i].value)), logEntries[i].value);
-    --     end
-    -- end
+    if request.logEntries and #request.logEntries > 0 then
+        for i=1,#request.logEntries do
+            local logEntry = LogEntry:new(term, request.logEntries[i].value)
+            local logIndex = self.logStore:append(logEntry)
+            self.stateMachine:preCommit(logIndex, request.logEntries[i].value);
+        end
+    end
 
     self:requestAllAppendEntries();
     response.accepted = true;
@@ -301,7 +307,7 @@ function RaftServer:handleElectionTimeout()
                 self.context.serverStateManager.saveClusterConfiguration(self.config);
             end
             
-            self.stateMachine.exit(0);
+            self.stateMachine:exit(0);
             return;
         end
 
@@ -428,7 +434,7 @@ function RaftServer:handlePeerResponse(response)
         self:handleInstallSnapshotResponse(response);
     else
         self.logger.error("Received an unexpected message %s for response, system exits.", response.messageType.string);
-        self.stateMachine.exit(-1);
+        self.stateMachine:exit(-1);
     end
 end
 
@@ -636,33 +642,34 @@ end
 
 
 function RaftServer:createAppendEntriesRequest(peer)
-    lastLogIndex = 0;
     -- synchronized(this){
-    startingIndex = self.logStore:getStartIndex();
-    currentNextIndex = self.logStore:getFirstAvailableIndex();
-    commitIndex = self.quickCommitIndex;
-    term = self.state.term;
+    local startingIndex = self.logStore:getStartIndex();
+    local currentNextIndex = self.logStore:getFirstAvailableIndex();
+    local commitIndex = self.quickCommitIndex;
+    local term = self.state.term;
     -- }
     -- synchronized(peer){
     if(peer.nextLogIndex == 0) then
         peer.nextLogIndex = currentNextIndex;
     end
-    lastLogIndex = peer.nextLogIndex - 1;
+    
+    local lastLogIndex = peer.nextLogIndex - 1;
     -- }
     if(lastLogIndex >= currentNextIndex) then
         self.logger.error("Peer's lastLogIndex is too large %d v.s. %d, server exits", lastLogIndex, currentNextIndex);
-        self.stateMachine.exit(-1);
+        self.stateMachine:exit(-1);
     end
     -- -- for syncing the snapshots, if the lastLogIndex == lastSnapshot.getLastLogIndex, we could get the term from the snapshot
     -- if(lastLogIndex > 0 and lastLogIndex < startingIndex - 1) then
     --     return self:createSyncSnapshotRequest(peer, lastLogIndex, term, commitIndex);
     -- end
-    lastLogTerm = self:termForLastLog(lastLogIndex);
-    endIndex = math.min(currentNextIndex, lastLogIndex + 1 + context.raftParameters.maximumAppendingSize);
-    logEntries = self.logStore:getLogEntries(lastLogIndex + 1, endIndex);
+    local lastLogTerm = self:termForLastLog(lastLogIndex);
+    local endIndex = math.min(currentNextIndex, lastLogIndex + 1 + context.raftParameters.maximumAppendingSize);
+    local logEntries;
     if not ((lastLogIndex + 1) >= endIndex) then
-         logEntries = nil
+         logEntries = self.logStore:getLogEntries(lastLogIndex + 1, endIndex)
     end
+    -- self.logger.debug("endIndex:%d, %d, %d", endIndex, currentNextIndex, lastLogIndex + 1 + context.raftParameters.maximumAppendingSize)
     self.logger.debug(
             "An AppendEntries Request for %d with LastLogIndex=%d, LastLogTerm=%d, EntriesLength=%d, CommitIndex=%d and Term=%d",
             peer:getId(),
@@ -671,7 +678,7 @@ function RaftServer:createAppendEntriesRequest(peer)
             (logEntries == nil and 0 ) or #logEntries,
             commitIndex,
             term);
-    requestMessage = {
+    local requestMessage = {
         messageType = RaftMessageType.AppendEntriesRequest,
         source = self.id,
         destination = peer:getId(),

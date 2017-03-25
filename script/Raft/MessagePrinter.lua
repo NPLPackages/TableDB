@@ -58,7 +58,7 @@ function MessagePrinter:start(raftMessageSender)
 
     -- use Rpc for incoming Request message
     Rpc:new():init("MPRequestRPC", function(self, msg) 
-        LOG.std(nil, "info", "MPRequestRPC", msg);
+        -- LOG.std(nil, "info", "MPRequestRPC", msg);
         msg = o:processMessage(msg)
         return msg; 
     end)
@@ -75,7 +75,7 @@ end
  * @param data 
  ]]--
 function MessagePrinter:commit(logIndex, data)
-    local message = tostring(data);
+    local message = data;
     print(format("commit: %d\t%s\n", logIndex, message));
     self.commitIndex = logIndex;
     self:addMessage(message);
@@ -95,8 +95,8 @@ end
  * @param data
  ]]--
 function MessagePrinter:preCommit(logIndex, data)
-    local message = tostring(data);
-    print(string.format("PreCommit:%s at %d", message, logIndex));
+    local message = data;
+    print(string.format("PreCommit:%s at %d", message, tonumber(logIndex)));
 
     local index = string.find(message, ':');
     if(index ~= nil) then

@@ -10,7 +10,8 @@ NPL.load("(gl)script/Raft/SequentialLogStore.lua");
 local SequentialLogStore = commonlib.gettable("Raft.SequentialLogStore");
 ------------------------------------------------------------
 ]]--
-
+NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
+local util = commonlib.gettable("System.Compiler.lib.util")
 NPL.load("(gl)script/Raft/LogEntry.lua");
 local LogEntry = commonlib.gettable("Raft.LogEntry");
 NPL.load("(gl)script/Raft/LogBuffer.lua");
@@ -132,7 +133,7 @@ function SequentialLogStore:append(logEntry)
     self.dataFile:seek(dataFileLength);
     self.dataFile:WriteUInt(logEntry.term);
     self.dataFile:WriteBytes(1, {logEntry.valueType});
-    self.dataFile:WriteBytes(#logEntry.value, logEntry.value);
+    self.dataFile:WriteBytes(#logEntry.value, {logEntry.value:byte(1, -1)});
 
     self.entriesInStore = self.entriesInStore + 1;
     self.buffer:append(logEntry);
@@ -164,7 +165,7 @@ function SequentialLogStore:writeAt(logIndex, logEntry)
     self.indexFile:WriteUInt(dataPosition);
     self.dataFile:WriteUInt(logEntry.term);
     self.dataFile:WriteBytes(1, {logEntry.valueType});
-    self.dataFile:WriteBytes(#logEntry.value, logEntry.value);
+    self.dataFile:WriteBytes(#logEntry.value, {logEntry.value:byte(1, -1)});
 
 
     -- trim the files if necessary
@@ -191,6 +192,7 @@ end
  * @return the log entries between [start, end)
 ]]--
 function SequentialLogStore:getLogEntries(startIndex, endIndex)
+    -- self.logger.debug("startIndex:%d, %d", startIndex,self.startIndex)
     if startIndex < self.startIndex then
         return;
     end
@@ -198,16 +200,18 @@ function SequentialLogStore:getLogEntries(startIndex, endIndex)
     -- start and adjustedEnd are zero based, targetEndIndex is this.startIndex based
     local start = startIndex - self.startIndex;
     local adjustedEnd = endIndex - self.startIndex;
-    adjustedEnd = adjustedEnd > self.entriesInStore and self.entriesInStore or adjustedEnd;
-    local targetEndIndex = endIndex > self.entriesInStore + self.startIndex + 1 and self.entriesInStore + self.startIndex + 1 or endIndex;
+    adjustedEnd = (adjustedEnd > self.entriesInStore and self.entriesInStore) or adjustedEnd;
+    local targetEndIndex = (endIndex > self.entriesInStore + self.startIndex + 1 and self.entriesInStore + self.startIndex + 1) or endIndex;
+    -- self.logger.debug(":%d, %d, %d", adjustedEnd, start, targetEndIndex)
 
-    entries = {}
+    local entries = {}
     if adjustedEnd - start == 0 then
         return entries
     end
 
     -- fill with buffer
     local bufferFirstIndex = self.buffer:fill(startIndex, targetEndIndex, entries);
+    -- self.logger.debug(":%d, %d", bufferFirstIndex, #entries)
     
     -- Assumption: buffer.lastIndex() == this.entriesInStore + this.startIndex
     -- (Yes, for sure, we need to enforce this assumption to be true)

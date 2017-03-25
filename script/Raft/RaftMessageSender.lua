@@ -33,7 +33,6 @@ function RaftMessageSender:__tostring()
 end
 
 function RaftMessageSender:appendEntries(values)
-    -- print("iiiii")
     -- util.table_print(values)
     -- if(values or #values == 0) then
     --     return;
@@ -58,7 +57,7 @@ end
 function RaftMessageSender:sendMessageToLeader(request)
     leaderId = self.server.leader;
     config = self.server.config;
-    print("leaderId %d", leaderId)
+    -- print(format("leaderId %d", leaderId))
     
     if(leaderId == -1) then
         return;

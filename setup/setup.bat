@@ -12,7 +12,7 @@ for %%i in (1 2 3) do (
     REM start "server%%i" /D "%curdir%\server%%i" java -jar %curdir%\dmprinter.jar server "%curdir%\server%%i" 800%%i
 )
 
-goto done
+REM goto done
 :setupClient
 echo start a client
 mkdir client

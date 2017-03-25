@@ -97,7 +97,7 @@ end
 
 
 function PeerServer:SendRequest(request, callbackFunc)
-    isAppendRequest = request.messageType == RaftMessageType.AppendEntriesRequest or
+    local isAppendRequest = request.messageType == RaftMessageType.AppendEntriesRequest or
                       request.messageType == RaftMessageType.InstallSnapshotRequest;
 
     -- RaftRequestRPC is init in the RpcListener, suppose we could directly use here

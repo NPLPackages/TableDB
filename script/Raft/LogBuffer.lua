@@ -10,7 +10,8 @@ local LogBuffer = commonlib.gettable("Raft.LogBuffer");
 ------------------------------------------------------------
 ]]--
 
-
+NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
+local util = commonlib.gettable("System.Compiler.lib.util")
 local LogBuffer = commonlib.gettable("Raft.LogBuffer");
 
 
@@ -65,6 +66,9 @@ function LogBuffer:fill(start, endi, result)
         result[i] = self.buffer[i]
     end
 
+    -- util.table_print(self.buffer)
+    -- print(format("%d,%d", #result, #self.buffer))
+
     return self.startIndex;
 end
 
@@ -81,7 +85,7 @@ function LogBuffer:trim(fromIndex)
 end
 
 function LogBuffer:append(entry)
-    self.buffer[#self.buffer] = entry
+    self.buffer[#self.buffer+1] = entry
 
     -- maxSize
     if self.maxSize < #self.buffer then
