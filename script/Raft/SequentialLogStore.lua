@@ -192,7 +192,8 @@ end
  * @return the log entries between [start, end)
 ]]--
 function SequentialLogStore:getLogEntries(startIndex, endIndex)
-    -- self.logger.debug("startIndex:%d, %d", startIndex,self.startIndex)
+    self.logger.trace("getLogEntries:startIndex:%d, endIndex:%d, self.startIndex:%d, self.entriesInStore:%d",
+                       startIndex, endIndex, self.startIndex, self.entriesInStore)
     if startIndex < self.startIndex then
         return;
     end
@@ -202,16 +203,16 @@ function SequentialLogStore:getLogEntries(startIndex, endIndex)
     local adjustedEnd = endIndex - self.startIndex;
     adjustedEnd = (adjustedEnd > self.entriesInStore and self.entriesInStore) or adjustedEnd;
     local targetEndIndex = (endIndex > self.entriesInStore + self.startIndex + 1 and self.entriesInStore + self.startIndex + 1) or endIndex;
-    -- self.logger.debug(":%d, %d, %d", adjustedEnd, start, targetEndIndex)
 
     local entries = {}
     if adjustedEnd - start == 0 then
         return entries
     end
 
+    self.logger.trace("getLogEntries:pre fill entries len:%d", #entries)
     -- fill with buffer
     local bufferFirstIndex = self.buffer:fill(startIndex, targetEndIndex, entries);
-    -- self.logger.debug(":%d, %d", bufferFirstIndex, #entries)
+    self.logger.trace("getLogEntries:bufferFirstIndex:%d, got entries len:%d", bufferFirstIndex, #entries)
     
     -- Assumption: buffer.lastIndex() == this.entriesInStore + this.startIndex
     -- (Yes, for sure, we need to enforce this assumption to be true)
@@ -224,6 +225,7 @@ function SequentialLogStore:getLogEntries(startIndex, endIndex)
             local dataEnd = self.indexFile:ReadUInt();
             local dataSize = dataEnd - dataStart;
             self.dataFile:seek(dataStart);
+            -- here we should use i to index
             entries[i] = self:readEntry(dataSize);
             dataStart = dataEnd;
         end

@@ -10,6 +10,7 @@ local LogBuffer = commonlib.gettable("Raft.LogBuffer");
 ------------------------------------------------------------
 ]]--
 
+local LoggerFactory = NPL.load("(gl)script/Raft/LoggerFactory.lua");
 NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 local util = commonlib.gettable("System.Compiler.lib.util")
 local LogBuffer = commonlib.gettable("Raft.LogBuffer");
@@ -21,6 +22,7 @@ function LogBuffer:new(startIndex, maxSize)
     local o = {
         startIndex = startIndex,
         maxSize = maxSize,
+        logger = LoggerFactory.getLogger("LogBuffer"),
         buffer = {},
     };
     setmetatable(o, self);
@@ -63,11 +65,12 @@ function LogBuffer:fill(start, endi, result)
     end
 
     for i=start, endi do
-        result[i] = self.buffer[i]
+        result[#result + 1] = self.buffer[i]
     end
 
-    -- util.table_print(self.buffer)
-    -- print(format("%d,%d", #result, #self.buffer))
+    self.logger.trace("LogBuffer:fill>start:%d, end:%d, result len:%d, self.buffer len:%d",
+                       start, endi, #result, #self.buffer)
+    -- self.logger.trace("LogBuffer:fill>result:%s", util.table_tostring(result))
 
     return self.startIndex;
 end

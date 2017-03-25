@@ -182,8 +182,8 @@ function RaftServer:handleAppendEntriesRequest(request)
             (request.lastLogIndex < self.logStore:getFirstAvailableIndex() and
                     request.lastLogTerm == self:termForLastLog(request.lastLogIndex));
     if(request.term < self.state.term or (not logOkay) )then
-        response.accepted = false;
-        response.nextIndex= self.logStore:getFirstAvailableIndex();
+        response.accepted  = false;
+        response.nextIndex = self.logStore:getFirstAvailableIndex();
         return response;
     end
     -- The role is Follower and log is okay now
@@ -613,7 +613,7 @@ function RaftServer:updateTerm(term)
 end    
 
 function RaftServer:commit(targetIndex)
-    -- self.logger.debug("commit:%d, %d", targetIndex, self.quickCommitIndex)
+    self.logger.trace("committing..targetIndex:%d, quickCommitIndex:%d", targetIndex, self.quickCommitIndex)
     if(targetIndex > self.quickCommitIndex) then
         self.quickCommitIndex = targetIndex;
 
