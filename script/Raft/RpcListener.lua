@@ -52,9 +52,9 @@ end
 function RpcListener:startListening(messageHandler)
     self.logger.info("startListening")
     -- use Rpc for incoming Request message
+    local o = self
     Rpc:new():init("RaftRequestRPC", function(self, msg) 
-        -- LOG.std(nil, "debug", "RaftRequestRPC", msg);
-        -- self.logger.info("RaftRequestRPC:%s",util.table_tostring(msg));
+        o.logger.trace("RaftRequestRPC:%s",util.table_tostring(msg));
         msg = messageHandler:processRequest(msg)
         return msg; 
     end)

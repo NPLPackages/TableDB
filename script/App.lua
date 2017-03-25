@@ -45,8 +45,8 @@ local raftMode = ParaEngine.GetAppCommandLineByParam("raftMode", "server");
 
 logger.info("app arg:"..baseDir..mpPort..raftMode)
 
-stateManager = ServerStateManager:new(baseDir);
-config = stateManager:loadClusterConfiguration();
+local stateManager = ServerStateManager:new(baseDir);
+local config = stateManager:loadClusterConfiguration();
 
 local localEndpoint = config:getServer(stateManager.serverId).endpoint
 local parsed_url = url.parse(localEndpoint)
@@ -57,9 +57,7 @@ local rpcListener = RpcListener:new(parsed_url.host, parsed_url.port, config.ser
 mp = MessagePrinter:new(baseDir, parsed_url.host, mpPort)
 
 local function executeInServerMode(...)
-  -- body
-
-    raftParameters = RaftParameters:new()
+    local raftParameters = RaftParameters:new()
     raftParameters.electionTimeoutUpperBound = 5000;
     raftParameters.electionTimeoutLowerBound = 3000;
     raftParameters.heartbeatInterval = 1500;
@@ -70,14 +68,11 @@ local function executeInServerMode(...)
     raftParameters.snapshotEnabled = 5000;
     raftParameters.syncSnapshotBlockSize = 0;
 
-    -- logger.debug(raftParameters)
-
-
-    context = RaftContext:new(stateManager,
-                              mp,
-                              raftParameters,
-                              rpcListener,
-                              LoggerFactory);
+    local context = RaftContext:new(stateManager,
+                                    mp,
+                                    raftParameters,
+                                    rpcListener,
+                                    LoggerFactory);
     RaftConsensus.run(context);
 end
 

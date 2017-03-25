@@ -29,7 +29,6 @@ function ClusterServer:__index(name)
 end
 
 function ClusterServer:__tostring()
-    -- return format("ClusterServer(term:%d,commitIndex:%d,votedFor:%d)", self.term, self.commitIndex, self.votedFor);
     return util.table_tostring(self)
 end
 

@@ -76,7 +76,7 @@ end
  ]]--
 function MessagePrinter:commit(logIndex, data)
     local message = data;
-    print(format("commit: %d\t%s\n", logIndex, message));
+    print(format("commit: %d\t%s", logIndex, message));
     self.commitIndex = logIndex;
     self:addMessage(message);
 end

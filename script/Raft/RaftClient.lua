@@ -106,6 +106,7 @@ function RaftClient:tryCurrentLeader(request, rpcBackoff, retry)
     if (activate_result ~= 0) then
         self.logger.info("rpc error, failed(%d) to send request to remote server. tried %d", activate_result, retry);
         if(retry > #self.configuration.servers) then
+            self.logger.info("FAILED. reach to the max retry. tried %d", retry);
             return;
         end
 

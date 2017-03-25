@@ -5,8 +5,6 @@ Date:
 Desc: 
 
 
-
-FIXME: make the variables local
 ------------------------------------------------------------
 NPL.load("(gl)script/Raft/RaftServer.lua");
 local RaftServer = commonlib.gettable("Raft.RaftServer");
@@ -89,11 +87,11 @@ function RaftServer:new(ctx)
     -- o.logger.debug(o.peers)
 
     -- dedicated commit thread
-     o.commitingThreadName = "commitingThread"..o.id;
-     NPL.CreateRuntimeState(o.commitingThreadName, 0):Start();
-     NPL.activate(format("(%s)script/Raft/RaftServer.lua", o.commitingThreadName),{
-         server = o,
-     });
+    --  o.commitingThreadName = "commitingThread"..o.id;
+    --  NPL.CreateRuntimeState(o.commitingThreadName, 0):Start();
+    --  NPL.activate(format("(%s)script/Raft/RaftServer.lua", o.commitingThreadName),{
+    --      server = o,
+    --  });
 
     -- election timer
     o:restartElectionTimer()
@@ -129,7 +127,8 @@ function RaftServer:processRequest(request)
             entriesLength,
             request.commitIndex or 0,
             request.term or -1);
-    local response = nil;
+    
+    local response;
     if(request.messageType.int == RaftMessageType.AppendEntriesRequest.int) then
         response = self:handleAppendEntriesRequest(request);
     elseif(request.messageType.int == RaftMessageType.RequestVoteRequest.int) then
@@ -155,7 +154,7 @@ end
 function RaftServer:handleAppendEntriesRequest(request)
     -- we allow the server to be continue after term updated to save a round message
     self:updateTerm(request.term);
-    -- Reset stepping down value to prevent self server goes down when leader crashes after sending a LeaveClusterRequest
+    -- Reset stepping down value to prevent this server goes down when leader crashes after sending a LeaveClusterRequest
     if(self.steppingDown > 0) then
         self.steppingDown = 2;
     end
@@ -177,8 +176,8 @@ function RaftServer:handleAppendEntriesRequest(request)
         destination = request.source,
     }
 
-    -- After a snapshot the request.getLastLogIndex() may less than logStore.getStartingIndex() but equals to logStore.getStartingIndex() -1
-    -- In this case, log is Okay if request.getLastLogIndex() == lastSnapshot.getLastLogIndex() and request.getLastLogTerm() == lastSnapshot.getLastTerm()
+    -- After a snapshot the request.lastLogIndex may less than logStore:getStartingIndex() but equals to logStore:getStartingIndex() -1
+    -- In this case, log is Okay if request.lastLogIndex == lastSnapshot.lastLogIndex and request.lastLogTerm == lastSnapshot.getLastTerm()
     local logOkay = request.lastLogIndex == 0 or
             (request.lastLogIndex < self.logStore:getFirstAvailableIndex() and
                     request.lastLogTerm == self:termForLastLog(request.lastLogIndex));
@@ -193,17 +192,17 @@ function RaftServer:handleAppendEntriesRequest(request)
         local logEntries = request.logEntries;
         local index = request.lastLogIndex + 1;
         local logIndex = 1;
-        -- self.logger.debug("entry len:%d, index:%d, logIndex:%d", #logEntries, index, logIndex)
+        self.logger.trace("initial->entry len:%d, index:%d, logIndex:%d", #logEntries, index, logIndex)
         while(index < self.logStore:getFirstAvailableIndex() and
                 logIndex < #logEntries and
                 logEntries[logIndex].term == self.logStore:getLogEntryAt(index).term) do
             logIndex = logIndex + 1;
             index = index + 1;
         end
-        -- self.logger.debug("entry len:%d, index:%d, logIndex:%d", #logEntries, index, logIndex)
+        self.logger.trace("checked overlap->entry len:%d, index:%d, logIndex:%d", #logEntries, index, logIndex)
         -- dealing with overwrites
         while(index < self.logStore:getFirstAvailableIndex() and logIndex < #logEntries) do
-            oldEntry = self.logStore:getLogEntryAt(index);
+            local oldEntry = self.logStore:getLogEntryAt(index);
             if(oldEntry.valueType == LogValueType.Application) then
                 self.stateMachine:rollback(index, oldEntry.value);
             elseif(oldEntry.valueType == LogValueType.Configuration) then
@@ -214,11 +213,11 @@ function RaftServer:handleAppendEntriesRequest(request)
             logIndex = logIndex + 1;
             index = index + 1;
         end
-        -- self.logger.debug("entry len:%d, index:%d, logIndex:%d", #logEntries, index, logIndex)
+        self.logger.trace("dealed overwrite->entry len:%d, index:%d, logIndex:%d", #logEntries, index, logIndex)
         -- append the new log entries
         while(logIndex < #logEntries) do
             local logEntry = logEntries[logIndex];
-            self.logger.debug(logEntries)
+            self.logger.trace("dealing with logEntry:"..util.table_tostring(logEntry))
             logIndex = logIndex + 1;
             local indexForEntry = self.logStore:append(logEntry);
             if(logEntry.valueType == LogValueType.Configuration) then
@@ -245,31 +244,30 @@ function RaftServer:handleVoteRequest(request)
         self.steppingDown = 2;
     end
     
-    response = {
+    local response = {
         messageType = RaftMessageType.RequestVoteResponse,
-        source=self.id,
+        source = self.id,
         destination = request.source,
         term = self.state.term,
         nextIndex = 0,
     }
-    logOkay = request.lastLogTerm > self.logStore:getLastLogEntry().term or
+    local logOkay = request.lastLogTerm > self.logStore:getLastLogEntry().term or
             (request.lastLogTerm == self.logStore:getLastLogEntry().term and
              self.logStore:getFirstAvailableIndex() - 1 <= request.lastLogIndex);
-    grant = request.term == self.state.term and logOkay and (self.state.votedFor == request.source or self.state.votedFor == -1);
+    local grant = request.term == self.state.term and logOkay and (self.state.votedFor == request.source or self.state.votedFor == -1);
     response.accepted = grant;
-    if(grant) then
-        self.state.votedFor= request.source;
+    if (grant) then
+        self.state.votedFor = request.source;
         self.context.serverStateManager:persistState(self.state);
     end
     return response;
 end
 
 function RaftServer:handleClientRequest(request)
-
     local response = {
         messageType = RaftMessageType.AppendEntriesResponse,
         source = self.id,
-        destination = self.leader,
+        destination = self.leader, -- use destination to indicate the leadId
         term = self.state.term,
     }
 
@@ -301,10 +299,10 @@ function RaftServer:handleElectionTimeout()
         self.steppingDown = self.steppingDown - 1
         if(self.steppingDown == 0) then
             self.logger.info("no hearing further news from leader, remove this server from config and step down");
-            server = self.config:getServer(self.id);
+            local server = self.config:getServer(self.id);
             if(server ~= nil) then
-                self.config.servers[server] = nil;
-                self.context.serverStateManager.saveClusterConfiguration(self.config);
+                self.config.servers[server.id] = nil;
+                self.context.serverStateManager:saveClusterConfiguration(self.config);
             end
             
             self.stateMachine:exit(0);
@@ -363,7 +361,7 @@ function RaftServer:requestVote()
     end
 
     for _,peer in pairs(self.peers) do
-        request = {
+        local request = {
             messageType = RaftMessageType.RequestVoteRequest,
             destination = peer:getId(),
             source = self.id,
@@ -440,14 +438,14 @@ end
 
 
 function RaftServer:handleAppendEntriesResponse(response)
-    peer = self.peers[response.source];
+    local peer = self.peers[response.source];
     if(peer == nil) then
-        self.logger.info("the response is from an unkonw peer %d", response.source);
+        self.logger.info("the response is from an unkown peer %d", response.source);
         return;
     end
 
     -- If there are pending logs to be synced or commit index need to be advanced, continue to send appendEntries to this peer
-    needToCatchup = true;
+    local needToCatchup = true;
     if(response.accepted) then
         -- synchronized(peer){
         peer.nextLogIndex = response.nextIndex;
@@ -461,23 +459,23 @@ function RaftServer:handleAppendEntriesResponse(response)
             matchedIndexes[#matchedIndexes + 1] = p.matchedIndex
         end
 
-        -- self.logger.debug("matchedIndexes:%s",util.table_tostring(matchedIndexes))
+        self.logger.trace("all matchedIndexes:%s", util.table_tostring(matchedIndexes))
         table.sort(matchedIndexes, indexComparator);
-        -- self.logger.debug("sorted matchedIndexes:%s",util.table_tostring(matchedIndexes))
+        self.logger.trace("sorted matchedIndexes:%s", util.table_tostring(matchedIndexes))
         -- majority is a float without math.floor
         -- lua index start form 1
-        local majority = math.floor((#self.peers + 1) / 2) + 1;
-        -- self.logger.debug("total:%d, major:%d", #self.peers, majority)
+        local majority = math.ceil((#self.peers + 1) / 2);
+        self.logger.trace("total server num:%d, major num:%d", #self.peers + 1, majority)
         self:commit(matchedIndexes[majority]);
         needToCatchup = peer:clearPendingCommit() or response.nextIndex < self.logStore:getFirstAvailableIndex();
     else
         -- synchronized(peer){
-            -- Improvement: if peer's real log length is less than was assumed, reset to that length directly
-            if(response.nextIndex > 0 and peer.nextLogIndex > response.nextIndex) then
-                peer.nextLogIndex = response.nextIndex;
-            else
-                peer.nextLogIndex = peer.nextLogIndex - 1;
-            end
+        -- Improvement: if peer's real log length is less than was assumed, reset to that length directly
+        if(response.nextIndex > 0 and peer.nextLogIndex > response.nextIndex) then
+            peer.nextLogIndex = response.nextIndex;
+        else
+            peer.nextLogIndex = peer.nextLogIndex - 1;
+        end
         -- }
     end
 
@@ -541,9 +539,9 @@ function RaftServer:restartElectionTimer()
         self.electionTimer:Change()
     end
     
-    raftParameters = self.context.raftParameters
-    delta = raftParameters.electionTimeoutUpperBound - raftParameters.electionTimeoutLowerBound
-    electionTimeout = raftParameters.electionTimeoutLowerBound + math.random(0, delta)
+    local raftParameters = self.context.raftParameters
+    local delta = raftParameters.electionTimeoutUpperBound - raftParameters.electionTimeoutLowerBound
+    local electionTimeout = raftParameters.electionTimeoutLowerBound + math.random(0, delta)
     -- self.logger.debug("electionTimeout:%d,%d,%d,%d", electionTimeout, delta, raftParameters.electionTimeoutUpperBound, raftParameters.electionTimeoutLowerBound)
     self.electionTimer:Change(electionTimeout, nil)
 end
@@ -585,7 +583,6 @@ function RaftServer:enableHeartbeatForPeer(peer)
     peer:resumeHeartbeatingSpeed();
     peer.heartbeatTimer:Change(peer.currentHeartbeatInterval, nil);
    assert(peer.heartbeatTimer:IsEnabled(), "start heartbeatTimer error")
-    -- assert(false, "what's wrong'")
 end
 
 function RaftServer:becomeFollower()
@@ -659,23 +656,24 @@ function RaftServer:createAppendEntriesRequest(peer)
         self.logger.error("Peer's lastLogIndex is too large %d v.s. %d, server exits", lastLogIndex, currentNextIndex);
         self.stateMachine:exit(-1);
     end
-    -- -- for syncing the snapshots, if the lastLogIndex == lastSnapshot.getLastLogIndex, we could get the term from the snapshot
+    -- for syncing the snapshots, if the lastLogIndex == lastSnapshot.getLastLogIndex, we could get the term from the snapshot
     -- if(lastLogIndex > 0 and lastLogIndex < startingIndex - 1) then
     --     return self:createSyncSnapshotRequest(peer, lastLogIndex, term, commitIndex);
     -- end
     local lastLogTerm = self:termForLastLog(lastLogIndex);
-    local endIndex = math.min(currentNextIndex, lastLogIndex + 1 + context.raftParameters.maximumAppendingSize);
+    local endIndex = math.min(currentNextIndex, lastLogIndex + 1 + self.context.raftParameters.maximumAppendingSize);
     local logEntries;
     if not ((lastLogIndex + 1) >= endIndex) then
          logEntries = self.logStore:getLogEntries(lastLogIndex + 1, endIndex)
     end
-    -- self.logger.debug("endIndex:%d, %d, %d", endIndex, currentNextIndex, lastLogIndex + 1 + context.raftParameters.maximumAppendingSize)
+    self.logger.trace("endIndex:%d, currentNextIndex:%d, max endIndex%d",
+                       endIndex, currentNextIndex, lastLogIndex + 1 + self.context.raftParameters.maximumAppendingSize)
     self.logger.debug(
             "An AppendEntries Request for %d with LastLogIndex=%d, LastLogTerm=%d, EntriesLength=%d, CommitIndex=%d and Term=%d",
             peer:getId(),
             lastLogIndex,
             lastLogTerm,
-            (logEntries == nil and 0 ) or #logEntries,
+            (logEntries == nil and 0) or #logEntries,
             commitIndex,
             term);
     local requestMessage = {
@@ -700,15 +698,12 @@ function RaftServer:termForLastLog(logIndex)
     if(logIndex >= self.logStore:getStartIndex()) then
         return self.logStore:getLogEntryAt(logIndex).term;
     end
-    lastSnapshot = self.stateMachine:getLastSnapshot();
+    local lastSnapshot = self.stateMachine:getLastSnapshot();
     if(lastSnapshot == nil or logIndex ~= lastSnapshot:getLastLogIndex()) then
         self.logger.error("logIndex is beyond the range that no term could be retrieved");
     end
     return lastSnapshot.lastLogTerm;
 end
-
-
-
 
 
 -- TODO: resemble IOThread in TableDB
@@ -717,7 +712,8 @@ function real_commit(server)
     local currentCommitIndex = server.state.commitIndex;
     while(currentCommitIndex < server.quickCommitIndex and currentCommitIndex < server.logStore:getFirstAvailableIndex() - 1) do
         currentCommitIndex = currentCommitIndex + 1;
-        -- server.logger.debug("currentCommitIndex:%d, quickCommitIndex%d, logStoreFirstAvailableIndex%d", currentCommitIndex, server.quickCommitIndex, server.logStore:getFirstAvailableIndex())
+        server.logger.trace("commiting...currentCommitIndex:%d, quickCommitIndex:%d, logStoreFirstAvailableIndex:%d",
+                             currentCommitIndex, server.quickCommitIndex, server.logStore:getFirstAvailableIndex())
         local logEntry = server.logStore:getLogEntryAt(currentCommitIndex);
 
         -- FIXME:

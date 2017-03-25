@@ -10,15 +10,21 @@ NPL.load("(gl)script/Raft/RaftMessageSender.lua");
 local RaftMessageSender = commonlib.gettable("Raft.RaftMessageSender");
 ------------------------------------------------------------
 ]]--
+
+local LoggerFactory = NPL.load("(gl)script/Raft/LoggerFactory.lua");
+
+local logger = LoggerFactory.getLogger("RaftMessageSender")
 NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 local util = commonlib.gettable("System.Compiler.lib.util")
 NPL.load("(gl)script/Raft/Rpc.lua");
 local Rpc = commonlib.gettable("Raft.Rpc");
+local RaftMessageType = NPL.load("(gl)script/Raft/RaftMessageType.lua");
 local RaftMessageSender = commonlib.gettable("Raft.RaftMessageSender");
 
 function RaftMessageSender:new(server) 
     local o = {
         server = server,
+        logger = logger,
     };
     setmetatable(o, self);
     return o;
@@ -33,24 +39,6 @@ function RaftMessageSender:__tostring()
 end
 
 function RaftMessageSender:appendEntries(values)
-    -- util.table_print(values)
-    -- if(values or #values == 0) then
-    --     return;
-    -- end
-
-    -- local logEntries = {};
-    -- for i = 1, #values do
-    --     logEntries[#logEntries+1] =  LogEntry:new(0, values[i]);
-    -- end
-
-    -- local request = {
-    --     messageType = RaftMessageType.ClientRequest,
-    --     logEntries = logEntries,
-    -- }
-    -- print("iiiii")
-    
-    -- util.table_print(request)
-
     return self:sendMessageToLeader(values);
 end
 
@@ -60,15 +48,23 @@ function RaftMessageSender:sendMessageToLeader(request)
     -- print(format("leaderId %d", leaderId))
     
     if(leaderId == -1) then
+        self.logger.error("no leader in the cluster now")
         return;
     end
 
 
     if(leaderId == self.server.id) then
         return self.server:processRequest(request);
+    else
+        local response = {
+            messageType = RaftMessageType.AppendEntriesResponse,
+            destination = leaderId,
+            accepted = false,
+        }
+        return response;
     end
 
-
+    -- should we forward to the leader ?
     if (RaftRequestRPC("server"..self.server.id..":", "server"..leaderId..":", request, function(err, msg)
                        o:resumeHeartbeatingSpeed();
 

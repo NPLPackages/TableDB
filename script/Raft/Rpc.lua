@@ -32,14 +32,16 @@ end, 500);
 
 NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 local util = commonlib.gettable("System.Compiler.lib.util")
+local LoggerFactory = NPL.load("(gl)script/Raft/LoggerFactory.lua");
 
+local logger = LoggerFactory.getLogger("Rpc")
 local Rpc = commonlib.gettable("Raft.Rpc");
-
 
 local rpc_instances = {};
 
 function Rpc:new(o)
 	o = o or {};
+	o.logger = logger;
 	o.run_callbacks = {};
 	o.next_run_id = 0;
 	o.thread_name = format("(%s)", __rts__:GetName());
@@ -62,7 +64,7 @@ function Rpc:SetFuncName(funcName)
 	self.fullname = funcName;
 	self.filename = format("Rpc/%s.lua", self.fullname);
 	if(commonlib.getfield(funcName)) then
-		LOG.std(nil, "warn", "Rpc", "%s is overwritten", funcName);
+		self.logger.warn("%s is overwritten", funcName);
 	end
 	commonlib.setfield(funcName, self);
 
@@ -78,7 +80,7 @@ function Rpc:SetPublicFile(filename)
 		self:OnActivated(msg);
 	end, {filename = self.filename});
 
-	LOG.std(nil, "debug", "Rpc", "%s installed to file %s", self.fullname, self.filename);
+	self.logger.debug("%s installed to file %s", self.fullname, self.filename);
 end
 
 function Rpc:__tostring()
@@ -99,6 +101,9 @@ end
 
 -- private: whenever a message arrives
 function Rpc:OnActivated(msg)
+	if msg.name == "MPRequestRPC" then
+		self.logger.trace(msg)
+	end
   if(msg.tid) then
      -- unauthenticated? reject as early as possible or accept it. 
      if(msg.msg.messageType) then
@@ -120,13 +125,23 @@ function Rpc:OnActivated(msg)
 		end
 		
 		if(msg.type=="run") then
-		
 			local result, err = self:handle_request(msg.msg);
-			-- util.table_print(result)
-
-			-- call back on the remote
-			local activate_result = NPL.activate(format("%s%s%s", msg.callbackThread, msg.remoteAddress, self.filename),
-																						{type="result", msg = result, err=err, callbackId = msg.callbackId})
+			if not result then
+				return
+			end
+			local vFileId = format("%s%s%s", msg.callbackThread, msg.remoteAddress, self.filename)
+			local msg = {
+				name = self.fullname,
+				type="result",
+				msg = result, 
+				err=err,
+				remoteAddress = self.localAddress, -- on the server side the local address is nil
+				callbackId = msg.callbackId
+			}
+			if self.fullname == "MPRequestRPC" then
+				self.logger.debug("activate on %s, msg:%s", vFileId, util.table_tostring(msg))
+			end
+			local activate_result = NPL.activate(vFileId, msg)
 
 			-- handle memory leak
 			if activate_result ~= 0 then
@@ -134,8 +149,8 @@ function Rpc:OnActivated(msg)
 				-- this will cause remote side memory leak, how to handle this
 				-- should give run_callbacks a TTL
 				-- self.run_callbacks[callbackId] = nil
-				print(format("activate on %s%s%s failed %d", msg.callbackThread, msg.remoteAddress, self.filename, activate_result))
-			end											
+				self.logger.error("activate on %s failed %d", vFileId, activate_result)
+			end
 
 		elseif(msg.type== "result" and msg.callbackId) then
 			self:InvokeCallback(msg.callbackId, msg.err, msg.msg);
@@ -211,20 +226,24 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
 		callback.timer:Change(timeout, nil)
 	end
 
-	-- print(format("%s%s", self.remoteAddress or "", self.filename))
 
-	
-	local activate_result = NPL.activate(format("%s%s", self.remoteAddress or "", self.filename), {
-																						type="run", 
-																						msg = msg, 
-																						name = self.fullname,
-																						callbackId = self.next_run_id, 
-																						callbackThread=self.thread_name,
-																						remoteAddress=self.localAddress,
-																					});
+	local vFileId = format("%s%s", self.remoteAddress or "", self.filename)
+	local msg = {
+		type="run", 
+		msg = msg, 
+		name = self.fullname,
+		callbackId = self.next_run_id, 
+		callbackThread = self.thread_name,
+		remoteAddress = self.localAddress,
+	}
+	if self.fullname == "MPRequestRPC" then
+		self.logger.debug("activate on %s, msg:%s", vFileId, util.table_tostring(msg))
+	end
+	local activate_result = NPL.activate(vFileId, msg);
 	-- handle memory leak
 	if activate_result ~= 0 then
 		self.run_callbacks[callbackId] = nil
+		self.logger.error("activate on %s failed %d", vFileId, activate_result)
 	else
 		-- FIXME:
 		-- to avoid memory leak, we 
