@@ -9,7 +9,6 @@ for %%i in (1 2 3) do (
     echo server.id=%%i> "%curdir%\server%%i\config.properties"
     echo start server%%i
     start "server%%i" /D "%curdir%\server%%i" npl -d bootstrapper="script/App.lua" servermode="true" dev="../../" raftMode="server" baseDir="/" mpPort="800%%i"
-    REM start "server%%i" /D "%curdir%\server%%i" java -jar %curdir%\dmprinter.jar server "%curdir%\server%%i" 800%%i
 )
 
 REM goto done
@@ -19,7 +18,6 @@ mkdir client
 copy /Y init-cluster.json "%curdir%\client\cluster.json"
 copy /Y "%curdir%\server1\config.properties" "%curdir%\client\config.properties"
 start "client" /D "%curdir%\client" npl -d bootstrapper="script/App.lua" servermode="true" dev="../../" raftMode="client" baseDir="/" "%curdir%\client"
-REM start "client" /D "%curdir%\client" java -jar %curdir%\dmprinter.jar client "%curdir%\client"
 
 
 goto done
