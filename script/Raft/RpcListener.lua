@@ -33,6 +33,8 @@ function RpcListener:new(ip, port, servers)
         local parsed_url = url.parse(server.endpoint)
         NPL.AddNPLRuntimeAddress({host = parsed_url.host, port = tostring(parsed_url.port), nid = "server"..server.id})
     end
+
+    -- FIXME: mv to RPC
     NPL.AddNPLRuntimeAddress({host = "localhost", port = "9004", nid = "server4"})
 
     setmetatable(o, self);

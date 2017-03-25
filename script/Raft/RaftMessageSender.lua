@@ -45,7 +45,6 @@ end
 function RaftMessageSender:sendMessageToLeader(request)
     leaderId = self.server.leader;
     config = self.server.config;
-    -- print(format("leaderId %d", leaderId))
     
     if(leaderId == -1) then
         self.logger.error("no leader in the cluster now")

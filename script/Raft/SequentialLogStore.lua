@@ -82,7 +82,7 @@ function SequentialLogStore:new(logContainer)
 
     o.buffer = LogBuffer:new((o.entriesInStore > o.bufferSize and (o.entriesInStore + o.startIndex - o.bufferSize)) or o.startIndex, o.bufferSize);
 
-    o.logger.debug(string.format("log store started with entriesInStore=%d, startIndex=%d", o.entriesInStore, o.startIndex));
+    o.logger.debug("log store started with entriesInStore=%d, startIndex=%d", o.entriesInStore, o.startIndex);
 
     return o;
 end
@@ -239,7 +239,8 @@ end
  * @return the log entry or null if index >= {@code this.getFirstAvailableIndex()}
 ]]--
 function SequentialLogStore:getLogEntryAt(logIndex)
-    -- self.logger.debug("%d,%d,%d", logIndex, self.startIndex, self.entriesInStore)
+    self.logger.trace("SequentialLogStore:getLogEntryAt>logIndex:%d, self.startIndex:%d, self.entriesInStore:%d",
+                       logIndex, self.startIndex, self.entriesInStore)
     if logIndex < self.startIndex then
         return;
     end
