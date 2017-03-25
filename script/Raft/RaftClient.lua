@@ -42,7 +42,7 @@ end
 
 
 
-function RaftClient:appendEntries(values)
+function RaftClient:appendEntries(values, callbackFunc)
     if values and #values == 0 then
         return
     end
@@ -58,12 +58,11 @@ function RaftClient:appendEntries(values)
         logEntries = logEntries,
     }
 
-    self:tryCurrentLeader(request, 500, 0)
-
+    self:tryCurrentLeader(request, callbackFunc, 500, 0)
 end
 
 
-function RaftClient:tryCurrentLeader(request, rpcBackoff, retry)
+function RaftClient:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry)
     self.logger.debug("trying request to %d as current leader from %d", self.leaderId, self.id);
 
     local o = self
@@ -71,11 +70,11 @@ function RaftClient:tryCurrentLeader(request, rpcBackoff, retry)
     local backoff_retry_func = function (...)
         if(rpcBackoff > 0) then
             local backoff_timer = commonlib.Timer:new({callbackFunc = function(timer)
-                                               o:tryCurrentLeader(request, rpcBackoff + 500, retry + 1);
+                                               o:tryCurrentLeader(request, callbackFunc, rpcBackoff + 500, retry + 1);
                                            end})
             backoff_timer:Change(rpcBackoff, nil);
         else
-            o:tryCurrentLeader(request, rpcBackoff + 500, retry + 1);
+            o:tryCurrentLeader(request, callbackFunc, rpcBackoff + 500, retry + 1);
         end
     end
     local activate_result = self.RequestRPC(self.localAddress, "server"..self.leaderId..":", request, function(err, response)
@@ -85,16 +84,16 @@ function RaftClient:tryCurrentLeader(request, rpcBackoff, retry)
                            if(not response.accepted) then
                                -- set the leader return from the server
                                if(o.leaderId == response.destination and not o.randomLeader) then
-                                   -- skip here                           
+                                   -- skip here
                                else
                                    o.randomLeader = false;
                                    o.leaderId = response.destination;
-                                   o:tryCurrentLeader(request, rpcBackoff, retry);
+                                   o:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry);
                                end
                            end
 
                            if callbackFunc then
-                               callbackFunc(response)
+                               callbackFunc(err, response)
                            end
                        elseif err == "timeout" then
                            -- we handle connected here

@@ -101,7 +101,7 @@ end
 
 function ServerStateManager:readState()
     if(self.serverStateFile:GetFileSize() == 0) then
-        return nil
+        return;
     end
 
     local term = self.serverStateFile:ReadUint()

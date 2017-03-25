@@ -19,8 +19,8 @@ function RaftContext:new(stateManager, stateMachine, raftParameters, rpcListener
         serverStateManager = stateManager,
         stateMachine = stateMachine,
         raftParameters = raftParameters,
-        -- logger factory
         rpcListener = rpcListener,
+        -- logger factory
         loggerFactory = loggerFactory,
     };
     setmetatable(o, self);

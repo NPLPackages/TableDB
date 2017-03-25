@@ -35,7 +35,6 @@ function RaftParameters:__index(name)
 end
 
 function RaftParameters:__tostring()
-    -- return format("RaftParameters(term:%d,commitIndex:%d,votedFor:%d)", self.term, self.commitIndex, self.votedFor);
     return util.table_tostring(self)
 end
 

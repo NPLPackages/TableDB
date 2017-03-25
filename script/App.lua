@@ -14,29 +14,23 @@ NPL.load("(gl)script/Raft/RaftContext.lua");
 NPL.load("(gl)script/Raft/RpcListener.lua");
 NPL.load("(gl)script/Raft/MessagePrinter.lua");
 NPL.load("(gl)script/Raft/RaftClient.lua");
+NPL.load("(gl)script/ide/socket/url.lua");
+NPL.load("(gl)script/Raft/RaftConsensus.lua");
+NPL.load("(gl)script/Raft/RpcClient.lua");
 
 local RaftClient = commonlib.gettable("Raft.RaftClient");
-
--- local ServerState = commonlib.gettable("Raft.ServerState");
--- local ServerRole = NPL.load("(gl)script/Raft/ServerRole.lua");
 local ServerStateManager = commonlib.gettable("Raft.ServerStateManager");
 local RaftParameters = commonlib.gettable("Raft.RaftParameters");
 local RaftContext = commonlib.gettable("Raft.RaftContext");
 local RpcListener = commonlib.gettable("Raft.RpcListener");
-NPL.load("(gl)script/ide/socket/url.lua");
 local url = commonlib.gettable("commonlib.socket.url")
-NPL.load("(gl)script/Raft/RaftConsensus.lua");
 local RaftConsensus = commonlib.gettable("Raft.RaftConsensus");
-NPL.load("(gl)script/Raft/RpcClient.lua");
 local RpcClient = commonlib.gettable("Raft.RpcClient");
 local MessagePrinter = commonlib.gettable("Raft.MessagePrinter");
 local util = commonlib.gettable("System.Compiler.lib.util")
 local LoggerFactory = NPL.load("(gl)script/Raft/LoggerFactory.lua");
 
 local logger = LoggerFactory.getLogger("App")
-
--- local configDir = "script/config/"
--- local mpDir = "script/mpDir/"
 
 
 local baseDir = ParaEngine.GetAppCommandLineByParam("baseDir", "./");
@@ -88,21 +82,11 @@ local function executeAsClient(localAddress, RequestRPC, configuration, loggerFa
       "test:1115",
     }
 
-    raftClient:appendEntries(values)
-    
-    -- while(true) do
-    --     printf("Message:");
+    raftClient:appendEntries(values, function (err, response)
+      local result = (err == nil and response.accepted and "accepted") or "denied"
+      logger.info("the request has been %s", result)
+    end)
 
-        -- for(int i = 1; i <= count; ++i){
-        --     String msg = String.format(format, i);
-        --     boolean accepted = client.appendEntries(new byte[][]{ msg.getBytes() }).get();
-        --     printf("Accepted: " + String.valueOf(accepted));
-        -- }
-
-
-        -- boolean accepted = client.appendEntries(new byte[][]{ message.getBytes() }).get();
-        -- printf("Accepted: " + String.valueOf(accepted));
-    -- end
 end
 
 if raftMode:lower() == "server" then

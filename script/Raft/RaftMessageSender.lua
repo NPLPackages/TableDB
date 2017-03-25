@@ -43,8 +43,8 @@ function RaftMessageSender:appendEntries(values)
 end
 
 function RaftMessageSender:sendMessageToLeader(request)
-    leaderId = self.server.leader;
-    config = self.server.config;
+    local leaderId = self.server.leader;
+    local config = self.server.config;
     
     if(leaderId == -1) then
         self.logger.error("no leader in the cluster now")
@@ -65,13 +65,13 @@ function RaftMessageSender:sendMessageToLeader(request)
 
     -- should we forward to the leader ?
     if (RaftRequestRPC("server"..self.server.id..":", "server"..leaderId..":", request, function(err, msg)
-                       o:resumeHeartbeatingSpeed();
+                    --    o:resumeHeartbeatingSpeed();
 
                        if callbackFunc then
                            callbackFunc(msg)
                        end
                    end) ~= 0) then
-        self:slowDownHeartbeating()
+        -- self:slowDownHeartbeating()
     end
 
 end
