@@ -115,6 +115,7 @@ function Rpc:OnActivated(msg)
 					-- we got a client request
 					if not added_runtime[remoteAddress.id] then
 						added_runtime[remoteAddress.id] = true
+						-- can not contain ':'
 						local nid = string.sub(remoteAddress.id, 1, #remoteAddress.id-1);
 						self.logger.trace("accepted nid is %s", nid)
 					  NPL.AddNPLRuntimeAddress({host = remoteAddress.host, port = remoteAddress.port, nid = nid})

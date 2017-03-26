@@ -42,6 +42,8 @@ logger.info("app arg:"..baseDir..mpPort..raftMode)
 local stateManager = ServerStateManager:new(baseDir);
 local config = stateManager:loadClusterConfiguration();
 
+logger.info("config:%s", util.table_tostring(config))
+
 local localEndpoint = config:getServer(stateManager.serverId).endpoint
 local parsed_url = url.parse(localEndpoint)
 logger.info("local state info"..util.table_tostring(parsed_url))

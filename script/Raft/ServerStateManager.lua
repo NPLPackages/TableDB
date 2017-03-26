@@ -92,7 +92,8 @@ end
 
 
 function ServerStateManager:persistState(serverState)
-    -- self.logger.info("persistState:".. serverState.term .. serverState.commitIndex .. serverState.votedFor)
+    self.logger.trace("ServerStateManager:persistState>term:%d,commitIndex:%d,votedFor:%d", 
+                        serverState.term, serverState.commitIndex, serverState.votedFor)
     self.serverStateFile:WriteUInt(serverState.term)
     self.serverStateFile:WriteUInt(serverState.commitIndex)
     self.serverStateFile:WriteInt(serverState.votedFor)

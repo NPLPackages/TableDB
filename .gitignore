@@ -262,7 +262,7 @@ __pycache__/
 
 # npl
 log.txt
-npl_packages/main
+npl_packages/*
 *.sln
 *.csproj*
 *.vscode
