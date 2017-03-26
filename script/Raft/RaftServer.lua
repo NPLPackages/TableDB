@@ -26,15 +26,17 @@ NPL.load("(gl)script/ide/timer.lua");
 local RaftMessageType = NPL.load("(gl)script/Raft/RaftMessageType.lua");
 NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 local util = commonlib.gettable("System.Compiler.lib.util")
-
-
+NPL.load("(gl)script/Raft/ClusterConfiguration.lua");
+local ClusterConfiguration = commonlib.gettable("Raft.ClusterConfiguration");
+NPL.load("(gl)script/Raft/Rutils.lua");
+local Rutils = commonlib.gettable("Raft.Rutils");
 
 local RaftServer = commonlib.gettable("Raft.RaftServer");
 
 
 local indexComparator = function (arg0, arg1)
     -- body
-    return arg1 > arg0;
+    return arg0 > arg1;
 end
 
 local real_commit -- 'forward' declarations
@@ -279,10 +281,11 @@ function RaftServer:handleClientRequest(request)
     local term = self.state.term
 
     if request.logEntries and #request.logEntries > 0 then
-        for i=1,#request.logEntries do
-            local logEntry = LogEntry:new(term, request.logEntries[i].value)
+
+        for i,v in ipairs(request.logEntries) do
+            local logEntry = LogEntry:new(term, v.value)
             local logIndex = self.logStore:append(logEntry)
-            self.stateMachine:preCommit(logIndex, request.logEntries[i].value);
+            self.stateMachine:preCommit(logIndex, v.value);
         end
     end
 
@@ -352,7 +355,7 @@ function RaftServer:requestVote()
     self.votesResponded = self.votesResponded + 1;
 
     -- this is the only server?
-    if(self.votesGranted > (#self.peers + 1) / 2) then
+    if(self.votesGranted > (Rutils.table_size(self.peers) + 1) / 2) then
         self.electionCompleted = true;
         self:becomeLeader();
         return;
@@ -378,12 +381,14 @@ end
 
 
 function RaftServer:requestAllAppendEntries()
-    if(#self.peers == 0) then
+    -- be careful with the table and sequence array !
+    self.logger.warn("#self.peers:%d, peers table size:%d", #self.peers, Rutils.table_size(self.peers))
+    if(Rutils.table_size(self.peers) == 0) then
         self:commit(self.logStore:getFirstAvailableIndex() - 1);
         return;
     end
 
-    for _,peer in ipairs(self.peers) do
+    for _,peer in pairs(self.peers) do
         self:requestAppendEntries(peer);
     end
 end
@@ -453,7 +458,7 @@ function RaftServer:handleAppendEntriesResponse(response)
         -- try to commit with this response
         local matchedIndexes = {};
         matchedIndexes[#matchedIndexes + 1] = self.logStore:getFirstAvailableIndex() - 1
-        for _,p in ipairs(self.peers) do
+        for _,p in pairs(self.peers) do
             matchedIndexes[#matchedIndexes + 1] = p.matchedIndex
         end
 
@@ -462,8 +467,8 @@ function RaftServer:handleAppendEntriesResponse(response)
         self.logger.trace("sorted matchedIndexes:%s", util.table_tostring(matchedIndexes))
         -- majority is a float without math.floor
         -- lua index start form 1
-        local majority = math.ceil((#self.peers + 1) / 2);
-        self.logger.trace("total server num:%d, major num:%d", #self.peers + 1, majority)
+        local majority = math.ceil((Rutils.table_size(self.peers) + 1) / 2);
+        self.logger.trace("total server num:%d, major num:%d", Rutils.table_size(self.peers) + 1, majority)
         self:commit(matchedIndexes[majority]);
         needToCatchup = peer:clearPendingCommit() or response.nextIndex < self.logStore:getFirstAvailableIndex();
     else
@@ -498,12 +503,12 @@ function RaftServer:handleVotingResponse(response)
         self.votesGranted = self.votesGranted + 1;
     end
 
-    if(self.votesResponded >= #self.peers + 1) then
+    if(self.votesResponded >= Rutils.table_size(self.peers) + 1) then
         self.electionCompleted = true;
     end
 
     -- got a majority set of granted votes
-    if(self.votesGranted > (#self.peers + 1) / 2) then
+    if(self.votesGranted > (Rutils.table_size(self.peers) + 1) / 2) then
         self.logger.info("Server is elected as leader for term %d", self.state.term);
         self.electionCompleted = true;
         self:becomeLeader();
@@ -558,7 +563,7 @@ function RaftServer:becomeLeader()
     self.role = ServerRole.Leader;
     self.leader = self.id;
     self.serverToJoin = nil;
-    for _,server in ipairs(self.peers) do
+    for _,server in pairs(self.peers) do
         server.nextLogIndex= self.logStore:getFirstAvailableIndex();
         server.snapshotInSync = nil;
         server:setFree();
@@ -567,10 +572,10 @@ function RaftServer:becomeLeader()
 
     -- if current config is not committed, try to commit it
     if(self.config.logIndex == 0) then
-        -- self.config.logIndex= self.logStore:getFirstAvailableIndex();
-        -- self.logStore:append(LogEntry:new(self.state.term, self.config:toBytes(), LogValueType.Configuration));
-        -- self.logger.info("add initial configuration to log store");
-        -- self.configChanging = true;
+        self.config.logIndex= self.logStore:getFirstAvailableIndex();
+        self.logStore:append(LogEntry:new(self.state.term, self.config:toBytes(), LogValueType.Configuration));
+        self.logger.info("add initial configuration to log store");
+        self.configChanging = true;
     end
 
     self:requestAllAppendEntries();
@@ -585,7 +590,7 @@ end
 
 function RaftServer:becomeFollower()
     -- stop heartbeat for all peers
-    for _, server in ipairs(self.peers) do
+    for _, server in pairs(self.peers) do
         if server.heartbeatTimer:IsEnabled() then
             server.heartbeatTimer:Change()
             assert(not server.heartbeatTimer:IsEnabled(), "stop heartbeatTimer error")
@@ -620,7 +625,7 @@ function RaftServer:commit(targetIndex)
         -- if this is a leader notify peers to commit as well
         -- for peers that are free, send the request, otherwise, set pending commit flag for that peer
         if(self.role == ServerRole.Leader) then
-            for _,peer in ipairs(self.peers) do
+            for _,peer in pairs(self.peers) do
                 if( not self:requestAppendEntries(peer)) then
                     peer:setPendingCommit();
                 end
@@ -687,6 +692,78 @@ function RaftServer:createAppendEntriesRequest(peer)
     return requestMessage;
 end
 
+-- private
+function RaftServer:reconfigure(newConfig)
+    self.logger.debug(
+            "system is reconfigured to have %d servers, last config index: %d, this config index: %d",
+            Rutils.table_size(newConfig.servers),
+            newConfig.lastLogIndex,
+            newConfig.logIndex);
+
+    local serversRemoved = {}
+    local serversAdded = {}
+
+    for _,server in ipairs(newConfig.servers) do
+        if not self.peers[server.id] and server.id ~= self.id then
+            -- new add server
+            serversAdded[server] = true;
+        end
+    end
+
+    for id,_ in pairs(self.peers) do
+        if newConfig:getServer(id) == nil then
+            -- the server has been removed
+            serversRemoved[id] = true
+        end
+    end
+
+    if newConfig:getServer(self.id) == nil then
+        serversRemoved[self.id] = true;
+    end
+
+    for server,_ in pairs(serversAdded) do
+        if(server.id ~= self.id) then
+           local o = self
+           local peer = PeerServer:new(server, self.context, function (s)
+                                                        o:handleHeartbeatTimeout(s)
+                                                    end)
+           peer.nextLogIndex = self.logStore:getFirstAvailableIndex();
+           self.peers[server.id] = peer;
+           self.logger.info("server %d is added to cluster", peer:getId());
+           if(self.role == ServerRole.Leader) then
+               self.logger.info("enable heartbeating for server %d", peer.getId());
+               self:enableHeartbeatForPeer(peer);
+               if(self.serverToJoin ~= nil and self.serverToJoin:getId() == peer:getId()) then
+                   peer.nextLogIndex = self.serverToJoin.nextLogIndex;
+                   self.serverToJoin = nil;
+               end
+           end
+        end
+    end
+
+    for id,_ in pairs(serversRemoved) do
+        if(id == self.id and not self.catchingUp) then
+            -- this server is removed from cluster
+            self.context.serverStateManager:saveClusterConfiguration(newConfig);
+            self.logger.info("server has been removed from cluster, step down");
+            self.stateMachine:exit(0);
+            return;
+        end
+        
+        local peer = self.peers[id];
+        if(peer == nil) then
+            self.logger.info("peer %d cannot be found in current peer list", id);
+        else
+            peer.heartbeatTimer:Change()
+            peer.heartbeatEnabled = false;
+            self.peers[id] = nil;
+            self.logger.info("server %d is removed from cluster", id);
+        end
+    end
+
+    self.config = newConfig;
+
+end
 
 function RaftServer:termForLastLog(logIndex)
     if(logIndex == 0) then

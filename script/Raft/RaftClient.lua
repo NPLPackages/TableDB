@@ -49,8 +49,8 @@ function RaftClient:appendEntries(values, callbackFunc)
 
     local logEntries = {}
 
-    for i=1,#values do
-        logEntries[#logEntries + 1] = LogEntry:new(0, values[i])
+    for i,v in ipairs(values) do
+        logEntries[#logEntries + 1] = LogEntry:new(0, v)
     end
 
     request = {
@@ -63,7 +63,7 @@ end
 
 
 function RaftClient:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry)
-    self.logger.debug("trying request to %d as current leader from %d", self.leaderId, self.id);
+    self.logger.debug("trying request to %d as current leader from %s", self.leaderId, self.localAddress.id);
 
     local o = self
 
@@ -88,8 +88,8 @@ function RaftClient:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry)
                                else
                                    o.randomLeader = false;
                                    o.leaderId = response.destination;
-                                   o:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry);
                                end
+                               return o:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry);
                            end
 
                            if callbackFunc then
@@ -105,8 +105,11 @@ function RaftClient:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry)
                    end, 1);
     if (activate_result ~= 0) then
         self.logger.info("rpc error, failed(%d) to send request to remote server. tried %d", activate_result, retry);
-        if(retry > #self.configuration.servers) then
+        if(retry > 3 * #self.configuration.servers) then
             self.logger.info("FAILED. reach to the max retry. tried %d", retry);
+            if callbackFunc then
+                callbackFunc("FAILED")
+            end
             return;
         end
 
