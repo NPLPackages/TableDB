@@ -26,7 +26,7 @@ function ClusterServer:new(bytesOrTable)
             local server = bytesOrTable;
             o.id = server.id;
             o.endpoint = server.endpoint;
-        elseif type(bytesOrTable) == "string" then -- actually no used
+        elseif type(bytesOrTable) == "string" then
             local bytes = bytesOrTable;
             local file = ParaIO.open("<memory>", "w");
             if(file:IsValid()) then	

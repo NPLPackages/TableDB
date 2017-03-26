@@ -12,7 +12,7 @@ NPL.load("(gl)script/Raft/ServerStateManager.lua");
 NPL.load("(gl)script/Raft/RaftParameters.lua");
 NPL.load("(gl)script/Raft/RaftContext.lua");
 NPL.load("(gl)script/Raft/RpcListener.lua");
-NPL.load("(gl)script/Raft/MessagePrinter.lua");
+NPL.load("(gl)script/app/MessagePrinter.lua");
 NPL.load("(gl)script/Raft/RaftClient.lua");
 NPL.load("(gl)script/ide/socket/url.lua");
 NPL.load("(gl)script/Raft/RaftConsensus.lua");
@@ -26,7 +26,7 @@ local RpcListener = commonlib.gettable("Raft.RpcListener");
 local url = commonlib.gettable("commonlib.socket.url")
 local RaftConsensus = commonlib.gettable("Raft.RaftConsensus");
 local RpcClient = commonlib.gettable("Raft.RpcClient");
-local MessagePrinter = commonlib.gettable("Raft.MessagePrinter");
+local MessagePrinter = commonlib.gettable("app.MessagePrinter");
 local util = commonlib.gettable("System.Compiler.lib.util")
 local LoggerFactory = NPL.load("(gl)script/Raft/LoggerFactory.lua");
 
