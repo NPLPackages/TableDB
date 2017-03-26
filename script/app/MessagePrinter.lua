@@ -6,8 +6,8 @@ Desc:
 
 
 ------------------------------------------------------------
-NPL.load("(gl)script/Raft/MessagePrinter.lua");
-local MessagePrinter = commonlib.gettable("Raft.MessagePrinter");
+NPL.load("(gl)script/app/MessagePrinter.lua");
+local MessagePrinter = commonlib.gettable("app.MessagePrinter");
 ------------------------------------------------------------
 ]]--
 NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
@@ -15,7 +15,7 @@ local util = commonlib.gettable("System.Compiler.lib.util")
 
 NPL.load("(gl)script/Raft/Rpc.lua");
 local Rpc = commonlib.gettable("Raft.Rpc");
-local MessagePrinter = commonlib.gettable("Raft.MessagePrinter");
+local MessagePrinter = commonlib.gettable("app.MessagePrinter");
 
 function MessagePrinter:new(baseDir, ip, listeningPort) 
     local o = {
