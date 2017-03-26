@@ -5,7 +5,7 @@ Date: 2017.03.25 2017/2/8
 Desc: Create RPC in current NPL thread. Internally it will use an existing or a virtual NPL activation file that can be invoked from any thread.
 use the lib:
 ------------------------------------------------------------
-NPL.load("(gl)script/ide/System/Concurrent/Rpc.lua");
+NPL.load("(gl)script/Raft/Rpc.lua");
 local Rpc = commonlib.gettable("Raft.Rpc");
 Rpc:new():init("Test.testRPC", function(self, msg) 
 	LOG.std(nil, "info", "category", msg);
