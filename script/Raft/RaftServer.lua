@@ -77,9 +77,9 @@ function RaftServer:new(ctx)
 
     for _,server in ipairs(o.config.servers) do
         if server.id ~= o.id then
-            local peer = PeerServer:new(server, o.context,function (s)
-                                                        o:handleHeartbeatTimeout(s)
-                                                    end)
+            local peer = PeerServer:new(server, o.context, function (s)
+                                                              o:handleHeartbeatTimeout(s)
+                                                           end)
             o.peers[server.id] = peer
         end
     end
@@ -373,16 +373,16 @@ function RaftServer:requestVote()
 
         self.logger.debug("send %s to server %d with term %d", RaftMessageType.RequestVoteRequest.string, peer:getId(), self.state.term);
         local o = self
-        peer:SendRequest(request, function (response)
-            o:handlePeerResponse(response);
-        end);
+        peer:SendRequest(request, function (response, error)
+                                      o:handlePeerResponse(response, error);
+                                  end);
     end
 end
 
 
 function RaftServer:requestAllAppendEntries()
     -- be careful with the table and sequence array !
-    self.logger.warn("#self.peers:%d, peers table size:%d", #self.peers, Rutils.table_size(self.peers))
+    self.logger.trace("#self.peers:%d, peers table size:%d", #self.peers, Rutils.table_size(self.peers))
     if(Rutils.table_size(self.peers) == 0) then
         self:commit(self.logStore:getFirstAvailableIndex() - 1);
         return;
@@ -396,9 +396,9 @@ end
 function RaftServer:requestAppendEntries(peer)
     if(peer:makeBusy()) then
         local o = self
-        peer:SendRequest(self:createAppendEntriesRequest(peer), function (response)
-            o:handlePeerResponse(response);
-        end)
+        peer:SendRequest(self:createAppendEntriesRequest(peer), function (response, error)
+                                                                    o:handlePeerResponse(response, error);
+                                                                end)
         return true;
     end
 
@@ -408,7 +408,12 @@ end
 
 
 --synchronized
-function RaftServer:handlePeerResponse(response)
+function RaftServer:handlePeerResponse(response, error)
+    if(error ~= nil) then
+        self.logger.info("peer response error: %s", error);
+        return;
+    end
+
     self.logger.debug(
             "Receive a %s message from peer %d with Result=%s, Term=%d, NextIndex=%d",
             response.messageType.string,
@@ -764,6 +769,231 @@ function RaftServer:reconfigure(newConfig)
     self.config = newConfig;
 
 end
+
+-- synchronized
+function RaftServer:handleExtendedMessages(request)
+    if(request.messageType.int == RaftMessageType.AddServerReques.int) then
+        return self:handleAddServerRequest(request);
+    elseif(request.messageType.int == RaftMessageType.RemoveServerRequest.int) then
+        return self:handleRemoveServerRequest(request);
+    elseif(request.messageType.int == RaftMessageType.SyncLogRequest.int) then
+        return self:handleLogSyncRequest(request);
+    elseif(request.messageType.int == RaftMessageType.JoinClusterRequest.int) then
+        return self:handleJoinClusterRequest(request);
+    elseif(request.messageType.int == RaftMessageType.LeaveClusterRequest.int) then
+        return self:handleLeaveClusterRequest(request);
+    elseif(request.messageType.int == RaftMessageType.InstallSnapshotRequest.int) then
+        return self:handleInstallSnapshotRequest(request);
+    else
+        self.logger.error("receive an unknown request %s, for safety, step down.", request.messageType.string);
+        self.stateMachine:exit(-1);
+    end
+end
+
+
+-- synchronized
+function RaftServer:handleExtendedResponse(response, error)
+    if(error ~= nil) then
+        self:handleExtendedResponseError(error);
+        return;
+    end
+
+    self.logger.debug(
+            "Receive an extended %s message from peer %d with Result=%s, Term=%d, NextIndex=%d",
+            response.messageType.string,
+            response.source,
+            (response.accepted and "true") or "false",
+            response.term,
+            response.nextIndex);
+    if(response.messageType.int == RaftMessageType.SyncLogResponse.int) then
+        if(self.serverToJoin ~= nil) then
+            -- we are reusing heartbeat interval value to indicate when to stop retry
+            self.serverToJoin:resumeHeartbeatingSpeed();
+            self.serverToJoin.nextLogIndex = response.nextIndex;
+            self.serverToJoin.matchedIndex = response.nextIndex - 1;
+            self:syncLogsToNewComingServer(response.nextIndex);
+        end
+    elseif(response.messageType.int == RaftMessageType.JoinClusterResponse.int) then
+        if(self.serverToJoin ~= nil) then
+            if(response.accepted) then
+                self.logger.debug("new server confirms it will join, start syncing logs to it");
+                self:syncLogsToNewComingServer(1);
+            else
+                self.logger.debug("new server cannot accept the invitation, give up");
+            end
+        else
+            self.logger.debug("no server to join, drop the message");
+        end
+    elseif(response.messageType.int == RaftMessageType.LeaveClusterResponse.int) then
+        if(not response.accepted) then
+            self.logger.info("peer doesn't accept to stepping down, stop proceeding");
+            return;
+        end
+
+        self.logger.debug("peer accepted to stepping down, removing this server from cluster");
+        self:removeServerFromCluster(response.source);
+    elseif(response.messageType.int == RaftMessageType.InstallSnapshotResponse.int) then
+        if(self.serverToJoin == nil) then
+            self.logger.info("no server to join, the response must be very old.");
+            return;
+        end
+
+        if(not response.accepted) then
+            self.logger.info("peer doesn't accept the snapshot installation request");
+            return;
+        end
+
+        local context = self.serverToJoin:getSnapshotSyncContext();
+        if(context == nil) then
+            self.logger.error("Bug! SnapshotSyncContext must not be nil");
+            self.stateMachine:exit(-1);
+            return;
+        end
+
+        if(response.nextIndex >= context.snapshot.size) then
+            -- snapshot is done
+            self.logger.debug("snapshot has been copied and applied to new server, continue to sync logs after snapshot");
+            self.serverToJoin:setSnapshotInSync(nil);
+            self.serverToJoin.nextLogIndex = context.snapshot.lastLogIndex + 1;
+            self.serverToJoin.matchedIndex = context.snapshot.lastLogIndex;
+        else
+            context.offset = response.nextIndex; 
+            self.logger.debug("continue to send snapshot to new server at offset %d", response.nextIndex);
+        end
+
+        self:syncLogsToNewComingServer(self.serverToJoin.nextLogIndex);
+    else
+        -- No more response message types need to be handled
+        self.logger.error("received an unexpected response message type %s, for safety, stepping down", response.messageType.string);
+        self.stateMachine:exit(-1);
+    end
+end
+
+function RaftServer:handleRemoveServerRequest(request)
+    local logEntries = request.logEntries;
+    local response = {
+        source = self.id,
+        destination = self.leader,
+        term = self.state.term,
+        messageType = RaftMessageType.AddServerResponse,
+        nextIndex = self.logStore:getFirstAvailableIndex(),
+        accepted = false,
+    }
+
+    if(#logEntries ~= 1 or logEntries[0].valueType ~= LogValueType.ClusterServer) then
+        self.logger.info("bad add server request as we are expecting one log entry with value type of ClusterServer");
+        return response;
+    end
+
+    if(self.role ~= ServerRole.Leader) then
+        self.logger.info("this is not a leader, cannot handle RemoveServerRequest");
+        return response;
+    end
+
+    if(self.configChanging) then
+        -- the previous config has not committed yet
+        self.logger.info("previous config has not committed yet");
+        return response;
+    end
+
+    local server = ClusterServer:new(logEntries[0].value);
+    if(self.peers[server.Id] or self.id == server.id) then
+        self.logger.warning("the server to be added has a duplicated id with existing server %d", server.id);
+        return response;
+    end
+
+    local serverId = tonumber(logEntries[0].value)
+    if(serverId == self.id) then
+        self.logger.info("cannot request to remove leader");
+        return response;
+    end
+
+    local peer = self.peers[serverId];
+    if(peer == nil) then
+        self.logger.info("server %d does not exist", serverId);
+        return response;
+    end
+
+    local leaveClusterRequest = {
+        commitIndex = self.quickCommitIndex,
+        destination = peer:getId(),
+        lastLogIndex = self.logStore:getFirstAvailableIndex() - 1,
+        lastLogTerm = 0,
+        term = self.state.term,
+        messageType = RaftMessageType.leaveClusterRequest,
+        source = self.id,
+    }
+
+    local o = self
+    peer:SendRequest(request, function (response, error)
+                                  o:handleExtendedResponse(response, error);
+                              end);
+
+    response.accepted = true;
+    return response;
+end
+
+
+function RaftServer:handleAddServerRequest(request)
+    local logEntries = request.logEntries;
+    local response = {
+        source = self.id,
+        destination = self.leader,
+        term = self.state.term,
+        messageType = RaftMessageType.AddServerResponse,
+        nextIndex = self.logStore:getFirstAvailableIndex(),
+        accepted = false,
+    }
+
+    if(#logEntries ~= 1 or logEntries[0].valueType ~= LogValueType.ClusterServer) then
+        self.logger.info("bad add server request as we are expecting one log entry with value type of ClusterServer");
+        return response;
+    end
+
+    if(self.role ~= ServerRole.Leader) then
+        self.logger.info("this is not a leader, cannot handle AddServerRequest");
+        return response;
+    end
+
+    local server = ClusterServer:new(logEntries[0].value);
+    if(self.peers[server.Id] or self.id == server.id) then
+        self.logger.warning("the server to be added has a duplicated id with existing server %d", server.id);
+        return response;
+    end
+
+    if(self.configChanging) then
+        -- the previous config has not committed yet
+        self.logger.info("previous config has not committed yet");
+        return response;
+    end
+
+    local o = self
+    self.serverToJoin = PeerServer:new(server, self.context, function (s)
+                                                              o:handleHeartbeatTimeout(s)
+                                                             end)
+
+    self:inviteServerToJoinCluster();
+    response.accepted = true;
+    return response;
+end
+
+function RaftServer:inviteServerToJoinCluster()
+    local request = {
+        commitIndex = self.quickCommitIndex,
+        destination = self.serverToJoin:getId(),
+        source = self.id,
+        term = self.state.term,
+        messageType = RaftMessageType.JoinClusterRequest,
+        lastLogIndex = self.logStore:getFirstAvailableIndex() - 1,
+        logEntries = {LogEntry:new(self.state.term, self.config:toBytes(), LogValueType.Configuration)},
+    }
+
+    local o = self
+    self.serverToJoin:SendRequest(request, function (response, error)
+                                               o:handleExtendedResponse(response, error);
+                                           end);
+end
+
 
 function RaftServer:termForLastLog(logIndex)
     if(logIndex == 0) then

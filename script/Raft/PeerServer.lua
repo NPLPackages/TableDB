@@ -108,9 +108,11 @@ function PeerServer:SendRequest(request, callbackFunc)
                        o:resumeHeartbeatingSpeed();
 
                        if callbackFunc then
-                           callbackFunc(msg)
+                           callbackFunc(msg, err)
                        end
                    end) ~= 0) then
+        
+        -- TODO: re send 
         self:slowDownHeartbeating()
     end
     
