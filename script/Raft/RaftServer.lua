@@ -28,14 +28,17 @@ NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 local util = commonlib.gettable("System.Compiler.lib.util")
 NPL.load("(gl)script/Raft/ClusterConfiguration.lua");
 local ClusterConfiguration = commonlib.gettable("Raft.ClusterConfiguration");
+NPL.load("(gl)script/Raft/SnapshotSyncRequest.lua");
+local SnapshotSyncRequest = commonlib.gettable("Raft.SnapshotSyncRequest");
 NPL.load("(gl)script/Raft/Rutils.lua");
 local Rutils = commonlib.gettable("Raft.Rutils");
 
 local RaftServer = commonlib.gettable("Raft.RaftServer");
 
+local DEFAULT_SNAPSHOT_SYNC_BLOCK_SIZE = 4 * 1024;
 
 local indexComparator = function (arg0, arg1)
-    -- body
+    
     return arg0 > arg1;
 end
 
@@ -644,7 +647,75 @@ function RaftServer:commit(targetIndex)
     end
 end
 
+function RaftServer:snapshotAndCompact(indexCommitted)
+    local snapshotInAction = false;
+    -- see if we need to do snapshots
+    if(self.context.raftParameters.snapshotDistance > 0
+        and ((indexCommitted - self.logStore:getStartIndex()) > self.context.raftParameters.snapshotDistance)
+        and self.snapshotInProgress == 0) then
+        self.snapshotInProgress = 1
+        snapshotInAction = true;
+        local currentSnapshot = self.stateMachine:getLastSnapshot();
+        if(currentSnapshot ~= nil and indexCommitted - currentSnapshot.lastLogIndex < self.context.raftParameters.snapshotDistance) then
+            self.logger.info("a very recent snapshot is available at index %d, will skip this one", currentSnapshot.lastLogIndex);
+            self.snapshotInProgress = 0;
+            snapshotInAction = false;
+        else
+            self.logger.info("creating a snapshot for index %d", indexCommitted);
 
+            -- get the latest configuration info
+            local config = self.config;
+            while(config.logIndex > indexCommitted and config.lastLogIndex >= self.logStore:getStartIndex()) do
+                config = ClusterConfiguration:fromBytes(self.logStore:getLogEntryAt(config.lastLogIndex).value);
+            end
+
+            if(config.logIndex > indexCommitted and config.lastLogIndex > 0 and config.lastLogIndex < self.logStore:getStartIndex()) then
+                local lastSnapshot = self.stateMachine:getLastSnapshot();
+                if(lastSnapshot == nil) then
+                    self.logger.error("No snapshot could be found while no configuration cannot be found in current committed logs, this is a system error, exiting");
+                    self.stateMachine:exit(-1);
+                    return;
+                end
+
+                config = lastSnapshot.lastConfig;
+            elseif(config.logIndex > indexCommitted and config.lastLogIndex == 0) then
+                self.logger.error("BUG!!! stop the system, there must be a configuration at index one");
+                self.stateMachine:exit(-1);
+            end
+
+            local indexToCompact = indexCommitted - 1;
+            local logTermToCompact = self.logStore:getLogEntryAt(indexToCompact).term;
+            local snapshot = Snapshot:new(indexToCompact, logTermToCompact, config);
+
+            local o = self
+            self.stateMachine:createSnapshot(snapshot, function (result, error)
+                    if(error ~= nil) then
+                        o.logger.error("failed to create a snapshot due to %s", error);
+                        return;
+                    end
+
+                    if(not result) then
+                        o.logger.info("the state machine rejects to create the snapshot");
+                        return;
+                    end
+
+                    -- synchronized(this){
+                    o.logger.debug("snapshot created, compact the log store");
+
+                    o.logStore:compact(snapshot.lastLogIndex);
+                    -- o.logger.error("failed to compact the log store, no worries, the system still in a good shape", ex);
+
+                    o.snapshotInProgress = 0;
+            end )
+            snapshotInAction = false;
+        end
+    end
+    -- error handle
+    -- self.logger.error("failed to compact logs at index %d, due to errors %s", indexCommitted, error);
+    -- if(snapshotInAction) then
+    --     self.snapshotInProgress = 0;
+    -- end
+end
 
 function RaftServer:createAppendEntriesRequest(peer)
     -- synchronized(this){
@@ -994,6 +1065,71 @@ function RaftServer:inviteServerToJoinCluster()
                                            end);
 end
 
+function RaftServer:getSnapshotSyncBlockSize()
+    local blockSize = self.context.raftParameters.snapshotBlockSize;
+    return (blockSize == 0 and DEFAULT_SNAPSHOT_SYNC_BLOCK_SIZE) or blockSize;
+end
+
+function RaftServer:createSyncSnapshotRequest(peer, lastLogIndex, term, commitIndex)
+    -- synchronized(peer){
+    local context = peer:getSnapshotSyncContext();
+    local snapshot 
+    if context then
+        snapshot = context.snapshot;
+    end
+    local lastSnapshot = self.stateMachine:getLastSnapshot();
+    if(snapshot == nil or (lastSnapshot ~= nil and lastSnapshot.lastLogIndex > snapshot.lastLogIndex)) then
+        snapshot = lastSnapshot;
+
+        if(snapshot == nil or lastLogIndex > snapshot.lastLogIndex) then
+            self.logger.error("system is running into fatal errors, failed to find a snapshot for peer %d(snapshot nil: %s, snapshot doesn't contais lastLogIndex: %s)", peer.getId(), String.valueOf(snapshot == nil), String.valueOf(lastLogIndex > snapshot.lastLogIndex));
+            self.stateMachine:exit(-1);
+            return nil;
+        end
+
+        if(snapshot.size < 1) then
+            self.logger.error("invalid snapshot, this usually means a bug from state machine implementation, stop the system to prevent further errors");
+            self.stateMachine:exit(-1);
+            return nil;
+        end
+
+        self.logger.info("trying to sync snapshot with last index %d to peer %d", snapshot.lastLogIndex, peer.getId());
+        peer.setSnapshotInSync(snapshot);
+    end
+
+    local offset = peer.snapshotSyncContext.offset;
+    local sizeLeft = snapshot.size - offset;
+    local blockSize = self:getSnapshotSyncBlockSize();
+    local expectedSize = (sizeLeft > blockSize and blockSize) or sizeLeft;
+    local data = {}
+    -- try{
+    local sizeRead, error = self.stateMachine:readSnapshotData(snapshot, offset, data, expectedSize);
+    if error then
+        -- if there is i/o error, no reason to continue
+        self.logger.error("failed to read snapshot data due to io error %s", error.toString());
+        self.stateMachine:exit(-1);
+        return nil;
+    end
+    if(sizeRead and sizeRead < expectedSize) then
+        self.logger.error("only %d bytes could be read from snapshot while %d bytes are expected, should be something wrong" , sizeRead, data.length);
+        self.stateMachine:exit(-1);
+        return nil;
+    end
+
+    local syncRequest = SnapshotSyncRequest:new(snapshot, offset, data, (offset + expectedSize) >= snapshot.size);
+    local requestMessage = {
+        messageType = RaftMessageType.InstallSnapshotRequest,
+        source = self.id,
+        destination = peer:getId(),
+        lastLogIndex = snapshot.lastLogIndex,
+        lastLogTerm = snapshot.lastLogTerm,
+        logEntries = {LogEntry:new(term, syncRequest:toBytes(), LogValueType.SnapshotSyncRequest)},
+        commitIndex = commitIndex,
+        term = term,
+    }
+    return requestMessage;
+end
+
 
 function RaftServer:termForLastLog(logIndex)
     if(logIndex == 0) then
@@ -1004,7 +1140,7 @@ function RaftServer:termForLastLog(logIndex)
         return self.logStore:getLogEntryAt(logIndex).term;
     end
     local lastSnapshot = self.stateMachine:getLastSnapshot();
-    if(lastSnapshot == nil or logIndex ~= lastSnapshot:getLastLogIndex()) then
+    if(lastSnapshot == nil or logIndex ~= lastSnapshot.lastLogIndex) then
         self.logger.error("logIndex is beyond the range that no term could be retrieved");
     end
     return lastSnapshot.lastLogTerm;
@@ -1021,12 +1157,11 @@ function real_commit(server)
                              currentCommitIndex, server.quickCommitIndex, server.logStore:getFirstAvailableIndex())
         local logEntry = server.logStore:getLogEntryAt(currentCommitIndex);
 
-        -- FIXME:
-        -- how can a LogEntry be nil ??
-        -- perhaps on the start up, self commitIndex is -1, logStore's StartIndex is 1
-        -- need more test here
+
+        -- hitorical reason for logEntry to be nil
         if logEntry == nil then
             -- do nothing
+            server.logger.error("committed an empty LogEntry!!")
         elseif(logEntry.valueType == LogValueType.Application) then
             server.stateMachine:commit(currentCommitIndex, logEntry.value);
         elseif(logEntry.valueType == LogValueType.Configuration) then
@@ -1045,7 +1180,7 @@ function real_commit(server)
         end
 
         server.state.commitIndex = currentCommitIndex;
-        -- server:snapshotAndCompact(currentCommitIndex);
+        server:snapshotAndCompact(currentCommitIndex);
     end
 
     server.context.serverStateManager:persistState(server.state);

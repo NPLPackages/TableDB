@@ -36,6 +36,7 @@ function PeerServer:new(server, ctx, heartbeatTimeoutHandler)
         nextLogIndex = 0,
         matchedIndex = 0,
         heartbeatEnabled = false,
+        snapshotSyncContext = nil,
     };
 
     o.heartbeatTask = function(timer) o.heartbeatTimeoutHandler(o) end;

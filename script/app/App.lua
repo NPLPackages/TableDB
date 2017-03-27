@@ -60,9 +60,9 @@ local function executeInServerMode(...)
     raftParameters.rpcFailureBackoff = 500;
     raftParameters.maximumAppendingSize = 200;
     raftParameters.logSyncBatchSize = 5;
-    raftParameters.logSyncStoppingGap = 5;
-    raftParameters.snapshotEnabled = 5000;
-    raftParameters.syncSnapshotBlockSize = 0;
+    raftParameters.logSyncStopGap = 5;
+    raftParameters.snapshotDistance = 5000;
+    raftParameters.snapshotBlockSize = 0;
 
     local context = RaftContext:new(stateManager,
                                     mp,
