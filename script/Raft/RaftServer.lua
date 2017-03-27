@@ -73,6 +73,33 @@ function RaftServer:new(ctx)
         o.state = ServerState:new()
     end
 
+    --[[
+     * I found this implementation is also a victim of bug https:--groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
+     * As the implementation is based on Diego's thesis
+     * Fix:
+     * We should never load configurations that is not committed, 
+     *   this prevents an old server from replicating an obsoleted config to other servers
+     * The prove is as below:
+     * Assume S0 is the last committed server set for the old server A
+     * |- EXITS Log l which has been committed but l !BELONGS TO A.logs =>  Vote(A) < Majority(S0)
+     * In other words, we need to prove that A cannot be elected to leader if any logs/configs has been committed.
+     * Case #1, There is no configuration change since S0, then it's obvious that Vote(A) < Majority(S0), see the core Algorithm
+     * Case #2, There are one or more configuration changes since S0, then at the time of first configuration change was committed, 
+     *      there are at least Majority(S0 - 1) servers committed the configuration change
+     *      Majority(S0 - 1) + Majority(S0) > S0 => Vote(A) < Majority(S0)
+     * -|
+     ]]--
+
+    -- try to see if there is an uncommitted configuration change, since we cannot allow two configuration changes at a time
+    for i = math.max(o.state.commitIndex + 1, o.logStore:getStartIndex()), o.logStore:getFirstAvailableIndex() - 1 do
+        local logEntry = o.logStore:getLogEntryAt(i);
+        if(logEntry.valueType == LogValueType.Configuration) then
+            o.logger.info("detect a configuration change that is not committed yet at index %d", i);
+            o.configChanging = true;
+            break;
+        end
+    end
+
     o.electionTimer = commonlib.Timer:new({callbackFunc = function(timer)
                                                o:handleElectionTimeout()
                                            end}),
@@ -498,7 +525,46 @@ function RaftServer:handleAppendEntriesResponse(response)
     end
 end
 
+function RaftServer:handleInstallSnapshotResponse(response)
+    local peer = self.peers[response.source];
+    if(peer == nil) then
+        self.logger.info("the response is from an unkonw peer %d", response.source);
+        return;
+    end
 
+    -- If there are pending logs to be synced or commit index need to be advanced, continue to send appendEntries to this peer
+    local needToCatchup = true;
+    if(response.accepted) then
+        -- synchronized(peer){
+        local context = peer.snapshotSyncContext;
+        if(context == nil) then
+            self.logger.info("no snapshot sync context for this peer, drop the response");
+            needToCatchup = false;
+        else
+            if(response.nextIndex >= context.snapshot.size) then
+                self.logger.debug("snapshot sync is done");
+                peer.nextLogIndex = context.snapshot.lastLogIndex + 1;
+                peer.matchedIndex = context.snapshot.lastLogIndex;
+                peer.snapshotSyncContext = nil;
+                needToCatchup = peer:clearPendingCommit() or response.nextIndex < self.logStore:getFirstAvailableIndex();
+            else
+                self.logger.debug("continue to sync snapshot at offset %d", response.nextIndex);
+                context.offset = response.nextIndex;
+            end
+        end
+        -- }
+
+    else
+        self.logger.info("peer declines to install the snapshot, will retry");
+    end
+
+    -- This may not be a leader anymore, such as the response was sent out long time ago
+    -- and the role was updated by UpdateTerm call
+    -- Try to match up the logs for this peer
+    if(self.role == ServerRole.Leader and needToCatchup) then
+        self:requestAppendEntries(peer);
+    end
+end
 
 function RaftServer:handleVotingResponse(response)
     self.votesResponded = self.votesResponded + 1;
@@ -573,14 +639,14 @@ function RaftServer:becomeLeader()
     self.serverToJoin = nil;
     for _,server in pairs(self.peers) do
         server.nextLogIndex= self.logStore:getFirstAvailableIndex();
-        server.snapshotInSync = nil;
+        server.snapshotSyncContext = nil;
         server:setFree();
         self:enableHeartbeatForPeer(server);
     end
 
     -- if current config is not committed, try to commit it
     if(self.config.logIndex == 0) then
-        self.config.logIndex= self.logStore:getFirstAvailableIndex();
+        self.config.logIndex = self.logStore:getFirstAvailableIndex();
         self.logStore:append(LogEntry:new(self.state.term, self.config:toBytes(), LogValueType.Configuration));
         self.logger.info("add initial configuration to log store");
         self.configChanging = true;
@@ -736,9 +802,9 @@ function RaftServer:createAppendEntriesRequest(peer)
         self.stateMachine:exit(-1);
     end
     -- for syncing the snapshots, if the lastLogIndex == lastSnapshot.getLastLogIndex, we could get the term from the snapshot
-    -- if(lastLogIndex > 0 and lastLogIndex < startingIndex - 1) then
-    --     return self:createSyncSnapshotRequest(peer, lastLogIndex, term, commitIndex);
-    -- end
+    if(lastLogIndex > 0 and lastLogIndex < startingIndex - 1) then
+        return self:createSyncSnapshotRequest(peer, lastLogIndex, term, commitIndex);
+    end
     local lastLogTerm = self:termForLastLog(lastLogIndex);
     local endIndex = math.min(currentNextIndex, lastLogIndex + 1 + self.context.raftParameters.maximumAppendingSize);
     local logEntries;
@@ -862,6 +928,107 @@ function RaftServer:handleExtendedMessages(request)
 end
 
 
+function RaftServer:handleInstallSnapshotRequest(request)
+    -- we allow the server to be continue after term updated to save a round message
+    self:updateTerm(request.term);
+
+    -- Reset stepping down value to prevent this server goes down when leader crashes after sending a LeaveClusterRequest
+    if(self.steppingDown > 0) then
+        self.steppingDown = 2;
+    end
+    
+    if(request.term == self.state.term and not self.catchingUp) then
+        if(self.role == ServerRole.Candidate) then
+            self:becomeFollower();
+        elseif(self.role == ServerRole.Leader) then
+            self.logger.error("Receive InstallSnapshotRequest from another leader(%d) with same term, there must be a bug, server exits", request.source);
+            self.stateMachine:exit(-1);
+        else
+            self:restartElectionTimer();
+        end
+    end
+
+
+    local response = {
+        messageType = RaftMessageType.InstallSnapshotResponse,
+        term = self.state.term,
+        source = self.id,
+        destination = request.source,
+    }
+
+    if(not self.catchingUp and request.term < self.state.term) then
+        self.logger.info("received an install snapshot request which has lower term than this server, decline the request");
+        response.accepted = false;
+        response.nextIndex = 0;
+        return response;
+    end
+
+    local logEntries = request.logEntries;
+    if(logEntries == nil or #logEntries ~= 1 or logEntries[0].valueType ~= LogValueType.SnapshotSyncRequest) then
+        self.logger.warn("Receive an invalid InstallSnapshotRequest due to bad log entries or bad log entry value");
+        response.nextIndex = 0;
+        response.accepted = false;
+        return response;
+    end
+
+    local snapshotSyncRequest = SnapshotSyncRequest:fromBytes(logEntries[0].value);
+
+    -- We don't want to apply a snapshot that is older than we have, this may not happen, but just in case
+    if(snapshotSyncRequest.snapshot.lastLogIndex <= self.quickCommitIndex) then
+        self.logger.error("Received a snapshot which is older than this server (%d)", self.id);
+        response.nextIndex = 0;
+        response.accepted = false;
+        return response;
+    end
+
+    response.accepted = self:handleSnapshotSyncRequest(snapshotSyncRequest);
+    response.nextIndex = snapshotSyncRequest.offset + #snapshotSyncRequest.data; -- the next index will be ignored if "accept" is false
+    return response;
+end
+
+function RaftServer:handleSnapshotSyncRequest(snapshotSyncRequest)
+    -- try{
+    self.stateMachine:saveSnapshotData(snapshotSyncRequest.snapshot, snapshotSyncRequest.offset, snapshotSyncRequest.data);
+    if(snapshotSyncRequest.done) then
+        -- Only follower will run this piece of code, but let's check it again
+        if(self.role ~= ServerRole.Follower) then
+            self.logger.error("bad server role for applying a snapshot, exit for debugging");
+            self.stateMachine:exit(-1);
+        end
+
+        self.logger.debug("sucessfully receive a snapshot from leader");
+        if(self.logStore:compact(snapshotSyncRequest.snapshot.lastLogIndex)) then
+            -- The state machine will not be able to commit anything before the snapshot is applied, so make this synchronously
+            -- with election timer stopped as usually applying a snapshot may take a very long time
+            self:stopElectionTimer();
+            self.logger.info("successfully compact the log store, will now ask the statemachine to apply the snapshot");
+            if(not self.stateMachine:applySnapshot(snapshotSyncRequest.snapshot)) then
+                self.logger.error("failed to apply the snapshot after log compacted, to ensure the safety, will shutdown the system");
+                self.stateMachine:exit(-1);
+                return false; --should never be reached
+            end
+
+            self:reconfigure(snapshotSyncRequest.snapshot.lastConfig);
+            self.context.serverStateManager:saveClusterConfiguration(self.config);
+            self.state.commitIndex = snapshotSyncRequest.snapshot.lastLogIndex;
+            self.quickCommitIndex = snapshotSyncRequest.snapshot.lastLogIndex;
+            self.context.serverStateManager:persistState(self.state);
+            self.logger.info("snapshot is successfully applied");
+            self:restartElectionTimer();
+        else
+            self.logger.error("failed to compact the log store after a snapshot is received, will ask the leader to retry");
+            return false;
+        end
+    end
+    -- }catch(Throwable error){
+    --     self.logger.error("I/O error %s while saving the snapshot or applying the snapshot, no reason to continue", error.getMessage());
+    --     self.stateMachine:exit(-1);
+    --     return false;
+    -- }
+
+    return true;
+end
+
 -- synchronized
 function RaftServer:handleExtendedResponse(response, error)
     if(error ~= nil) then
@@ -914,7 +1081,7 @@ function RaftServer:handleExtendedResponse(response, error)
             return;
         end
 
-        local context = self.serverToJoin:getSnapshotSyncContext();
+        local context = self.serverToJoin.snapshotSyncContext;
         if(context == nil) then
             self.logger.error("Bug! SnapshotSyncContext must not be nil");
             self.stateMachine:exit(-1);
@@ -924,7 +1091,7 @@ function RaftServer:handleExtendedResponse(response, error)
         if(response.nextIndex >= context.snapshot.size) then
             -- snapshot is done
             self.logger.debug("snapshot has been copied and applied to new server, continue to sync logs after snapshot");
-            self.serverToJoin:setSnapshotInSync(nil);
+            self.serverToJoin.snapshotSyncContext = nil;
             self.serverToJoin.nextLogIndex = context.snapshot.lastLogIndex + 1;
             self.serverToJoin.matchedIndex = context.snapshot.lastLogIndex;
         else
@@ -969,7 +1136,7 @@ function RaftServer:handleRemoveServerRequest(request)
 
     local server = ClusterServer:new(logEntries[0].value);
     if(self.peers[server.Id] or self.id == server.id) then
-        self.logger.warning("the server to be added has a duplicated id with existing server %d", server.id);
+        self.logger.warn("the server to be added has a duplicated id with existing server %d", server.id);
         return response;
     end
 
@@ -1028,7 +1195,7 @@ function RaftServer:handleAddServerRequest(request)
 
     local server = ClusterServer:new(logEntries[0].value);
     if(self.peers[server.Id] or self.id == server.id) then
-        self.logger.warning("the server to be added has a duplicated id with existing server %d", server.id);
+        self.logger.warn("the server to be added has a duplicated id with existing server %d", server.id);
         return response;
     end
 
@@ -1072,7 +1239,7 @@ end
 
 function RaftServer:createSyncSnapshotRequest(peer, lastLogIndex, term, commitIndex)
     -- synchronized(peer){
-    local context = peer:getSnapshotSyncContext();
+    local context = peer.snapshotSyncContext;
     local snapshot 
     if context then
         snapshot = context.snapshot;
@@ -1093,8 +1260,8 @@ function RaftServer:createSyncSnapshotRequest(peer, lastLogIndex, term, commitIn
             return nil;
         end
 
-        self.logger.info("trying to sync snapshot with last index %d to peer %d", snapshot.lastLogIndex, peer.getId());
-        peer.setSnapshotInSync(snapshot);
+        self.logger.info("trying to sync snapshot with last index %d to peer %d", snapshot.lastLogIndex, peer:getId());
+        peer.snapshotSyncContext = snapshot;
     end
 
     local offset = peer.snapshotSyncContext.offset;
@@ -1111,7 +1278,7 @@ function RaftServer:createSyncSnapshotRequest(peer, lastLogIndex, term, commitIn
         return nil;
     end
     if(sizeRead and sizeRead < expectedSize) then
-        self.logger.error("only %d bytes could be read from snapshot while %d bytes are expected, should be something wrong" , sizeRead, data.length);
+        self.logger.error("only %d bytes could be read from snapshot while %d bytes are expected, should be something wrong" , sizeRead, #data);
         self.stateMachine:exit(-1);
         return nil;
     end

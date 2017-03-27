@@ -41,7 +41,6 @@ function PeerServer:new(server, ctx, heartbeatTimeoutHandler)
 
     o.heartbeatTask = function(timer) o.heartbeatTimeoutHandler(o) end;
     o.heartbeatTimer = commonlib.Timer:new({callbackFunc = o.heartbeatTask})
-    -- util.table_print(o)
     setmetatable(o, self);
     return o;
 end
