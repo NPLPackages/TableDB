@@ -42,11 +42,11 @@ function SnapshotSyncRequest:toBytes()
 	local file = ParaIO.open("<memory>", "w");
     local bytes;
 	if(file:IsValid()) then
-        file:WriteUInt(self.lastLogIndex)
-        file:WriteUInt(self.lastLogTerm)
+        file:WriteDouble(self.lastLogIndex)
+        file:WriteDouble(self.lastLogTerm)
         file:WriteInt(#configData)
         file:WriteBytes(#configData, {configData:byte(1, -1)})
-        file:WriteUInt(self.offset)
+        file:WriteDouble(self.offset)
         file:WriteInt(#self.data)
         file:WriteBytes(#self.data, {self.data:byte(1, -1)})
         file:WriteBytes(1, {(self.done and 1) or 0})
@@ -67,13 +67,13 @@ function SnapshotSyncRequest:fromBytes(bytes)
         -- can not use file:WriteString(bytes);, use WriteBytes
         file:WriteBytes(#bytes, {bytes:byte(1, -1)});
         file:seek(0)
-        local lastLogIndex = file:ReadUInt()
-        local lastLogTerm = file:ReadUInt()
+        local lastLogIndex = file:ReadDouble()
+        local lastLogTerm = file:ReadDouble()
         local configSize = file:ReadInt(#configData)
         local configData = {}
         file:ReadBytes(configSize, configData)
         local config = ClusterConfiguration:fromBytes(configData)
-        local offset = file:ReadUInt()
+        local offset = file:ReadDouble()
         local dataSize = file:ReadInt()
         local data = {}
         file:ReadBytes(dataSize, data)

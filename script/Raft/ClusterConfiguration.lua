@@ -16,9 +16,6 @@ NPL.load("(gl)script/Raft/ClusterServer.lua");
 local ClusterServer = commonlib.gettable("Raft.ClusterServer");
 local ClusterConfiguration = commonlib.gettable("Raft.ClusterConfiguration");
 
--- local UIntBytes = 4; -- 32 bits
-
-
 function ClusterConfiguration:new(config)
     local o = {
         logIndex = config.logIndex or 0,
@@ -64,8 +61,8 @@ function ClusterConfiguration:fromBytes(bytes)
         -- can not use file:WriteString(bytes);, use WriteBytes
         file:WriteBytes(#bytes, {bytes:byte(1, -1)});
         file:seek(0)
-        o.logIndex = file:ReadUInt()
-        o.lastLogIndex = file:ReadUInt()
+        o.logIndex = file:ReadDouble()
+        o.lastLogIndex = file:ReadDouble()
 
         while file:getpos() < file:GetFileSize() do
             local server = {}
@@ -92,8 +89,8 @@ function ClusterConfiguration:toBytes()
 	local file = ParaIO.open("<memory>", "w");
     local bytes;
 	if(file:IsValid()) then
-        file:WriteUInt(self.logIndex)
-        file:WriteUInt(self.lastLogIndex)
+        file:WriteDouble(self.logIndex)
+        file:WriteDouble(self.lastLogIndex)
 
         for _,server in ipairs(self.servers) do
             local b = server:toBytes()
