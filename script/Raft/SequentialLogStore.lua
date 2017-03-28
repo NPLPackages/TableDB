@@ -260,7 +260,55 @@ function SequentialLogStore:getLogEntryAt(logIndex)
    @param itemsToPack
    @return log pack
 ]]--
-function SequentialLogStore:packLog(index, itemsToPack)
+function SequentialLogStore:packLog(logIndex, itemsToPack)
+    if logIndex < self.startIndex then
+        return;
+    end
+
+    local index = logIndex - self.startIndex + 1;
+    if(index > self.entriesInStore) then
+        return {};
+    end
+
+    local endIndex = math.min(index + itemsToPack, self.entriesInStore + 1);
+    local readToEnd = (endIndex == self.entriesInStore + 1);
+    local indexPosition = (index - 1) * DoubleBytes;
+    self.indexFile:seek(indexPosition);
+
+    local endOfLog = self.dataFile:GetFileSize();
+    local indexBytes = DoubleBytes * (endIndex - index)
+    if(not readToEnd) then
+        self.indexFile:seek(indexBytes)
+        endOfLog = self.indexFile:ReadDouble();
+    end
+
+    local startOfLog = self.indexFile:ReadDouble();
+    self.dataFile:seek(startOfLog);
+
+    -- "<memory>" is a special name for memory file, both read/write is possible. 
+    local file = ParaIO.open("<memory>", "w");
+    local bytes;
+    if(file:IsValid()) then
+        local dataBytes = endOfLog - startOfLog
+        file:WriteDouble(indexBytes)
+        file:WriteDouble(dataBytes)
+       
+        -- index data
+        file:WriteBytes(indexBytes, {self.indexFile:GetText(indexPosition, -1):byte(1, -1)})
+        file:WriteBytes(dataBytes, {self.dataFile:GetText(startOfLog, -1):byte(1, -1)})
+        bytes = file:GetText(0, -1)
+        file:close()
+	 
+        -- Compress
+        local data = {content=bytes, method="gzip"};
+        if(NPL.Compress(data)) then
+            bytes = data.result;
+        end
+    end
+    return bytes;
+
+    -- error handle
+    -- self.logger.error("failed to read files to read data for packing");
 end
 
 --[[
@@ -268,7 +316,62 @@ end
    @param index the log index that start applying the logPack, index starts from 1
    @param logPack
 ]]--
-function SequentialLogStore:applyLogPack(index, logPack)
+function SequentialLogStore:applyLogPack(logIndex, logPack)
+    if logIndex < self.startIndex then
+        return;
+    end
+
+    local index = logIndex - self.startIndex + 1;
+
+    local bytes;
+    local data = {content=logPack, method="gzip"};
+    if(NPL.Decompress(data)) then
+        bytes = data.result;
+    end
+
+    -- "<memory>" is a special name for memory file, both read/write is possible. 
+    local file = ParaIO.open("<memory>", "w");
+    local bytes;
+    if(file:IsValid()) then
+        file:WriteBytes(#bytes, {bytes:byte(1, -1)})
+        file:seek(0)
+
+        local indexBytes = file:ReadDouble()
+        local dataBytes = file:ReadDouble()
+
+        local indexBuffer = {}
+        local logBuffer = {}
+       
+        -- index data
+        file:ReadBytes(indexBytes, indexBuffer)
+        file:ReadBytes(dataBytes, logBuffer)
+
+        local indexFilePosition, dataFilePosition;
+        if(index == self.entriesInStore + 1) then
+            indexFilePosition = self.indexFile:GetFileSize();
+            dataFilePosition = self.dataFile:GetFileSize();
+        else
+            indexFilePosition = (index - 1) * DoubleBytes;
+            self.indexFile.seek(indexFilePosition);
+            dataFilePosition = self.indexFile:ReadDouble();
+        end
+
+
+        self.indexFile:seek(indexFilePosition);
+        self.indexFile:WriteBytes(indexBytes, indexBuffer);
+        self.indexFile:SetEndOfFile();
+        self.dataFile:seek(dataFilePosition);
+        self.dataFile:WriteBytes(dataBytes, logBuffer);
+        self.dataFile:SetEndOfFile();
+        self.entriesInStore = index - 1 + indexBytes / DoubleBytes;
+
+        self.buffer:reset(self.entriesInStore > self.bufferSize and self.entriesInStore + self.startIndex - self.bufferSize or self.startIndex);
+        self:fillBuffer();
+        file:close()
+    end
+
+    -- error handle
+    -- self.logger.error("failed to write files to unpack logs for data");
 end
 
 --[[
@@ -277,6 +380,76 @@ end
    @return compact successfully or not
 ]]--
 function SequentialLogStore:compact(lastLogIndex)
+    if lastLogIndex < self.startIndex then
+        return;
+    end
+
+    self:backup();
+    local lastIndex = lastLogIndex - self.startIndex;
+    if(lastLogIndex >= self:getFirstAvailableIndex() - 1) then
+        self.indexFile:seek(0)
+        self.indexFile:SetEndOfFile();
+        self.dataFile:seek(0);
+        self.dataFile:SetEndOfFile();
+        self.startIndexFile:seek(0);
+        self.startIndexFile:WriteDouble(lastLogIndex + 1);
+        self.startIndex = lastLogIndex + 1;
+        self.entriesInStore = 0;
+        self.buffer:reset(lastLogIndex + 1);
+        return true;
+    else
+        local dataPosition = -1;
+        local indexPosition = DoubleBytes * (lastIndex + 1);
+        self.indexFile:seek(indexPosition);
+        dataPosition = self.indexFile:ReadDouble()
+        local indexFileNewLength = self.indexFile:GetFileSize() - indexPosition;
+        local dataFileNewLength = self.dataFile:GetFileSize() - dataPosition;
+
+        -- copy the log data
+        -- data file
+        local backupDataFileName = o.logContainer..LOG_STORE_FILE_BAK
+        local backupFile = ParaIO.open(backupDataFileName, "r");
+        assert(backupFile:IsValid(), "dataFile not Valid")
+
+        -- we don't have an channel, so this is inefficient and ugly
+        backupFile:seek(dataPosition);
+        local data = {}
+        backupFile:ReadBytes(dataFileNewLength, data)
+        self.dataFile:seek(0)
+        self.dataFile:WriteBytes(dataFileNewLength, data)
+        self.dataFile:SetEndOfFile()
+        backupFile:close();
+
+        -- copy the index data
+        -- index file
+        local backupIndexFileName = o.logContainer..LOG_INDEX_FILE_BAK
+        backupFile = ParaIO.open(backupIndexFileName, "r");
+        assert(backupFile:IsValid(), "backupFile not Valid")
+
+        
+        backupFile = new RandomAccessFile(self.logContainer.resolve(LOG_INDEX_FILE_BAK).toString(), "r");
+        backupFile:seek(indexPosition);
+        self.indexFile:seek(0);
+        for  i = 1, indexFileNewLength / DoubleBytes do
+            self.indexFile:WriteDouble(backupFile:ReadDouble() - dataPosition);
+        end
+
+        self.indexFile:SetEndOfFile();
+        backupFile:close();
+
+        -- save the starting index
+        self.startIndexFile:seek(0);
+        self.startIndexFile:WriteDouble(lastLogIndex + 1);
+        self.entriesInStore = self.entriesInStore - (lastLogIndex - self.startIndex + 1);
+        self.startIndex = lastLogIndex + 1;
+        self.buffer.reset(self.entriesInStore > self.bufferSize and self.entriesInStore + self.startIndex - self.bufferSize or self.startIndex);
+        self:fillBuffer();
+        return true;
+    end
+
+    self.logger.error("fail to compact the logs due to error");
+    self:restore();
+    return false;
 end
 
 function SequentialLogStore:fillBuffer()
@@ -294,6 +467,56 @@ function SequentialLogStore:fillBuffer()
         end
     end
 end
+
+
+function SequentialLogStore:restore()
+    self.indexFile:close();
+    self.dataFile:close();
+    self.startIndexFile:close();
+    local indexFileName = self.logContainer..LOG_INDEX_FILE
+    local dataFileName = self.logContainer..LOG_STORE_FILE
+    local startIndexFileName = self.logContainer..LOG_START_INDEX_FILE
+    
+    local backupIndexFileName = self.logContainer..LOG_INDEX_FILE_BAK
+    local backupDataFileName = self.logContainer..LOG_STORE_FILE_BAK
+    local backupStartIndexFileName = self.logContainer..LOG_START_INDEX_FILE_BAK
+
+    if (ParaIO.CopyFile(backupIndexFileName, indexFileName, true) and
+        ParaIO.CopyFile(backupDataFileName, dataFileName, true) and
+        ParaIO.CopyFile(backupStartIndexFileName, startIndexFileName, true)) then
+
+        self.indexFile = ParaIO.open(indexFileName, "rw");
+        self.dataFile = ParaIO.open(dataFileName, "rw");
+        self.startIndexFile = ParaIO.open(startIndexFileName, "rw");
+    
+    else
+        -- this is fatal...
+        self.logger.fatal("cannot restore from failure, please manually restore the log files");
+    end
+
+end
+
+function SequentialLogStore:backup()
+    --decide not to use ParaIO.BackupFile
+    local indexFileName = self.logContainer..LOG_INDEX_FILE
+    local dataFileName = self.logContainer..LOG_STORE_FILE
+    local startIndexFileName = self.logContainer..LOG_START_INDEX_FILE
+    
+    local backupIndexFileName = self.logContainer..LOG_INDEX_FILE_BAK
+    local backupDataFileName = self.logContainer..LOG_STORE_FILE_BAK
+    local backupStartIndexFileName = self.logContainer..LOG_START_INDEX_FILE_BAK
+
+    ParaIO.DeleteFile(backupDataFileName)
+    ParaIO.DeleteFile(backupIndexFileName)
+    ParaIO.DeleteFile(backupStartIndexFileName)
+
+    if not (ParaIO.CopyFile(indexFileName, backupIndexFileName, true) and
+        ParaIO.CopyFile(dataFileName, backupDataFileName, true) and
+        ParaIO.CopyFile(startIndexFileName, backupStartIndexFileName, true)) then
+        self.logger.error("failed to create a backup folder")
+    end
+end
+
 
 function SequentialLogStore:readEntry(size)
     local term = self.dataFile:ReadDouble();
