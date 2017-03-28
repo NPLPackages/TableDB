@@ -83,7 +83,6 @@ end
 function PeerServer:clearPendingCommit()
     -- return this.pendingCommitFlag.compareAndSet(1, 0);
     if self.pendingCommitFlag == 1 then
-        -- body
         self.pendingCommitFlag = 0;
         return true;
     end

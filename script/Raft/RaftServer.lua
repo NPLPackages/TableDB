@@ -1320,15 +1320,17 @@ function real_commit(server)
     local currentCommitIndex = server.state.commitIndex;
     while(currentCommitIndex < server.quickCommitIndex and currentCommitIndex < server.logStore:getFirstAvailableIndex() - 1) do
         currentCommitIndex = currentCommitIndex + 1;
-        server.logger.trace("commiting...currentCommitIndex:%d, quickCommitIndex:%d, logStoreFirstAvailableIndex:%d",
+        server.logger.trace("commiting...currentCommitIndex:%d, quickCommitIndex:%d, logStore:FirstAvailableIndex:%d",
                              currentCommitIndex, server.quickCommitIndex, server.logStore:getFirstAvailableIndex())
         local logEntry = server.logStore:getLogEntryAt(currentCommitIndex);
 
 
-        -- hitorical reason for logEntry to be nil
+        -- how can a LogEntry be nil ??
+        -- perhaps on the start up, self commitIndex is -1, logStore's StartIndex(logStore:FirstAvailableIndex) is 1
+        -- need more test here
         if logEntry == nil then
             -- do nothing
-            server.logger.error("committed an empty LogEntry!!")
+            server.logger.error("committed an empty LogEntry at %d !!", currentCommitIndex)
         elseif(logEntry.valueType == LogValueType.Application) then
             server.stateMachine:commit(currentCommitIndex, logEntry.value);
         elseif(logEntry.valueType == LogValueType.Configuration) then

@@ -43,10 +43,10 @@ function ServerStateManager:new(dataDirectory)
     end
 
     -- stateFile 
-    if not ParaIO.DoesFileExist(o.container..STATE_FILE) then
-        local result = ParaIO.CreateNewFile(o.container..STATE_FILE)
-        assert(result, "create serverStateFile failed")
-    end
+    -- if not ParaIO.DoesFileExist(o.container..STATE_FILE) then
+    --     local result = ParaIO.CreateNewFile(o.container..STATE_FILE)
+    --     assert(result, "create serverStateFile failed")
+    -- end
 
     o.serverStateFile = ParaIO.open(dataDirectory..STATE_FILE, "rw");
 

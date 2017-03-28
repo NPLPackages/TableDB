@@ -39,35 +39,34 @@ function SequentialLogStore:new(logContainer)
         logger = LoggerFactory.getLogger("SequentialLogStore"),
         zeroEntry = LogEntry:new(),
         bufferSize = BUFFER_SIZE,
-
     };
     setmetatable(o, self);
 
 
     -- index file
     local indexFileName = o.logContainer..LOG_INDEX_FILE
-    if not ParaIO.DoesFileExist(indexFileName) then
-        local result = ParaIO.CreateNewFile(indexFileName)
-        assert(result, "create indexFile failed")
-    end
+    -- if not ParaIO.DoesFileExist(indexFileName) then
+    --     local result = ParaIO.CreateNewFile(indexFileName)
+    --     assert(result, "create indexFile failed")
+    -- end
     o.indexFile = ParaIO.open(indexFileName, "rw");
     assert(o.indexFile:IsValid(), "indexFile not Valid")
 
     -- data file
     local dataFileName = o.logContainer..LOG_STORE_FILE
-    if not ParaIO.DoesFileExist(dataFileName) then
-        local result = ParaIO.CreateNewFile(dataFileName)
-        assert(result, "create dataFile failed")
-    end
+    -- if not ParaIO.DoesFileExist(dataFileName) then
+    --     local result = ParaIO.CreateNewFile(dataFileName)
+    --     assert(result, "create dataFile failed")
+    -- end
     o.dataFile = ParaIO.open(dataFileName, "rw");
     assert(o.dataFile:IsValid(), "dataFile not Valid")
 
     -- startIndex file
     local startIndexFileName = o.logContainer..LOG_START_INDEX_FILE
-    if not ParaIO.DoesFileExist(startIndexFileName) then
-        local result = ParaIO.CreateNewFile(startIndexFileName)
-        assert(result, "create startIndexFile failed")
-    end
+    -- if not ParaIO.DoesFileExist(startIndexFileName) then
+    --     local result = ParaIO.CreateNewFile(startIndexFileName)
+    --     assert(result, "create startIndexFile failed")
+    -- end
     o.startIndexFile = ParaIO.open(startIndexFileName, "rw");
     assert(o.startIndexFile:IsValid(), "startIndexFile not Valid")
 
