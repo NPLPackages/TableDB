@@ -436,7 +436,6 @@ function RaftServer:requestAppendEntries(peer)
     return false;
 end
 
-
 --synchronized
 function RaftServer:handlePeerResponse(response, error)
     if(error ~= nil) then
@@ -1107,6 +1106,72 @@ function RaftServer:handleExtendedResponse(response, error)
     end
 end
 
+function RaftServer:handleExtendedResponseError(error)
+    self.logger.info("receive an error response from peer server, %s", error.string);
+
+    if(error ~= nil) then
+        self.logger.debug("it's a rpc error, see if we need to retry");
+        local request = error.request;
+        if(request.messageType.int == RaftMessageType.SyncLogRequest.int or
+           request.messageType.int == RaftMessageType.JoinClusterRequest.int or
+           request.messageType.int == RaftMessageType.LeaveClusterRequest.int) then
+            local server = (request.messageType.int == RaftMessageType.LeaveClusterRequest.int) and self.peers[request.destination] or self.serverToJoin;
+            if(server ~= nil) then
+                if(server.currentHeartbeatInterval >= self.context.raftParameters.maxHeartbeatInterval) then
+                    if(request.messageType.int == RaftMessageType.LeaveClusterRequest.int) then
+                        self.logger.info("rpc failed again for the removing server (%d), will remove this server directly", server:getId());
+                        
+                        --[[
+                         * In case of there are only two servers in the cluster, it safe to remove the server directly from peers
+                         * as at most one config change could happen at a time
+                         *  prove:
+                         *      assume there could be two config changes at a time
+                         *      this means there must be a leader after previous leader offline, which is impossible 
+                         *      (no leader could be elected after one server goes offline in case of only two servers in a cluster)
+                         * so the bug https:--groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E 
+                         * does not apply to cluster which only has two members
+                         ]]--
+                        if(Rutils.table_size(self.peers) == 1) then
+                            local peer = self.peers[server:getId()];
+                            if(peer == nil) then
+                                self.logger.info("peer %d cannot be found in current peer list", id);
+                            else
+                                peer.heartbeatTimer:Change()
+                                peer.heartbeatEnabled = false;
+                                self.peers[server:getId()] = nil;
+                                self.logger.info("server %d is removed from cluster", server:getId());
+                            end
+                        end
+                        
+                        self:removeServerFromCluster(server:getId());
+                    else
+                        self.logger.info("rpc failed again for the new coming server (%d), will stop retry for this server", server:getId());
+                        self.configChanging = false;
+                        self.serverToJoin = nil;
+                    end
+                else
+                    -- reuse the heartbeat interval value to indicate when to stop retrying, as rpc backoff is the same
+                    self.logger.debug("retry the request");
+                    server:slowDownHeartbeating();
+                    local this = self;
+
+                    local timer = commonlib.Timer:new({callbackFunc = function(timer)
+                            this.logger.debug("retrying the request %s", request.messageType.string);
+                            
+                            server:SendRequest(request, function(furtherResponse, furtherError)
+                                this:handleExtendedResponse(furtherResponse, furtherError);
+                            end);
+                            return nil;
+                    end})
+                    timer:Change(server.currentHeartbeatInterval, nil)
+
+                end
+            end
+        end
+    end
+end
+
+
 function RaftServer:handleRemoveServerRequest(request)
     local logEntries = request.logEntries;
     local response = {
@@ -1171,7 +1236,6 @@ function RaftServer:handleRemoveServerRequest(request)
     return response;
 end
 
-
 function RaftServer:handleAddServerRequest(request)
     local logEntries = request.logEntries;
     local response = {
@@ -1215,6 +1279,78 @@ function RaftServer:handleAddServerRequest(request)
     return response;
 end
 
+function RaftServer:handleLogSyncRequest(request)
+    local logEntries = request.logEntries;
+    local response = {
+        source = self.id,
+        destination = request.source,
+        term = self.state.term,
+        messageType = RaftMessageType.SyncLogResponse,
+        nextIndex = self.logStore:getFirstAvailableIndex(),
+        accepted = false,
+    }
+
+    if(logEntries == nil or
+       #logEntries ~= 1 or
+       logEntries[0].valueType ~= LogValueType.LogPack or
+       logEntries[0].value == nil or
+       #logEntries[0].value == 0) then
+        self.logger.info("receive an invalid LogSyncRequest as the log entry value doesn't meet the requirements");
+        return response;
+    end
+
+    if(not self.catchingUp) then
+        self.logger.debug("This server is ready for cluster, ignore the request");
+        return response;
+    end
+
+    self.logStore:applyLogPack(request.lastLogIndex + 1, logEntries[0].value);
+    self:commit(self.logStore:getFirstAvailableIndex() -1);
+    response.nextIndex = self.logStore:getFirstAvailableIndex();
+    response.accepted = true;
+    return response;
+end
+
+function RaftServer:syncLogsToNewComingServer(startIndex)
+    -- only sync committed logs
+    local gap = self.quickCommitIndex - startIndex;
+    if(gap < self.context.raftParameters.logSyncStopGap) then
+
+        self.logger.info("LogSync is done for server %d with log gap %d, now put the server into cluster", self.serverToJoin.getId(), gap);
+        local newConfig = ClusterConfiguration:new(self.config)
+        newConfig.lastLogIndex = self.logStore:getFirstAvailableIndex()
+        newConfig.servers[#newConfig.servers+1] = ClusterServer:new(self.serverToJoin.clusterConfig)
+        local configEntry = LogEntry:new(self.state.term, newConfig:toBytes(), LogValueType.Configuration);
+        self.logStore:append(configEntry);
+        self.configChanging = true;
+        self:requestAllAppendEntries();
+        return;
+    end
+
+    local request = nil;
+    if(startIndex > 0 and startIndex < self.logStore:getStartIndex()) then
+        request = self.createSyncSnapshotRequest(self.serverToJoin, startIndex, self.state.term, self.quickCommitIndex);
+
+    else
+        local sizeToSync = math.min(gap, self.context.raftParameters.logSyncBatchSize);
+        local logPack = self.logStore:packLog(startIndex, sizeToSync);
+        request = {
+            commitIndex = self.quickCommitIndex,
+            destination = self.serverToJoin:getId(),
+            source = self.id,
+            term = self.state.term,
+            messageType = RaftMessageType.SyncLogRequest,
+            LastLogIndex = startIndex - 1,
+            logEntries = {LogEntry:new(self.state.term, logPack, LogValueType.LogPack)}
+        }
+    end
+
+    local this = self;
+    self.serverToJoin.SendRequest(request, function (response, error)
+        this:handleExtendedResponse(response, error);
+    end);
+end
+
 function RaftServer:inviteServerToJoinCluster()
     local request = {
         commitIndex = self.quickCommitIndex,
@@ -1230,6 +1366,79 @@ function RaftServer:inviteServerToJoinCluster()
     self.serverToJoin:SendRequest(request, function (response, error)
                                                o:handleExtendedResponse(response, error);
                                            end);
+end
+
+function RaftServer:handleJoinClusterRequest(request)
+    local logEntries = request.logEntries;
+    local response = {
+        source = self.id,
+        destination = request.source,
+        term = self.state.term,
+        messageType = RaftMessageType.JoinClusterResponse,
+        nextIndex = self.logStore:getFirstAvailableIndex(),
+        accepted = false,
+    }
+
+    if(logEntries == nil or
+       #logEntries ~= 1 or
+       logEntries[0].valueType ~= LogValueType.Configuration or
+       logEntries[0].value == nil or
+       logEntries[0].value == 0) then
+        self.logger.info("receive an invalid JoinClusterRequest as the log entry value doesn't meet the requirements");
+        return response;
+    end
+
+    if(self.catchingUp) then
+        self.logger.info("this server is already in log syncing mode");
+        return response;
+    end
+
+    self.catchingUp = true;
+    self.role = ServerRole.Follower;
+    self.leader = request.source;
+    self.state.term = request.term;
+    self.state.commitIndex = 0;
+    self.quickCommitIndex = 0;
+    self.state.votedFor = -1;
+    self.context.serverStateManager:persistState(self.state);
+    self:stopElectionTimer();
+    local newConfig = ClusterConfiguration:fromBytes(logEntries[0].value);
+    self:reconfigure(newConfig);
+    response.term = self.state.term;
+    response.accepted = true;
+    return response;
+end
+
+function RaftServer:handleLeaveClusterRequest(request)
+    local response = {
+        source = self.id,
+        destination = request.source,
+        term = self.state.term,
+        messageType = RaftMessageType.LeaveClusterResponse,
+        nextIndex = self.logStore:getFirstAvailableIndex(),
+    }
+
+    if(not self.configChanging) then
+        self.steppingDown = 2;
+        response.accepted = true;
+    else
+        response.accepted = false;
+    end
+    
+    return response;
+end
+
+function RaftServer:removeServerFromCluster(serverId)
+    local newConfig = ClusterConfiguration:new(self.config);
+    newConfig.logIndex = self.logStore:getFirstAvailableIndex();
+    if newConfig.servers[serverId] then
+        newConfig.servers[serverId] = nil
+    end
+
+    self.logger.info("removed a server from configuration and save the configuration to log store at %d", newConfig.getLogIndex());
+    self.configChanging = true;
+    self.logStore:append(LogEntry:new(self.state.term, newConfig:toBytes(), LogValueType.Configuration));
+    self:requestAppendEntries();
 end
 
 function RaftServer:getSnapshotSyncBlockSize()

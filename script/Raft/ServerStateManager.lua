@@ -105,9 +105,9 @@ function ServerStateManager:readState()
         return;
     end
 
-    local term = self.serverStateFile:ReadUint()
-    local commitIndex = self.serverStateFile:ReadUint()
-    local votedFor = self.serverStateFile:Readint()
+    local term = self.serverStateFile:ReadDouble()
+    local commitIndex = self.serverStateFile:ReadDouble()
+    local votedFor = self.serverStateFile:ReadInt()
 
     return ServerState:new(term, commitIndex, votedFor);
 end
