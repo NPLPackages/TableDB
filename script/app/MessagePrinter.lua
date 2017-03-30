@@ -19,10 +19,10 @@ local MessagePrinter = commonlib.gettable("app.MessagePrinter");
 
 function MessagePrinter:new(baseDir, ip, listeningPort) 
     local o = {
-        ip = ip,
-        port = listeningPort,
+        -- ip = ip,
+        -- port = listeningPort,
         logger = commonlib.logging.GetLogger(""),
-        -- snapshotStore = baseDir.resolve("snapshots"),
+        snapshotStore = baseDir.."snapshot/",
         commitIndex = 0,
         messageSender = nil,
 
@@ -31,7 +31,7 @@ function MessagePrinter:new(baseDir, ip, listeningPort)
     };
     setmetatable(o, self);
 
-    if not ParaIO.CreateDirectory(baseDir) then
+    if not ParaIO.CreateDirectory(o.snapshot) then
         o.logger.error("%s create error", baseDir)
     end
     return o;
@@ -87,6 +87,14 @@ end
  * @param data
  ]]--
 function MessagePrinter:rollback(logIndex, data)
+    local message = data;
+    local index = string.find(message, ':');
+    if(index ~= nil) then
+        key = string.sub(message, 1, index - 1);
+        self.pendingMessages[key] = nil;
+    end
+
+    print(format("Rollback index %d\t%s", logIndex, message or ""));
 end
 
 --[[
@@ -112,6 +120,19 @@ end
  * @param data part of snapshot data
  ]]--
 function MessagePrinter:saveSnapshotData(snapshot, offset, data)
+    local filePath = self.snapshotStore..string.format("%d-%d.s", snapshot.lastLogIndex, snapshot.lastLogTerm);
+
+    if(not ParaIO.DoesFileExist(filePath)) then
+        local snapshotConf = self.snapshotStore..string.format("%d.cnf", snapshot.lastLogIndex);
+        local sConf = ParaIO.open(snapshotConf, "rw");
+        local bytes = snapshot.lastConfig:toBytes();
+        sConf:WriteBytes(#bytes, {bytes:byte(1, -1)})
+    end
+
+    local snapshotFile = ParaIO.open(filePath, "rw");
+    snapshotFile:seek(offset);
+    snapshotFile:write(data);
+    snapshotFile:close();
 end
 
 --[[
@@ -120,6 +141,24 @@ end
  * @return true if successfully applied, otherwise false
  ]]--
 function MessagePrinter:applySnapshot(snapshot)
+    local filePath = self.snapshotStore..string.format("%d-%d.s", snapshot.lastLogIndex, snapshot.lastLogTerm);
+    if(not ParaIO.DoesFileExist(filePath)) then
+        return false;
+    end
+
+    local snapshotFile = ParaIO.open(filePath, "rw");
+
+    local line = snapshotFile:readline();
+    while line do
+        if #line > 0 then
+            print(format("from snapshot: %s", line))
+            self:addMessage(line)
+        end
+
+        line = snapshotFile:readline();
+    end
+    self.commitIndex = snapshot.lastLogIndex;
+    snapshotFile:close()
 end
 
 --[[
@@ -129,7 +168,20 @@ end
  * @param buffer the buffer to be filled
  * @return bytes read
  ]]--
-function MessagePrinter:readSnapshotData(snapshot, offset, buffer)
+function MessagePrinter:readSnapshotData(snapshot, offset, buffer, expectedSize)
+    local filePath = self.snapshotStore..string.format("%d-%d.s", snapshot.lastLogIndex, snapshot.lastLogTerm);
+    if(not ParaIO.DoesFileExist(filePath)) then
+        return -1;
+    end
+
+   local snapshotFile = ParaIO.open(filePath, "rw");
+
+   snapshotFile:seek(offset);
+
+   snapshotFile:ReadBytes(expectedSize, buffer);
+
+   return expectedSize;
+
 end
 
 --[[
