@@ -439,7 +439,7 @@ end
 --synchronized
 function RaftServer:handlePeerResponse(response, error)
     if(error ~= nil) then
-        self.logger.info("peer response error: %s", error);
+        self.logger.info("peer response error: %s", error.string);
         return;
     end
 
