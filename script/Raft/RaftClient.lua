@@ -62,6 +62,39 @@ function RaftClient:appendEntries(values, callbackFunc)
 end
 
 
+function RaftClient:addServer(server, callbackFunc)
+    if(server == nil) then
+        self.logger.error("server cannot be null");
+        return
+    end
+
+    local logEntries = {LogEntry:new(0, server:toBytes(), LogValueType.ClusterServer)};
+    local request = {
+        messageType = RaftMessageType.AddServerRequest,
+        logEntries = logEntries,
+    }
+
+    self:tryCurrentLeader(request, callbackFunc, 500, 0);
+end
+
+
+function RaftClient:removeServer(serverId, callbackFunc)
+    if(serverId < 0) then
+        self.logger.error("serverId must be equal or greater than zero");
+        return
+    end
+
+    -- assume {serverId} is string
+    local logEntries = {LogEntry:new(0, {serverId}, LogValueType.ClusterServer)};
+    local request = {
+        messageType = RaftMessageType.RemoveServerRequest,
+        logEntries = logEntries,
+    }
+
+    self:tryCurrentLeader(request, callbackFunc, 500, 0);
+end
+
+
 function RaftClient:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry)
     self.logger.debug("trying request to %d as current leader from %s", self.leaderId, self.localAddress.id);
 
