@@ -25,6 +25,7 @@ function MessagePrinter:new(baseDir, ip, listeningPort)
         snapshotStore = baseDir.."snapshot/",
         commitIndex = 0,
         messageSender = nil,
+        snapshotInprogress = false,
 
         messages = {},
         pendingMessages = {},
@@ -148,6 +149,7 @@ function MessagePrinter:applySnapshot(snapshot)
 
     local snapshotFile = ParaIO.open(filePath, "rw");
 
+    self.messages = {}
     local line = snapshotFile:readline();
     while line do
         if #line > 0 then
@@ -189,6 +191,7 @@ end
  * @return last snapshot information in the state machine or null if none
  ]]--
 function MessagePrinter:getLastSnapshot()
+
 end
 
 --[[
@@ -199,6 +202,41 @@ end
  * @return true if snapshot is created successfully, otherwise false
  ]]--
 function MessagePrinter:createSnapshot(snapshot)
+    if(snapshot.lastLogIndex > self.commitIndex) then
+        return false;
+    end
+
+    if self.snapshotInprogress then
+        return false;
+    end
+
+    self.snapshotInprogress = true;
+    local copyOfMessages = self.messages
+
+
+    -- make async ??
+    local filePath = self.snapshotStore..string.format("%d-%d.s", snapshot.lastLogIndex, snapshot.lastLogTerm);
+
+    if(not ParaIO.DoesFileExist(filePath)) then
+        local snapshotConf = self.snapshotStore..string.format("%d.cnf", snapshot.lastLogIndex);
+        local sConf = ParaIO.open(snapshotConf, "rw");
+        local bytes = snapshot.lastConfig:toBytes();
+        sConf:WriteBytes(#bytes, {bytes:byte(1, -1)})
+    end
+
+    local snapshotFile = ParaIO.open(filePath, "rw");
+
+    for _,v in ipairs(self.messages) do
+        snapshotFile:WriteBytes(#v, {v:byte(1, -1)})
+        snapshotFile:WriteBytes(1, {string.byte("\n")})
+    end
+
+    snapshotFile:close();
+
+    self.snapshotInprogress = false;
+
+
+    return true;
 end
 
 --[[

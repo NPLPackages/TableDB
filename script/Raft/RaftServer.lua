@@ -753,25 +753,24 @@ function RaftServer:snapshotAndCompact(indexCommitted)
             local snapshot = Snapshot:new(indexToCompact, logTermToCompact, config);
 
             local o = self
-            self.stateMachine:createSnapshot(snapshot, function (result, error)
-                    if(error ~= nil) then
-                        o.logger.error("failed to create a snapshot due to %s", error);
-                        return;
-                    end
+            local result, err = self.stateMachine:createSnapshot(snapshot);
+            if(err ~= nil) then
+                o.logger.error("failed to create a snapshot due to %s", err);
+            end
 
-                    if(not result) then
-                        o.logger.info("the state machine rejects to create the snapshot");
-                        return;
-                    end
+            if(not result) then
+                o.logger.info("the state machine rejects to create the snapshot");
+            end
 
-                    -- synchronized(this){
-                    o.logger.debug("snapshot created, compact the log store");
+            if not err and result then
+                -- synchronized(this){
+                o.logger.debug("snapshot created, compact the log store");
 
-                    o.logStore:compact(snapshot.lastLogIndex);
-                    -- o.logger.error("failed to compact the log store, no worries, the system still in a good shape", ex);
+                o.logStore:compact(snapshot.lastLogIndex);
+                -- o.logger.error("failed to compact the log store, no worries, the system still in a good shape", ex);
+            end
 
-                    o.snapshotInProgress = 0;
-            end )
+            self.snapshotInProgress = 0;
             snapshotInAction = false;
         end
     end
