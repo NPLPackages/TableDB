@@ -60,6 +60,8 @@ end
 
 
 -- make sure this happens in one NPL thread(state)
+-- actually we just use one NPL thread, we do not
+-- need these
 function PeerServer:setFree()
    self.busyFlag = 0;
 end
@@ -67,7 +69,6 @@ end
 function PeerServer:makeBusy()
     -- return self.busyFlag.compareAndSet(0, 1);
     if self.busyFlag == 0 then
-        -- body
         self.busyFlag = 1;
         return true;
     end
@@ -105,26 +106,32 @@ function PeerServer:SendRequest(request, callbackFunc)
     local source = "server"..request.source..":";
     local destination = "server"..request.destination..":";
 
-    local activate_result = RaftRequestRPC(source, destination, request, function(err, msg)
-                       o:resumeHeartbeatingSpeed();
-
-                       if callbackFunc then
-                           callbackFunc(msg, err)
-                       end
-                   end)
-
-
-    if ( activate_result ~= 0) then
-        self:slowDownHeartbeating()
+    local function error_handler(msg, err, activate_result)
+        o:slowDownHeartbeating()
         
         local err = {
-            string = string.format("activate %s from %s failed(%d)", destination, source, activate_result),
+            string = string.format("activate %s from %s failed(%d), err:%s",
+                                 destination, source, activate_result or -1, err or ""),
             request = request
         }
 
         if callbackFunc then
             callbackFunc(msg, err)
         end
+    end
+
+    local activate_result = RaftRequestRPC(source, destination, request, function(err, msg)
+                       if err then
+                           return error_handler(msg, err, 0)
+                       end
+                       o:resumeHeartbeatingSpeed();
+
+                       if callbackFunc then
+                           callbackFunc(msg, err)
+                       end
+                   end);
+    if ( activate_result ~= 0) then
+        error_handler(nil, nil, activate_result)
     end
     
     if(isAppendRequest) then
