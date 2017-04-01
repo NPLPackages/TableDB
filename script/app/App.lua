@@ -17,7 +17,9 @@ NPL.load("(gl)script/Raft/RaftClient.lua");
 NPL.load("(gl)script/ide/socket/url.lua");
 NPL.load("(gl)script/Raft/RaftConsensus.lua");
 NPL.load("(gl)script/Raft/RpcClient.lua");
+NPL.load("(gl)script/Raft/ClusterServer.lua");
 
+local ClusterServer = commonlib.gettable("Raft.ClusterServer");
 local RaftClient = commonlib.gettable("Raft.RaftClient");
 local ServerStateManager = commonlib.gettable("Raft.ServerStateManager");
 local RaftParameters = commonlib.gettable("Raft.RaftParameters");
@@ -84,9 +86,27 @@ local function executeAsClient(localAddress, RequestRPC, configuration, loggerFa
       "test:1115",
     }
 
-    raftClient:appendEntries(values, function (err, response)
+    raftClient:appendEntries(values, function (response, err)
       local result = (err == nil and response.accepted and "accepted") or "denied"
-      logger.info("the request has been %s", result)
+      logger.info("the appendEntries request has been %s", result)
+    end)
+
+    -- add server
+    local serverToJoin = {
+      id = 5,
+      endpoint = "tcp://localhost:9005",
+    }
+
+    raftClient:addServer(ClusterServer:new(serverToJoin), function (response, err)
+      local result = (err == nil and response.accepted and "accepted") or "denied"
+      logger.info("the addServer request has been %s", result)
+    end)
+
+    -- remove server
+    local serverIdToRemove = 5
+    raftClient:removeServer(serverIdToRemove, function (response, err)
+      local result = (err == nil and response.accepted and "accepted") or "denied"
+      logger.info("the removeServer request has been %s", result)
     end)
 
 end

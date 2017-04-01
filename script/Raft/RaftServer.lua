@@ -14,6 +14,8 @@ local RaftServer = commonlib.gettable("Raft.RaftServer");
 NPL.load("(gl)script/ide/commonlib.lua");
 NPL.load("(gl)script/Raft/RaftMessageSender.lua");
 local RaftMessageSender = commonlib.gettable("Raft.RaftMessageSender");
+NPL.load("(gl)script/Raft/ClusterServer.lua");
+local ClusterServer = commonlib.gettable("Raft.ClusterServer");
 NPL.load("(gl)script/Raft/ServerState.lua");
 local ServerState = commonlib.gettable("Raft.ServerState");
 NPL.load("(gl)script/Raft/LogEntry.lua");
@@ -907,7 +909,7 @@ end
 
 -- synchronized
 function RaftServer:handleExtendedMessages(request)
-    if(request.messageType.int == RaftMessageType.AddServerReques.int) then
+    if(request.messageType.int == RaftMessageType.AddServerRequest.int) then
         return self:handleAddServerRequest(request);
     elseif(request.messageType.int == RaftMessageType.RemoveServerRequest.int) then
         return self:handleRemoveServerRequest(request);
@@ -962,14 +964,14 @@ function RaftServer:handleInstallSnapshotRequest(request)
     end
 
     local logEntries = request.logEntries;
-    if(logEntries == nil or #logEntries ~= 1 or logEntries[0].valueType ~= LogValueType.SnapshotSyncRequest) then
+    if(logEntries == nil or #logEntries ~= 1 or logEntries[1].valueType ~= LogValueType.SnapshotSyncRequest) then
         self.logger.warn("Receive an invalid InstallSnapshotRequest due to bad log entries or bad log entry value");
         response.nextIndex = 0;
         response.accepted = false;
         return response;
     end
 
-    local snapshotSyncRequest = SnapshotSyncRequest:fromBytes(logEntries[0].value);
+    local snapshotSyncRequest = SnapshotSyncRequest:fromBytes(logEntries[1].value);
 
     -- We don't want to apply a snapshot that is older than we have, this may not happen, but just in case
     if(snapshotSyncRequest.snapshot.lastLogIndex <= self.quickCommitIndex) then
@@ -1116,7 +1118,7 @@ function RaftServer:handleExtendedResponseError(error)
            request.messageType.int == RaftMessageType.LeaveClusterRequest.int) then
             local server = (request.messageType.int == RaftMessageType.LeaveClusterRequest.int) and self.peers[request.destination] or self.serverToJoin;
             if(server ~= nil) then
-                if(server.currentHeartbeatInterval >= self.context.raftParameters.maxHeartbeatInterval) then
+                if(server.currentHeartbeatInterval >= self.context.raftParameters:getMaxHeartbeatInterval()) then
                     if(request.messageType.int == RaftMessageType.LeaveClusterRequest.int) then
                         self.logger.info("rpc failed again for the removing server (%d), will remove this server directly", server:getId());
                         
@@ -1182,7 +1184,7 @@ function RaftServer:handleRemoveServerRequest(request)
         accepted = false,
     }
 
-    if(#logEntries ~= 1 or logEntries[0].valueType ~= LogValueType.ClusterServer) then
+    if(#logEntries ~= 1 or logEntries[1].valueType ~= LogValueType.ClusterServer) then
         self.logger.info("bad add server request as we are expecting one log entry with value type of ClusterServer");
         return response;
     end
@@ -1198,21 +1200,23 @@ function RaftServer:handleRemoveServerRequest(request)
         return response;
     end
 
-    local server = ClusterServer:new(logEntries[0].value);
-    if(self.peers[server.Id] or self.id == server.id) then
+    local server = ClusterServer:new();
+    server.id = tonumber(logEntries[1].value)
+    if(self.peers[server.id] or self.id == server.id) then
         self.logger.warn("the server to be added has a duplicated id with existing server %d", server.id);
         return response;
     end
 
-    local serverId = tonumber(logEntries[0].value)
-    if(serverId == self.id) then
+    -- local serverId = tonumber(logEntries[1].value)
+    if(server.id == self.id) then
         self.logger.info("cannot request to remove leader");
         return response;
     end
 
-    local peer = self.peers[serverId];
+    local peer = self.peers[server.id];
     if(peer == nil) then
-        self.logger.info("server %d does not exist", serverId);
+        -- self.logger.trace("serverId type:%s, %s", type(server.id), server.id)
+        self.logger.info("server %d does not exist", tonumber(server.id));
         return response;
     end
 
@@ -1246,7 +1250,7 @@ function RaftServer:handleAddServerRequest(request)
         accepted = false,
     }
 
-    if(#logEntries ~= 1 or logEntries[0].valueType ~= LogValueType.ClusterServer) then
+    if(#logEntries ~= 1 or logEntries[1].valueType ~= LogValueType.ClusterServer) then
         self.logger.info("bad add server request as we are expecting one log entry with value type of ClusterServer");
         return response;
     end
@@ -1256,7 +1260,7 @@ function RaftServer:handleAddServerRequest(request)
         return response;
     end
 
-    local server = ClusterServer:new(logEntries[0].value);
+    local server = ClusterServer:new(logEntries[1].value);
     if(self.peers[server.Id] or self.id == server.id) then
         self.logger.warn("the server to be added has a duplicated id with existing server %d", server.id);
         return response;
@@ -1291,9 +1295,9 @@ function RaftServer:handleLogSyncRequest(request)
 
     if(logEntries == nil or
        #logEntries ~= 1 or
-       logEntries[0].valueType ~= LogValueType.LogPack or
-       logEntries[0].value == nil or
-       #logEntries[0].value == 0) then
+       logEntries[1].valueType ~= LogValueType.LogPack or
+       logEntries[1].value == nil or
+       #logEntries[1].value == 0) then
         self.logger.info("receive an invalid LogSyncRequest as the log entry value doesn't meet the requirements");
         return response;
     end
@@ -1303,7 +1307,7 @@ function RaftServer:handleLogSyncRequest(request)
         return response;
     end
 
-    self.logStore:applyLogPack(request.lastLogIndex + 1, logEntries[0].value);
+    self.logStore:applyLogPack(request.lastLogIndex + 1, logEntries[1].value);
     self:commit(self.logStore:getFirstAvailableIndex() -1);
     response.nextIndex = self.logStore:getFirstAvailableIndex();
     response.accepted = true;
@@ -1380,9 +1384,9 @@ function RaftServer:handleJoinClusterRequest(request)
 
     if(logEntries == nil or
        #logEntries ~= 1 or
-       logEntries[0].valueType ~= LogValueType.Configuration or
-       logEntries[0].value == nil or
-       logEntries[0].value == 0) then
+       logEntries[1].valueType ~= LogValueType.Configuration or
+       logEntries[1].value == nil or
+       logEntries[1].value == 0) then
         self.logger.info("receive an invalid JoinClusterRequest as the log entry value doesn't meet the requirements");
         return response;
     end
@@ -1401,7 +1405,7 @@ function RaftServer:handleJoinClusterRequest(request)
     self.state.votedFor = -1;
     self.context.serverStateManager:persistState(self.state);
     self:stopElectionTimer();
-    local newConfig = ClusterConfiguration:fromBytes(logEntries[0].value);
+    local newConfig = ClusterConfiguration:fromBytes(logEntries[1].value);
     self:reconfigure(newConfig);
     response.term = self.state.term;
     response.accepted = true;

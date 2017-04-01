@@ -103,6 +103,7 @@ end
 local added_runtime = {}
 -- private: whenever a message arrives
 function Rpc:OnActivated(msg)
+	-- this is for tracing raft client
 	if type(self.localAddress) == "table" then
 		self.logger.trace(msg)
 	end
@@ -111,7 +112,9 @@ function Rpc:OnActivated(msg)
 		 local messageType = msg.msg.messageType
      if(messageType) then
 				local remoteAddress = msg.remoteAddress
-				if messageType.int == RaftMessageType.ClientRequest.int then
+				if messageType.int == RaftMessageType.ClientRequest.int or 
+				   messageType.int == RaftMessageType.AddServerRequest.int or 
+					 messageType.int == RaftMessageType.RemoveServerRequest.int then
 					-- we got a client request
 					if not added_runtime[remoteAddress.id] then
 						added_runtime[remoteAddress.id] = true
@@ -123,7 +126,7 @@ function Rpc:OnActivated(msg)
 					NPL.accept(msg.tid, remoteAddress.id or "default_user");
 					msg.nid = remoteAddress.id or "default_user"
         else
-					-- body
+					-- this must be Raft internal message exclue the above 3
 				  NPL.accept(msg.tid, remoteAddress or "default_user");
 				  msg.nid = remoteAddress or "default_user"
 				end

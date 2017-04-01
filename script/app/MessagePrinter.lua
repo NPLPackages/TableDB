@@ -17,6 +17,7 @@ NPL.load("(gl)script/Raft/Snapshot.lua");
 local Snapshot = commonlib.gettable("Raft.Snapshot");
 NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 local util = commonlib.gettable("System.Compiler.lib.util")
+local LoggerFactory = NPL.load("(gl)script/Raft/LoggerFactory.lua");
 
 NPL.load("(gl)script/Raft/Rpc.lua");
 local Rpc = commonlib.gettable("Raft.Rpc");
@@ -26,7 +27,7 @@ function MessagePrinter:new(baseDir, ip, listeningPort)
     local o = {
         -- ip = ip,
         -- port = listeningPort,
-        logger = commonlib.logging.GetLogger(""),
+        logger = LoggerFactory.getLogger("MessagePrinter"),
         snapshotStore = baseDir.."snapshot/",
         commitIndex = 0,
         messageSender = nil,
@@ -37,8 +38,8 @@ function MessagePrinter:new(baseDir, ip, listeningPort)
     };
     setmetatable(o, self);
 
-    if not ParaIO.CreateDirectory(o.snapshot) then
-        o.logger.error("%s create error", baseDir)
+    if not ParaIO.CreateDirectory(o.snapshotStore) then
+        o.logger.error("%s dir create error", o.snapshotStore)
     end
     return o;
 end
@@ -64,7 +65,7 @@ function MessagePrinter:start(raftMessageSender)
 
     -- use Rpc for incoming Request message
     Rpc:new():init("MPRequestRPC", function(self, msg) 
-        -- LOG.std(nil, "info", "MPRequestRPC", msg);
+        -- o.logger.trace(msg);
         msg = o:processMessage(msg)
         return msg; 
     end)
