@@ -24,9 +24,9 @@ goto done
 :setupDummy
 mkdir "%curdir%\dummys"
 echo start dummy server
-start "Dummy Server" /D "%curdir%\dummys" java -jar %curdir%\dmprinter.jar dummy server
+start "Dummy Server" /D "%curdir%\dummys" npl -d bootstrapper="script/app/App.lua" servermode="true" dev="../../" raftMode="dummy" dummyMode="server" baseDir="/"
 mkdir "%curdir%\dummyc"
 echo start dummy client
-start "Dummy Client" /D "%curdir%\dummyc" java -jar %curdir%\dmprinter.jar dummy client
+start "Dummy Client" /D "%curdir%\dummyc" npl -d bootstrapper="script/app/App.lua" servermode="true" dev="../../" raftMode="dummy" dummyMode="client" baseDir="/"
 :done
 @echo on

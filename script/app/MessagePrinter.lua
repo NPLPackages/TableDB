@@ -10,6 +10,11 @@ NPL.load("(gl)script/app/MessagePrinter.lua");
 local MessagePrinter = commonlib.gettable("app.MessagePrinter");
 ------------------------------------------------------------
 ]]--
+
+NPL.load("(gl)script/Raft/ClusterConfiguration.lua");
+local ClusterConfiguration = commonlib.gettable("Raft.ClusterConfiguration");
+NPL.load("(gl)script/Raft/Snapshot.lua");
+local Snapshot = commonlib.gettable("Raft.Snapshot");
 NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 local util = commonlib.gettable("System.Compiler.lib.util")
 
@@ -191,6 +196,33 @@ end
  * @return last snapshot information in the state machine or null if none
  ]]--
 function MessagePrinter:getLastSnapshot()
+  -- list all files in the initial directory.
+  local search_result = ParaIO.SearchFiles(self.snapshotStore, "*.s", "", 15, 10000, 0);
+  local nCount = search_result:GetNumOfResult();
+  
+    local latestSnapshotFilename;
+    local maxLastLogIndex = 0;
+    local maxTerm = 0
+  local i;
+    -- start from 0, inconsistent with lua
+  for i = 0, nCount-1 do 
+    local filename = search_result:GetItem(i);
+        local lastLogIndex, term = string.match( filename,"(%d+)%-(%d+)%.s")
+        if lastLogIndex > maxLastLogIndex then
+            maxLastLogIndex = lastLogIndex;
+            maxTerm = term;
+            latestSnapshotFilename = filename;
+        end
+    end
+    search_result:Release();
+
+    if latestSnapshotFilename then
+        local snapshotConf = self.snapshotStore..string.format("%d.cnf", snapshot.lastLogIndex);
+        local sConf = ParaIO.open(snapshotConf, "r");
+        local config = ClusterConfiguration:fromBytes(sConf:GetText(0, -1))
+        local latestSnapshotFileSize = ParaIO.open(latestSnapshotFilename, "r"):GetFileSize();
+        return Snapshot:new(maxLastLogIndex, term, config, latestSnapshotFileSize)
+    end
 
 end
 
@@ -226,7 +258,7 @@ function MessagePrinter:createSnapshot(snapshot)
 
     local snapshotFile = ParaIO.open(filePath, "rw");
 
-    for _,v in ipairs(self.messages) do
+    for _,v in pairs(self.messages) do
         snapshotFile:WriteBytes(#v, {v:byte(1, -1)})
         snapshotFile:WriteBytes(1, {string.byte("\n")})
     end
@@ -245,6 +277,7 @@ end
  * @param code 0 indicates the system is gracefully shutdown, -1 indicates there are some errors which cannot be recovered
  ]]--
 function MessagePrinter:exit(code)
+    ParaGlobal.Exit(code)
 end
 
 
