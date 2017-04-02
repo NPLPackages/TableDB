@@ -18,14 +18,17 @@ local ClusterConfiguration = commonlib.gettable("Raft.ClusterConfiguration");
 
 function ClusterConfiguration:new(config)
     local o = {
-        logIndex = config.logIndex or 0,
-        lastLogIndex = config.lastLogIndex or 0,
+        logIndex = (config and config.logIndex) or 0,
+        lastLogIndex = (config and config.lastLogIndex) or 0,
         servers = {},
     };
 
-    for _,server in ipairs(config.servers) do
-        o.servers[#o.servers + 1] = ClusterServer:new(server)
+    if config then
+        for _,server in ipairs(config.servers) do
+            o.servers[#o.servers + 1] = ClusterServer:new(server)
+        end
     end
+
     setmetatable(o, self);
     return o;
 end

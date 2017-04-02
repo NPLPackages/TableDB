@@ -1179,7 +1179,7 @@ function RaftServer:handleRemoveServerRequest(request)
         source = self.id,
         destination = self.leader,
         term = self.state.term,
-        messageType = RaftMessageType.AddServerResponse,
+        messageType = RaftMessageType.RemoveServerResponse,
         nextIndex = self.logStore:getFirstAvailableIndex(),
         accepted = false,
     }
@@ -1200,23 +1200,16 @@ function RaftServer:handleRemoveServerRequest(request)
         return response;
     end
 
-    local server = ClusterServer:new();
-    server.id = tonumber(logEntries[1].value)
-    if(self.peers[server.id] or self.id == server.id) then
-        self.logger.warn("the server to be added has a duplicated id with existing server %d", server.id);
-        return response;
-    end
-
-    -- local serverId = tonumber(logEntries[1].value)
-    if(server.id == self.id) then
+    local serverId = tonumber(logEntries[1].value)
+    if(serverId == self.id) then
         self.logger.info("cannot request to remove leader");
         return response;
     end
 
-    local peer = self.peers[server.id];
+    local peer = self.peers[serverId];
     if(peer == nil) then
-        -- self.logger.trace("serverId type:%s, %s", type(server.id), server.id)
-        self.logger.info("server %d does not exist", tonumber(server.id));
+        -- self.logger.trace("serverId type:%s, %s", type(serverId), serverId)
+        self.logger.info("server %d does not exist", tonumber(serverId));
         return response;
     end
 
@@ -1226,12 +1219,12 @@ function RaftServer:handleRemoveServerRequest(request)
         lastLogIndex = self.logStore:getFirstAvailableIndex() - 1,
         lastLogTerm = 0,
         term = self.state.term,
-        messageType = RaftMessageType.leaveClusterRequest,
+        messageType = RaftMessageType.LeaveClusterRequest,
         source = self.id,
     }
 
     local o = self
-    peer:SendRequest(request, function (response, error)
+    peer:SendRequest(leaveClusterRequest, function (response, error)
                                   o:handleExtendedResponse(response, error);
                               end);
 
@@ -1432,16 +1425,33 @@ function RaftServer:handleLeaveClusterRequest(request)
 end
 
 function RaftServer:removeServerFromCluster(serverId)
-    local newConfig = ClusterConfiguration:new(self.config);
+    local serverId = tonumber(serverId)
+    local newConfig = ClusterConfiguration:new();
     newConfig.logIndex = self.logStore:getFirstAvailableIndex();
-    if newConfig.servers[serverId] then
-        newConfig.servers[serverId] = nil
+    newConfig.lastLogIndex = self.config.lastLogIndex;
+    -- config.servers is a sequence, we can not use this
+    -- if newConfig.servers[serverId] then
+    --     newConfig.servers[serverId] = nil
+    -- end
+
+    for _,server in ipairs(self.config.servers) do
+        if serverId ~= server.id then
+            newConfig.servers[#newConfig.servers + 1] = ClusterServer:new(server)
+        end
     end
 
-    self.logger.info("removed a server from configuration and save the configuration to log store at %d", newConfig.getLogIndex());
+
+    -- self.logger.trace("RaftServer:removeServerFromCluster>peers:%s", util.table_tostring(self.peers))
+    -- self.logger.trace("RaftServer:removeServerFromCluster>newConfig:%s", util.table_tostring(newConfig))
+
+    self.logger.info("removed a server from configuration and save the configuration to log store at %d", newConfig.logIndex);
     self.configChanging = true;
+    local newConfigBytes = newConfig:toBytes();
+    
+    -- self.logger.trace("RaftServer:removeServerFromCluster>newConfigBytes:%s", util.table_tostring(newConfigBytes))
+    
     self.logStore:append(LogEntry:new(self.state.term, newConfig:toBytes(), LogValueType.Configuration));
-    self:requestAppendEntries();
+    self:requestAllAppendEntries();
 end
 
 function RaftServer:getSnapshotSyncBlockSize()

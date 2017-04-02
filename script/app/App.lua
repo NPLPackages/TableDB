@@ -46,7 +46,14 @@ local config = stateManager:loadClusterConfiguration();
 
 logger.info("config:%s", util.table_tostring(config))
 
-local localEndpoint = config:getServer(stateManager.serverId).endpoint
+local thisServer = config:getServer(stateManager.serverId)
+if not thisServer then
+  -- perhaps thisServer has been removed last time
+  ParaGlobal.Exit(0);
+  --- C/C++ API call is counted as one instruction, so Exit does not a block
+  return;
+end
+local localEndpoint = thisServer.endpoint
 local parsed_url = url.parse(localEndpoint)
 logger.info("local state info"..util.table_tostring(parsed_url))
 local rpcListener = RpcListener:new(parsed_url.host, parsed_url.port, config.servers)
@@ -78,32 +85,32 @@ end
 local function executeAsClient(localAddress, RequestRPC, configuration, loggerFactory)
     local raftClient = RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory)
 
-    local values = {
-      "test:1111",
-      "test:1112",
-      "test:1113",
-      "test:1114",
-      "test:1115",
-    }
+    -- local values = {
+    --   "test:1111",
+    --   "test:1112",
+    --   "test:1113",
+    --   "test:1114",
+    --   "test:1115",
+    -- }
 
-    raftClient:appendEntries(values, function (response, err)
-      local result = (err == nil and response.accepted and "accepted") or "denied"
-      logger.info("the appendEntries request has been %s", result)
-    end)
+    -- raftClient:appendEntries(values, function (response, err)
+    --   local result = (err == nil and response.accepted and "accepted") or "denied"
+    --   logger.info("the appendEntries request has been %s", result)
+    -- end)
 
-    -- add server
-    local serverToJoin = {
-      id = 5,
-      endpoint = "tcp://localhost:9005",
-    }
+    -- -- add server
+    -- local serverToJoin = {
+    --   id = 5,
+    --   endpoint = "tcp://localhost:9005",
+    -- }
 
-    raftClient:addServer(ClusterServer:new(serverToJoin), function (response, err)
-      local result = (err == nil and response.accepted and "accepted") or "denied"
-      logger.info("the addServer request has been %s", result)
-    end)
+    -- raftClient:addServer(ClusterServer:new(serverToJoin), function (response, err)
+    --   local result = (err == nil and response.accepted and "accepted") or "denied"
+    --   logger.info("the addServer request has been %s", result)
+    -- end)
 
     -- remove server
-    local serverIdToRemove = 5
+    local serverIdToRemove = 2
     raftClient:removeServer(serverIdToRemove, function (response, err)
       local result = (err == nil and response.accepted and "accepted") or "denied"
       logger.info("the removeServer request has been %s", result)
