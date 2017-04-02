@@ -60,8 +60,6 @@ end
 
 
 -- make sure this happens in one NPL thread(state)
--- actually we just use one NPL thread, we do not
--- need these
 function PeerServer:setFree()
    self.busyFlag = 0;
 end
