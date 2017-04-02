@@ -4,7 +4,7 @@ table database with replication
 ## NPL Raft Status
 the NPL Raft implementation is feature complete and usable now! :)
 
-The implementation is basically a port of [jraft](https://github.com/datatechnology/jraft) to NPL
+The implementation is basically a port from [jraft](https://github.com/datatechnology/jraft) to NPL
 
 Raft consensus implementation in NPL
 
