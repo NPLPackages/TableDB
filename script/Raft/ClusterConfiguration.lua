@@ -64,7 +64,11 @@ function ClusterConfiguration:fromBytes(bytes)
     local file = ParaIO.open("<memory>", "w");
     if(file:IsValid()) then	
         -- can not use file:WriteString(bytes);, use WriteBytes
-        file:WriteBytes(#bytes, {bytes:byte(1, -1)});
+        if type(bytes) == "string" then
+            file:WriteBytes(#bytes, {bytes:byte(1, -1)});
+        elseif type(bytes) == "table" then
+            file:WriteBytes(#bytes, bytes);
+        end
         file:seek(0)
         o.logIndex = file:ReadDouble()
         o.lastLogIndex = file:ReadDouble()

@@ -11,6 +11,12 @@ local SnapshotSyncRequest = commonlib.gettable("Raft.SnapshotSyncRequest");
 ------------------------------------------------------------
 ]]--
 
+NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
+local util = commonlib.gettable("System.Compiler.lib.util")
+NPL.load("(gl)script/Raft/ClusterConfiguration.lua");
+local ClusterConfiguration = commonlib.gettable("Raft.ClusterConfiguration");
+NPL.load("(gl)script/Raft/Snapshot.lua");
+local Snapshot = commonlib.gettable("Raft.Snapshot");
 
 local SnapshotSyncRequest = commonlib.gettable("Raft.SnapshotSyncRequest");
 
@@ -42,8 +48,8 @@ function SnapshotSyncRequest:toBytes()
 	local file = ParaIO.open("<memory>", "w");
     local bytes;
 	if(file:IsValid()) then
-        file:WriteDouble(self.lastLogIndex)
-        file:WriteDouble(self.lastLogTerm)
+        file:WriteDouble(self.snapshot.lastLogIndex)
+        file:WriteDouble(self.snapshot.lastLogTerm)
         file:WriteInt(#configData)
         file:WriteBytes(#configData, {configData:byte(1, -1)})
         file:WriteDouble(self.offset)
@@ -69,7 +75,7 @@ function SnapshotSyncRequest:fromBytes(bytes)
         file:seek(0)
         local lastLogIndex = file:ReadDouble()
         local lastLogTerm = file:ReadDouble()
-        local configSize = file:ReadInt(#configData)
+        local configSize = file:ReadInt()
         local configData = {}
         file:ReadBytes(configSize, configData)
         local config = ClusterConfiguration:fromBytes(configData)
@@ -77,8 +83,9 @@ function SnapshotSyncRequest:fromBytes(bytes)
         local dataSize = file:ReadInt()
         local data = {}
         file:ReadBytes(dataSize, data)
+        data = string.char(unpack(data))
         local doneByte = {}
-        file:ReadBytes(1, done)
+        file:ReadBytes(1, doneByte)
         local done = doneByte[1] == 1
 
         snapshotSyncRequest = SnapshotSyncRequest:new(Snapshot:new(lastLogIndex, lastLogTerm, config), offset, data, done);
