@@ -118,10 +118,11 @@ end
    @return the last appended log index
 ]]--
 function SequentialLogStore:append(logEntry)
-    self.indexFile:seek(self.indexFile:GetFileSize());
-    local dataFileLength = self.dataFile:GetFileSize();
-    self.indexFile:WriteDouble(dataFileLength);
-    self.dataFile:seek(dataFileLength);
+    self.indexFile:SetFilePointer(0, 2)
+    self.dataFile:SetFilePointer(0, 2)
+    self.indexFile:WriteDouble(self.dataFile:getpos());
+    -- self.logger.trace("datafile pos:%d, indexfile pos:%d", self.dataFile:getpos(), self.indexFile:getpos())
+    -- self.dataFile:seek(dataFileLength);
     self.dataFile:WriteDouble(logEntry.term);
     self.dataFile:WriteBytes(1, {logEntry.valueType});
     self.dataFile:WriteBytes(#logEntry.value, {logEntry.value:byte(1, -1)});
@@ -209,18 +210,49 @@ function SequentialLogStore:getLogEntries(startIndex, endIndex)
     -- (Yes, for sure, we need to enforce this assumption to be true)
     if(startIndex < bufferFirstIndex) then
         -- in this case, we need to read from store file
+        local fileEntries = {}
         local endi = bufferFirstIndex - self.startIndex;
-        self.indexFile:seek(start * DoubleBytes);
+
+        self.indexFile:close()
+        self.dataFile:close()
+        -- index file
+        local indexFileName = self.logContainer..LOG_INDEX_FILE
+        self.indexFile = ParaIO.open(indexFileName, "r");
+        assert(self.indexFile:IsValid(), "indexFile not Valid")
+
+        -- data file
+        local dataFileName = self.logContainer..LOG_STORE_FILE
+        self.dataFile = ParaIO.open(dataFileName, "r");
+        assert(self.dataFile:IsValid(), "dataFile not Valid")
+
+        self.indexFile:seek(start * DoubleBytes)
+        -- self.logger.trace("getLogEntries: start bytes:%d, indexfile pos:%d",  start * DoubleBytes, self.indexFile:getpos())
         local dataStart = self.indexFile:ReadDouble();
         for i = 1, (endi - start) do
             local dataEnd = self.indexFile:ReadDouble();
             local dataSize = dataEnd - dataStart;
             self.dataFile:seek(dataStart);
+            -- self.logger.trace("getLogEntries: dataStart:%d, dataEnd:%d, indexfile pos:%d, datafile pos:%d", dataStart, dataEnd, self.indexFile:getpos(), self.dataFile:getpos());
             -- here we should use i to index
-            entries[i] = self:readEntry(dataSize);
+            fileEntries[i] = self:readEntry(dataSize);
             dataStart = dataEnd;
         end
+        for i=1,#entries do
+            fileEntries[#fileEntries+1] = entries[i];
+        end
+        entries = fileEntries
+
+
+        self.indexFile:close()
+        self.dataFile:close()
+
+        self.indexFile = ParaIO.open(indexFileName, "rw");
+        assert(self.indexFile:IsValid(), "indexFile not Valid")
+        -- data file
+        local dataFileName = self.logContainer..LOG_STORE_FILE
+        self.dataFile = ParaIO.open(dataFileName, "rw");
     end
+
     return entries;
 end
 
@@ -520,10 +552,13 @@ end
 
 function SequentialLogStore:readEntry(size)
     local term = self.dataFile:ReadDouble();
-    local value = {}
-    self.dataFile:ReadBytes(size-DoubleBytes, value);
-    local valueType = value[1]
-    value[1] = nil
+    local valueTypeByte = {}
+    self.dataFile:ReadBytes(1, valueTypeByte);
+    local valueType = valueTypeByte[1]
+    -- local valueBytes = {}
+    -- self.dataFile:ReadBytes(size-DoubleBytes-1, valueBytes);
+    -- local value = string.char(unpack(valueBytes))
+    local value = self.dataFile:ReadBytes(size-DoubleBytes-1, nil);
     return LogEntry:new(term, value, valueType);
 end
 

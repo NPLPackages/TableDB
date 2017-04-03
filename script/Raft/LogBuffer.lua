@@ -13,6 +13,8 @@ local LogBuffer = commonlib.gettable("Raft.LogBuffer");
 local LoggerFactory = NPL.load("(gl)script/Raft/LoggerFactory.lua");
 NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 local util = commonlib.gettable("System.Compiler.lib.util")
+NPL.load("(gl)script/Raft/Rutils.lua");
+local Rutils = commonlib.gettable("Raft.Rutils");
 local LogBuffer = commonlib.gettable("Raft.LogBuffer");
 
 
@@ -38,7 +40,7 @@ end
 
 
 function LogBuffer:lastIndex()
-    return self.startIndex + #self.buffer
+    return #self.buffer
 end
 
 
@@ -49,7 +51,7 @@ end
 
 function LogBuffer:lastEntry()
     -- if buffer size = 0, will return nil
-    return self.buffer[self.startIndex + #self.buffer]
+    return self.buffer[#self.buffer]
 end
 
 function LogBuffer:entryAt(index)
@@ -62,12 +64,12 @@ function LogBuffer:fill(start, endi, result)
         return self.startIndex;
     end
 
-    for i=start, endi do
+    for i=start, endi - 1 do
         result[#result + 1] = self.buffer[i]
     end
 
     self.logger.trace("LogBuffer:fill>start:%d, end:%d, result len:%d, self.buffer len:%d",
-                       start, endi, #result, #self.buffer)
+                       start, endi, #result, Rutils.table_size(self.buffer))
     -- self.logger.trace("LogBuffer:fill>result:%s", util.table_tostring(result))
 
     return self.startIndex;
@@ -76,11 +78,9 @@ end
 
 -- trimming the buffer [fromIndex, end)
 function LogBuffer:trim(fromIndex)
-    local index = fromIndex - self.startIndex;
-    
-    if index < #self.buffer + 1 then
-        for i=index, #self.buffer do
-            self.buffer[self.startIndex+i] = nil
+    if fromIndex < #self.buffer + 1 then
+        for i=fromIndex, #self.buffer do
+            self.buffer[i] = nil
         end
     end
 end
@@ -89,7 +89,7 @@ function LogBuffer:append(entry)
     self.buffer[#self.buffer+1] = entry
 
     -- maxSize
-    if self.maxSize < #self.buffer + 1 then
+    if self.maxSize < Rutils.table_size(self.buffer) + 1 then
         self.buffer[self.startIndex] = nil
         self.startIndex = self.startIndex + 1
     end

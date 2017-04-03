@@ -50,7 +50,7 @@ local thisServer = config:getServer(stateManager.serverId)
 if not thisServer then
   -- perhaps thisServer has been removed last time
   ParaGlobal.Exit(0);
-  --- C/C++ API call is counted as one instruction, so Exit does not a block
+  --- C/C++ API call is counted as one instruction, so Exit does not block
   return;
 end
 local localEndpoint = thisServer.endpoint
