@@ -12,23 +12,25 @@ local ClusterConfiguration = commonlib.gettable("Raft.ClusterConfiguration");
 ------------------------------------------------------------
 ]]--
 
+NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
+local util = commonlib.gettable("System.Compiler.lib.util")
 NPL.load("(gl)script/Raft/ClusterServer.lua");
 local ClusterServer = commonlib.gettable("Raft.ClusterServer");
 local ClusterConfiguration = commonlib.gettable("Raft.ClusterConfiguration");
 
--- local UIntBytes = 4; -- 32 bits
-
-
 function ClusterConfiguration:new(config)
     local o = {
-        logIndex = config.logIndex or 0,
-        lastLogIndex = config.lastLogIndex or 0,
+        logIndex = (config and config.logIndex) or 0,
+        lastLogIndex = (config and config.lastLogIndex) or 0,
         servers = {},
     };
 
-    for _,server in ipairs(config.servers) do
-        o.servers[#o.servers + 1] = ClusterServer:new(server)
+    if config then
+        for _,server in ipairs(config.servers) do
+            o.servers[#o.servers + 1] = ClusterServer:new(server)
+        end
     end
+
     setmetatable(o, self);
     return o;
 end
@@ -62,10 +64,14 @@ function ClusterConfiguration:fromBytes(bytes)
     local file = ParaIO.open("<memory>", "w");
     if(file:IsValid()) then	
         -- can not use file:WriteString(bytes);, use WriteBytes
-        file:WriteBytes(#bytes, {bytes:byte(1, -1)});
+        if type(bytes) == "string" then
+            file:WriteBytes(#bytes, {bytes:byte(1, -1)});
+        elseif type(bytes) == "table" then
+            file:WriteBytes(#bytes, bytes);
+        end
         file:seek(0)
-        o.logIndex = file:ReadUInt()
-        o.lastLogIndex = file:ReadUInt()
+        o.logIndex = file:ReadDouble()
+        o.lastLogIndex = file:ReadDouble()
 
         while file:getpos() < file:GetFileSize() do
             local server = {}
@@ -92,8 +98,8 @@ function ClusterConfiguration:toBytes()
 	local file = ParaIO.open("<memory>", "w");
     local bytes;
 	if(file:IsValid()) then
-        file:WriteUInt(self.logIndex)
-        file:WriteUInt(self.lastLogIndex)
+        file:WriteDouble(self.logIndex)
+        file:WriteDouble(self.lastLogIndex)
 
         for _,server in ipairs(self.servers) do
             local b = server:toBytes()

@@ -43,10 +43,10 @@ function ServerStateManager:new(dataDirectory)
     end
 
     -- stateFile 
-    if not ParaIO.DoesFileExist(o.container..STATE_FILE) then
-        local result = ParaIO.CreateNewFile(o.container..STATE_FILE)
-        assert(result, "create serverStateFile failed")
-    end
+    -- if not ParaIO.DoesFileExist(o.container..STATE_FILE) then
+    --     local result = ParaIO.CreateNewFile(o.container..STATE_FILE)
+    --     assert(result, "create serverStateFile failed")
+    -- end
 
     o.serverStateFile = ParaIO.open(dataDirectory..STATE_FILE, "rw");
 
@@ -94,8 +94,8 @@ end
 function ServerStateManager:persistState(serverState)
     self.logger.trace("ServerStateManager:persistState>term:%d,commitIndex:%d,votedFor:%d", 
                         serverState.term, serverState.commitIndex, serverState.votedFor)
-    self.serverStateFile:WriteUInt(serverState.term)
-    self.serverStateFile:WriteUInt(serverState.commitIndex)
+    self.serverStateFile:WriteDouble(serverState.term)
+    self.serverStateFile:WriteDouble(serverState.commitIndex)
     self.serverStateFile:WriteInt(serverState.votedFor)
     self.serverStateFile:seek(0)
 end
@@ -105,9 +105,9 @@ function ServerStateManager:readState()
         return;
     end
 
-    local term = self.serverStateFile:ReadUint()
-    local commitIndex = self.serverStateFile:ReadUint()
-    local votedFor = self.serverStateFile:Readint()
+    local term = self.serverStateFile:ReadDouble()
+    local commitIndex = self.serverStateFile:ReadDouble()
+    local votedFor = self.serverStateFile:ReadInt()
 
     return ServerState:new(term, commitIndex, votedFor);
 end

@@ -36,11 +36,11 @@ function PeerServer:new(server, ctx, heartbeatTimeoutHandler)
         nextLogIndex = 0,
         matchedIndex = 0,
         heartbeatEnabled = false,
+        snapshotSyncContext = nil,
     };
 
     o.heartbeatTask = function(timer) o.heartbeatTimeoutHandler(o) end;
     o.heartbeatTimer = commonlib.Timer:new({callbackFunc = o.heartbeatTask})
-    -- util.table_print(o)
     setmetatable(o, self);
     return o;
 end
@@ -67,7 +67,6 @@ end
 function PeerServer:makeBusy()
     -- return self.busyFlag.compareAndSet(0, 1);
     if self.busyFlag == 0 then
-        -- body
         self.busyFlag = 1;
         return true;
     end
@@ -83,7 +82,6 @@ end
 function PeerServer:clearPendingCommit()
     -- return this.pendingCommitFlag.compareAndSet(1, 0);
     if self.pendingCommitFlag == 1 then
-        -- body
         self.pendingCommitFlag = 0;
         return true;
     end
@@ -103,17 +101,35 @@ function PeerServer:SendRequest(request, callbackFunc)
     -- RaftRequestRPC is init in the RpcListener, suppose we could directly use here
     local o = self
 
-    if (RaftRequestRPC("server"..request.source..":", "server"..request.destination..":", request, function(err, msg)
-                    --    LOG.std(nil, "debug", "RaftResponseRPC", msg);
+    local source = "server"..request.source..":";
+    local destination = "server"..request.destination..":";
+
+    local function error_handler(msg, err, activate_result)
+        o:slowDownHeartbeating()
+        
+        local err = {
+            string = string.format("activate %s from %s failed(%d), err:%s",
+                                 destination, source, activate_result or -1, err or ""),
+            request = request
+        }
+
+        if callbackFunc then
+            callbackFunc(msg, err)
+        end
+    end
+
+    local activate_result = RaftRequestRPC(source, destination, request, function(err, msg)
+                       if err then
+                           return error_handler(msg, err, 0)
+                       end
                        o:resumeHeartbeatingSpeed();
 
                        if callbackFunc then
                            callbackFunc(msg, err)
                        end
-                   end) ~= 0) then
-        
-        -- TODO: re send 
-        self:slowDownHeartbeating()
+                   end);
+    if ( activate_result ~= 0) then
+        error_handler(nil, nil, activate_result)
     end
     
     if(isAppendRequest) then
