@@ -34,10 +34,13 @@ local MAX_INT = 2^31 - 1;
 
 local removeTestFiles, randomLogEntry, logEntriesEquals;
 
+local assertTrue = assert
+
 TestSequentialLogStore = {}
 
 function TestSequentialLogStore:testBuffer()
     local container = "temp/snapshot/";
+    -- commonlib.Files.TouchFolder(container); -- this not works
     ParaIO.CreateDirectory(container);
     local store = SequentialLogStore:new(container);
     local logsCount = math.random(1000) + 1500;
@@ -56,12 +59,93 @@ function TestSequentialLogStore:testBuffer()
         logEntriesEquals(entries[i], results[i - start + 1]);
     end
 
+    store:close();
+
     removeTestFiles(container);
 end
 
 
+function TestSequentialLogStore:testStore()
+    local container = "temp/snapshot/";
+    removeTestFiles(container);
+    ParaIO.CreateDirectory(container);
+    local store = SequentialLogStore:new(container);
+    assertTrue(store:getLastLogEntry().term == 0);
+    assertTrue(store:getLastLogEntry().value == nil);
+    assertEquals(1, store:getFirstAvailableIndex());
+    assertTrue(store:getLogEntryAt(1) == nil);
+
+    -- write some logs
+    local entries = {};
+    for i = 1, math.random(100) + 10 do
+        local entry = randomLogEntry();
+        store:append(entry);
+        entries[#entries + 1] = entry;
+    end
+
+
+    assertEquals(#entries, store:getFirstAvailableIndex() - 1);
+    assertTrue(logEntriesEquals(entries[#entries], store:getLastLogEntry()));
+
+    -- random item
+    local randomIndex = math.random(#entries);
+    assertTrue(logEntriesEquals(entries[randomIndex], store:getLogEntryAt(randomIndex))); -- log store's index starts from 1
+
+    -- random range
+    randomIndex = math.random(#entries);
+    local randomSize = math.random(#entries - randomIndex);
+    local logEntries = store:getLogEntries(randomIndex, randomIndex + randomSize);
+
+    for i= randomIndex, randomIndex + randomSize - 1 do
+        assertTrue(logEntriesEquals(entries[i], logEntries[i - randomIndex + 1]));
+    end
+
+
+    store:close();
+    store = SequentialLogStore:new(container);
+
+    assertEquals(#entries, store:getFirstAvailableIndex() - 1);
+    assertTrue(logEntriesEquals(entries[#entries], store:getLastLogEntry()));
+
+    -- random item
+    randomIndex = math.random(#entries);
+    assertTrue(logEntriesEquals(entries[randomIndex], store:getLogEntryAt(randomIndex))); -- log store's index starts from 1
+
+    -- random range
+    randomIndex = math.random(#entries);
+    randomSize = math.random(#entries - randomIndex);
+    logEntries = store:getLogEntries(randomIndex, randomIndex + randomSize);
+
+    for i= randomIndex, randomIndex + randomSize - 1 do
+        assertTrue(logEntriesEquals(entries[i], logEntries[i - randomIndex + 1]));
+    end
+
+    -- test with edge
+    randomSize = math.random(#entries);
+    logEntries = store:getLogEntries(store:getFirstAvailableIndex() - randomSize, store:getFirstAvailableIndex());
+
+    local j = 1
+    for i= #entries - randomSize + 1, #entries do
+        assertTrue(logEntriesEquals(entries[i], logEntries[j]));
+        j = j + 1;
+    end
+
+    -- test write at
+    local logEntry = randomLogEntry();
+    randomIndex = math.random(store:getFirstAvailableIndex() - 1);
+    store:writeAt(store:getStartIndex() + randomIndex, logEntry);
+    assertEquals(randomIndex + store:getStartIndex(), store:getFirstAvailableIndex());
+    assertTrue(logEntriesEquals(logEntry, store:getLastLogEntry()));
+
+    store:close();
+    removeTestFiles(container);
+
+end
+
+
+
 function removeTestFiles(container)
-  commonlib.Files.DeleteFolder(container);
+    commonlib.Files.DeleteFolder(container);
 end
 
 function randomLogEntry()
