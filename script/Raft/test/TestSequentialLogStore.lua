@@ -14,14 +14,8 @@ LuaUnit:run('TestSequentialLogStore')
 NPL.load("(gl)script/ide/Files.lua");
 NPL.load("(gl)script/Raft/LogEntry.lua");
 local LogEntry = commonlib.gettable("Raft.LogEntry");
-NPL.load("(gl)script/Raft/ClusterConfiguration.lua");
-local ClusterConfiguration = commonlib.gettable("Raft.ClusterConfiguration");
-NPL.load("(gl)script/Raft/Snapshot.lua");
-local Snapshot = commonlib.gettable("Raft.Snapshot");
 NPL.load("(gl)script/Raft/SequentialLogStore.lua");
 local SequentialLogStore = commonlib.gettable("Raft.SequentialLogStore");
-NPL.load("(gl)script/Raft/ClusterServer.lua");
-local ClusterServer = commonlib.gettable("Raft.ClusterServer");
 NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 local util = commonlib.gettable("System.Compiler.lib.util")
 

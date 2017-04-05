@@ -41,15 +41,9 @@ function ServerStateManager:new(dataDirectory)
         local index = string.find(line, "=")
         o.serverId = tonumber(string.sub(line, index+1))
     end
-
-    -- stateFile 
-    -- if not ParaIO.DoesFileExist(o.container..STATE_FILE) then
-    --     local result = ParaIO.CreateNewFile(o.container..STATE_FILE)
-    --     assert(result, "create serverStateFile failed")
-    -- end
-
-    o.serverStateFile = ParaIO.open(dataDirectory..STATE_FILE, "rw");
-
+    
+    o.serverStateFileName = o.container..STATE_FILE;
+    o.serverStateFile = ParaIO.open(o.serverStateFileName, "rw");
     assert(o.serverStateFile:IsValid(), "serverStateFile not Valid")
     o.serverStateFile:seek(0)
 
@@ -85,6 +79,7 @@ function ServerStateManager:saveClusterConfiguration(configuration)
     local configFile = ParaIO.open(filename, "w");
     if configFile:IsValid() then
         configFile:WriteString(config);
+        configFile:close()
     else
         self.logger.error("%s path error", filename)
     end
@@ -92,22 +87,39 @@ end
 
 
 function ServerStateManager:persistState(serverState)
-    self.logger.trace("ServerStateManager:persistState>term:%d,commitIndex:%d,votedFor:%d", 
+    self.logger.trace("ServerStateManager:persistState>term:%f,commitIndex:%f,votedFor:%f", 
                         serverState.term, serverState.commitIndex, serverState.votedFor)
     self.serverStateFile:WriteDouble(serverState.term)
     self.serverStateFile:WriteDouble(serverState.commitIndex)
     self.serverStateFile:WriteInt(serverState.votedFor)
+    self.serverStateFile:SetEndOfFile()
     self.serverStateFile:seek(0)
 end
 
 function ServerStateManager:readState()
-    if(self.serverStateFile:GetFileSize() == 0) then
+    self.serverStateFile:close();
+
+    local serverStateFile = ParaIO.open(self.serverStateFileName, "r");
+    if(serverStateFile:GetFileSize() == 0) then
+        self.serverStateFile = ParaIO.open(self.serverStateFileName, "rw");
+        assert(self.serverStateFile:IsValid(), "serverStateFile not Valid")
+        self.serverStateFile:seek(0)
         return;
     end
 
-    local term = self.serverStateFile:ReadDouble()
-    local commitIndex = self.serverStateFile:ReadDouble()
-    local votedFor = self.serverStateFile:ReadInt()
+    local term = serverStateFile:ReadDouble()
+    local commitIndex = serverStateFile:ReadDouble()
+    local votedFor = serverStateFile:ReadInt()
 
+    serverStateFile:close();
+    
+    self.serverStateFile = ParaIO.open(self.serverStateFileName, "rw");
+    assert(self.serverStateFile:IsValid(), "serverStateFile not Valid")
+    self.serverStateFile:seek(0)
     return ServerState:new(term, commitIndex, votedFor);
+end
+
+function ServerStateManager:close()
+    self.serverStateFile:close();
+    self.logStore:close();
 end
