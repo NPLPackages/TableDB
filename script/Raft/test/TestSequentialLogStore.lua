@@ -65,6 +65,44 @@ function TestSequentialLogStore:testBuffer()
     removeTestFiles(container);
 end
 
+function TestSequentialLogStore:testPackAndUnpack()
+    local container = "temp/snapshot/";
+    removeTestFiles(container);
+    ParaIO.CreateDirectory(container);
+    local container1 = "temp/snapshot1/";
+    removeTestFiles(container1);
+    ParaIO.CreateDirectory(container1);
+    local store = SequentialLogStore:new(container);
+    local store1 = SequentialLogStore:new(container1);
+
+    -- write some logs
+    local logsCount = math.random(1000) + 1000;
+    for i = 1,logsCount  do
+        local entry = randomLogEntry();
+        store:append(entry);
+        store1:append(entry);
+    end
+
+    local logsCopied = 0;
+    while(logsCopied < logsCount) do
+        local pack = store:packLog(logsCopied + 1, 100);
+        store1:applyLogPack(logsCopied + 1, pack);
+        logsCopied = math.min(logsCopied + 100,  logsCount);
+    end
+
+    assertEquals(store:getFirstAvailableIndex(), store1:getFirstAvailableIndex());
+    for i = 1, logsCount do
+        local entry1 = store:getLogEntryAt(i);
+        local entry2 = store1:getLogEntryAt(i);
+        assertTrue( logEntriesEquals(entry1, entry2), "the " .. i .. "th value are not equal(total: " .. logsCount .. ")");
+    end
+
+    store:close();
+    store1:close();
+    removeTestFiles(container);
+    removeTestFiles(container1);
+end
+
 
 function TestSequentialLogStore:testStore()
     local container = "temp/snapshot/";
