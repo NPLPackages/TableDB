@@ -21,6 +21,7 @@ local LogBuffer = commonlib.gettable("Raft.LogBuffer");
 function LogBuffer:new(startIndex, maxSize) 
     local o = {
         startIndex = startIndex,
+        entriesInBuffer = 0,
         maxSize = maxSize,
         logger = LoggerFactory.getLogger("LogBuffer"),
         buffer = {},
@@ -40,7 +41,7 @@ end
 
 
 function LogBuffer:lastIndex()
-    return #self.buffer
+    return self.startIndex + self.entriesInBuffer - 1;
 end
 
 
@@ -51,10 +52,12 @@ end
 
 function LogBuffer:lastEntry()
     -- if buffer size = 0, will return nil
-    return self.buffer[#self.buffer]
+    return self.buffer[self:lastIndex()]
 end
 
 function LogBuffer:entryAt(index)
+    -- self.logger.trace("LogBuffer:entryAt>index:%d->%s, self.startIndex:%d, self.buffer len:%d",
+    --                    index, util.table_tostring(self.buffer[index]), self.startIndex, self:bufferSize())
     return self.buffer[index];
 end
 
@@ -68,11 +71,11 @@ function LogBuffer:fill(start, endi, result)
         start = self.startIndex
     end
     for i=start, endi - 1 do
-        result[#result + 1] = self.buffer[i]
+        result[#result + 1] = self:entryAt(i)
     end
 
     self.logger.trace("LogBuffer:fill>start:%d, end:%d, result len:%d, self.startIndex:%d, self.buffer len:%d",
-                       start, endi, #result, self.startIndex, Rutils.table_size(self.buffer))
+                       start, endi, #result, self.startIndex, self:bufferSize())
     -- self.logger.trace("LogBuffer:fill>result:%s", util.table_tostring(result))
 
     return self.startIndex;
@@ -81,28 +84,34 @@ end
 
 -- trimming the buffer [fromIndex, end)
 function LogBuffer:trim(fromIndex)
-    if fromIndex < #self.buffer + 1 then
-        for i=fromIndex, #self.buffer do
+    if fromIndex < self:lastIndex() + 1 then
+        for i=fromIndex, self:lastIndex() do
             self.buffer[i] = nil
+            self.entriesInBuffer = self.entriesInBuffer - 1;
         end
     end
 end
 
 function LogBuffer:append(entry)
-    self.buffer[#self.buffer+1] = entry
 
+    self.buffer[self:lastIndex() + 1] = entry
+    self.entriesInBuffer = self.entriesInBuffer + 1;
+    -- self.logger.trace("LogBuffer:append>index:%d->%s, self.startIndex:%d, self.buffer len:%d",
+    --                    self:lastIndex(), util.table_tostring(entry), self.startIndex, self:bufferSize())
     -- maxSize
-    if self.maxSize < Rutils.table_size(self.buffer) then
+    if self.maxSize < self.entriesInBuffer then
         self.buffer[self.startIndex] = nil
         self.startIndex = self.startIndex + 1
+        self.entriesInBuffer = self.entriesInBuffer - 1;
     end
 end
 
 function LogBuffer:reset(startIndex)
     self.buffer = {}
     self.startIndex = startIndex
+    self.entriesInBuffer = 0
 end
 
 function LogBuffer:bufferSize()
-    return Rutils.table_size(self.buffer)
+    return self.entriesInBuffer
 end

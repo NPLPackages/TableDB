@@ -30,6 +30,8 @@ local LOG_STORE_FILE_BAK = "store.data.bak";
 local LOG_START_INDEX_FILE_BAK = "store.sti.bak";
 local BUFFER_SIZE = 1000;
 
+local indexFileName, dataFileName, startIndexFileName, backupIndexFileName, backupDataFileName, backupStartIndexFileName;
+
 -- NOTE: 
 -- we use Double instead of Long at where it should be a Long
 -- but is the conversion between double and bytes is correct?
@@ -46,6 +48,14 @@ function SequentialLogStore:new(logContainer)
         bufferSize = BUFFER_SIZE,
     };
     setmetatable(o, self);
+
+    indexFileName = o.logContainer..LOG_INDEX_FILE
+    dataFileName = o.logContainer..LOG_STORE_FILE
+    startIndexFileName = o.logContainer..LOG_START_INDEX_FILE
+
+    backupIndexFileName = o.logContainer..LOG_INDEX_FILE_BAK
+    backupDataFileName = o.logContainer..LOG_STORE_FILE_BAK
+    backupStartIndexFileName = o.logContainer..LOG_START_INDEX_FILE_BAK
 
     openFile(o, "r");
 
@@ -417,6 +427,7 @@ function SequentialLogStore:compact(lastLogIndex)
         self.buffer:reset(lastLogIndex + 1);
         return true;
     else
+        openFile(self, "r")
         local dataPosition = -1;
         local indexPosition = DoubleBytes * (lastIndex + 1);
         self.indexFile:seek(indexPosition);
@@ -424,9 +435,10 @@ function SequentialLogStore:compact(lastLogIndex)
         local indexFileNewLength = self.indexFile:GetFileSize() - indexPosition;
         local dataFileNewLength = self.dataFile:GetFileSize() - dataPosition;
 
+        openFile(self, "rw")
+
         -- copy the log data
         -- data file
-        local backupDataFileName = o.logContainer..LOG_STORE_FILE_BAK
         local backupFile = ParaIO.open(backupDataFileName, "r");
         assert(backupFile:IsValid(), "dataFile not Valid")
 
@@ -441,12 +453,10 @@ function SequentialLogStore:compact(lastLogIndex)
 
         -- copy the index data
         -- index file
-        local backupIndexFileName = o.logContainer..LOG_INDEX_FILE_BAK
         backupFile = ParaIO.open(backupIndexFileName, "r");
         assert(backupFile:IsValid(), "backupFile not Valid")
 
         
-        backupFile = new RandomAccessFile(self.logContainer.resolve(LOG_INDEX_FILE_BAK).toString(), "r");
         backupFile:seek(indexPosition);
         self.indexFile:seek(0);
         for  i = 1, indexFileNewLength / DoubleBytes do
@@ -461,7 +471,7 @@ function SequentialLogStore:compact(lastLogIndex)
         self.startIndexFile:WriteDouble(lastLogIndex + 1);
         self.entriesInStore = self.entriesInStore - (lastLogIndex - self.startIndex + 1);
         self.startIndex = lastLogIndex + 1;
-        self.buffer.reset(self.entriesInStore > self.bufferSize and self.entriesInStore + self.startIndex - self.bufferSize or self.startIndex);
+        self.buffer:reset(self.entriesInStore > self.bufferSize and self.entriesInStore + self.startIndex - self.bufferSize or self.startIndex);
         self:fillBuffer();
         return true;
     end
@@ -472,6 +482,7 @@ function SequentialLogStore:compact(lastLogIndex)
 end
 
 function SequentialLogStore:fillBuffer()
+    openFile(self, "r")
     local startIndex = self.buffer:firstIndex();
     local indexFileSize = self.indexFile:GetFileSize();
     if(indexFileSize > 0) then
@@ -490,6 +501,7 @@ function SequentialLogStore:fillBuffer()
         self.buffer:append(entry);
     end
     self.logger.trace("SequentialLogStore:fillBuffer>buffer firstIndex:%d, entries:%d", self.buffer:firstIndex(), self.buffer:bufferSize())
+    openFile(self, "rw")
 end
 
 
@@ -521,15 +533,8 @@ function SequentialLogStore:restore()
 end
 
 function SequentialLogStore:backup()
+    self:close()
     --decide not to use ParaIO.BackupFile
-    local indexFileName = self.logContainer..LOG_INDEX_FILE
-    local dataFileName = self.logContainer..LOG_STORE_FILE
-    local startIndexFileName = self.logContainer..LOG_START_INDEX_FILE
-    
-    local backupIndexFileName = self.logContainer..LOG_INDEX_FILE_BAK
-    local backupDataFileName = self.logContainer..LOG_STORE_FILE_BAK
-    local backupStartIndexFileName = self.logContainer..LOG_START_INDEX_FILE_BAK
-
     ParaIO.DeleteFile(backupDataFileName)
     ParaIO.DeleteFile(backupIndexFileName)
     ParaIO.DeleteFile(backupStartIndexFileName)
@@ -539,6 +544,8 @@ function SequentialLogStore:backup()
         ParaIO.CopyFile(startIndexFileName, backupStartIndexFileName, true)) then
         self.logger.error("failed to create a backup folder")
     end
+
+    openFile(self, "rw")
 end
 
 
@@ -554,11 +561,14 @@ function SequentialLogStore:readEntry(size)
     return LogEntry:new(term, value, valueType);
 end
 
-local prevMode;
-function SequentialLogStore:close()
+function SequentialLogStore:closeFiles()
     self.indexFile:close()
     self.dataFile:close()
     self.startIndexFile:close()
+end
+local prevMode;
+function SequentialLogStore:close()
+    self:closeFiles()
     prevMode = nil;
 end
 
@@ -569,22 +579,17 @@ function openFile(logStore, mode)
         prevMode = mode
     end
     if logStore.indexFile and logStore.dataFile and logStore.startIndexFile then
-        logStore.indexFile:close()
-        logStore.dataFile:close()
-        logStore.startIndexFile:close()
+        logStore:closeFiles()
     end
     -- index file
-    local indexFileName = logStore.logContainer..LOG_INDEX_FILE
     logStore.indexFile = ParaIO.open(indexFileName, mode);
     -- assert(logStore.indexFile:IsValid(), "indexFile not Valid")
 
     -- data file
-    local dataFileName = logStore.logContainer..LOG_STORE_FILE
     logStore.dataFile = ParaIO.open(dataFileName, mode);
     -- assert(logStore.dataFile:IsValid(), "dataFile not Valid")
 
     -- startIndex file
-    local startIndexFileName = logStore.logContainer..LOG_START_INDEX_FILE
     logStore.startIndexFile = ParaIO.open(startIndexFileName, mode);
     -- assert(logStore.startIndexFile:IsValid(), "startIndexFile not Valid")
 

@@ -41,6 +41,7 @@ TestSequentialLogStore = {}
 function TestSequentialLogStore:testBuffer()
     local container = "temp/snapshot/";
     -- commonlib.Files.TouchFolder(container); -- this not works
+    removeTestFiles(container);
     ParaIO.CreateDirectory(container);
     local store = SequentialLogStore:new(container);
     local logsCount = math.random(1000) + 1500;
@@ -139,10 +140,64 @@ function TestSequentialLogStore:testStore()
 
     store:close();
     removeTestFiles(container);
-
 end
 
+function TestSequentialLogStore:testCompactRandom()
+    local container = "temp/snapshot/";
+    -- commonlib.Files.TouchFolder(container); -- this not works
+    removeTestFiles(container);
+    ParaIO.CreateDirectory(container);
+    local store = SequentialLogStore:new(container);
+    local logsCount = 300;
+    local entries = {};
+    for i = 1, logsCount do
+        local entry = randomLogEntry();
+        store:append(entry);
+        entries[#entries + 1] = entry;
+    end
 
+    local lastLogIndex = #entries;
+    local indexToCompact = math.random(lastLogIndex - 10) + 1;
+    store:compact(indexToCompact);
+
+    assertEquals(indexToCompact + 1, store:getStartIndex());
+    assertEquals(#entries, store:getFirstAvailableIndex() - 1);
+
+    for i = 1, store:getFirstAvailableIndex() - indexToCompact - 1 do
+        local entry = store:getLogEntryAt(store:getStartIndex() + i - 1);
+        assertTrue(logEntriesEquals(entries[i + indexToCompact], entry));
+    end
+
+    local randomIndex = math.random(store:getFirstAvailableIndex() - indexToCompact - 1);
+    local logEntry = randomLogEntry();
+    store:writeAt(store:getStartIndex() + randomIndex, logEntry);
+    entries[randomIndex + indexToCompact + 1] = logEntry;
+
+    for i=randomIndex + indexToCompact + 2,#entries do
+        entries[i] = nil;
+    end
+
+    for i = 1, store:getFirstAvailableIndex() - indexToCompact - 1 do
+        local entry = store:getLogEntryAt(store:getStartIndex() + i - 1);
+        assertTrue(logEntriesEquals(entries[i + indexToCompact], entry));
+    end
+
+    for i = 1, math.random(100) + 10 do
+        local entry = randomLogEntry();
+        entries[#entries + 1] = entry;
+        store:append(entry);
+    end
+
+    for i = 1, store:getFirstAvailableIndex() - indexToCompact - 1 do
+        local entry = store:getLogEntryAt(store:getStartIndex() + i - 1);
+        assertTrue(logEntriesEquals(entries[i + indexToCompact], entry));
+    end
+
+
+    store:close();
+    removeTestFiles(container);
+
+end
 
 function removeTestFiles(container)
     commonlib.Files.DeleteFolder(container);
