@@ -12,13 +12,13 @@ for %%i in (1 2 3) do (
     start "server%%i" /D "%curdir%\server%%i" npl -d bootstrapper="script/app/App.lua" servermode="true" dev="../../" raftMode="server" baseDir="/" mpPort="800%%i"
 )
 
-REM goto done
+goto done
 :setupClient
 echo start a client
 mkdir client
 copy /Y init-cluster.json "%curdir%\client\cluster.json"
 copy /Y "%curdir%\server1\config.properties" "%curdir%\client\config.properties"
-start "client" /D "%curdir%\client" npl -d bootstrapper="script/app/App.lua" servermode="true" dev="../../" raftMode="client" baseDir="/" "%curdir%\client"
+start "client" /D "%curdir%\client" npl -d bootstrapper="script/app/App.lua" servermode="true" dev="../../" raftMode="client" baseDir="/" clientMode="%2" serverId="%3"
 
 
 goto done

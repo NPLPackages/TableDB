@@ -11,6 +11,8 @@ local Rutils = commonlib.gettable("Raft.Rutils");
 ------------------------------------------------------------
 ]]--
 
+NPL.load("(gl)script/ide/socket/url.lua");
+local url = commonlib.gettable("commonlib.socket.url")
 
 local Rutils = commonlib.gettable("Raft.Rutils");
 
@@ -34,4 +36,10 @@ function Rutils.table_size(t)
     local i = 0
     for k in pairs(t) do i = i + 1 end
     return i
+end
+
+
+function Rutils.addServerToNPLRuntime(server)
+    local parsed_url = url.parse(server.endpoint)
+    NPL.AddNPLRuntimeAddress({host = parsed_url.host, port = tostring(parsed_url.port), nid = "server"..server.id})
 end

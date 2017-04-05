@@ -18,6 +18,8 @@ local url = commonlib.gettable("commonlib.socket.url")
 NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 local util = commonlib.gettable("System.Compiler.lib.util")
 local LoggerFactory = NPL.load("(gl)script/Raft/LoggerFactory.lua");
+NPL.load("(gl)script/Raft/Rutils.lua");
+local Rutils = commonlib.gettable("Raft.Rutils");
 
 local RpcListener = commonlib.gettable("Raft.RpcListener");
 
@@ -30,8 +32,7 @@ function RpcListener:new(ip, port, servers)
     };
     
     for _, server in ipairs(o.servers) do
-        local parsed_url = url.parse(server.endpoint)
-        NPL.AddNPLRuntimeAddress({host = parsed_url.host, port = tostring(parsed_url.port), nid = "server"..server.id})
+        Rutils.addServerToNPLRuntime(server)
     end
 
     setmetatable(o, self);
@@ -55,7 +56,7 @@ function RpcListener:startListening(messageHandler)
     Rpc:new():init("RaftRequestRPC", function(self, msg) 
         o.logger.trace("RaftRequestRPC:%s",util.table_tostring(msg));
         msg = messageHandler:processRequest(msg)
-        return msg; 
+        return msg;
     end)
 
     -- port is need to be string here??
