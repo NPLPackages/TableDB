@@ -199,6 +199,47 @@ function TestSequentialLogStore:testCompactRandom()
 
 end
 
+function TestSequentialLogStore:testCompactAll()
+    local container = "temp/snapshot/";
+    removeTestFiles(container);
+    ParaIO.CreateDirectory(container);
+    local store = SequentialLogStore:new(container);
+
+    -- write some logs
+    local entries = {};
+    for i = 1, math.random(1000) + 10 do
+        local entry = randomLogEntry();
+        entries[#entries + 1] = entry;
+        store:append(entry);
+    end
+
+    assertEquals(1, store:getStartIndex());
+    assertEquals(#entries, store:getFirstAvailableIndex() - 1);
+    assertTrue(logEntriesEquals(entries[#entries], store:getLastLogEntry()));
+    local lastLogIndex = #entries;
+    store:compact(lastLogIndex);
+
+    assertEquals(#entries + 1, store:getStartIndex());
+    assertEquals(#entries, store:getFirstAvailableIndex() - 1);
+
+    for i = 1, math.random(100) + 10 do
+        local entry = randomLogEntry();
+        entries[#entries + 1] = entry;
+        store:append(entry);
+    end
+
+    assertEquals(lastLogIndex + 1, store:getStartIndex());
+    assertEquals(#entries, store:getFirstAvailableIndex() - 1);
+    assertTrue(logEntriesEquals(entries[#entries], store:getLastLogEntry()));
+
+    local index = store:getStartIndex() + math.random(store:getFirstAvailableIndex() - store:getStartIndex());
+    assertTrue(logEntriesEquals(entries[index], store:getLogEntryAt(index)));
+
+    store:close();
+    removeTestFiles(container);
+end
+
+
 function removeTestFiles(container)
     commonlib.Files.DeleteFolder(container);
 end
