@@ -873,9 +873,9 @@ function RaftServer:reconfigure(newConfig)
            self.peers[server.id] = peer;
            self.logger.info("server %d is added to cluster", peer:getId());
            -- add server to NPL
-           Rutils.addServerToNPLRuntime(server)
+           Rutils.addServerToNPLRuntime(self.id, server)
            if(self.role == ServerRole.Leader) then
-               self.logger.info("enable heartbeating for server %d", peer.getId());
+               self.logger.info("enable heartbeating for server %d", peer:getId());
                self:enableHeartbeatForPeer(peer);
                if(self.serverToJoin ~= nil and self.serverToJoin:getId() == peer:getId()) then
                    peer.nextLogIndex = self.serverToJoin.nextLogIndex;
@@ -1273,7 +1273,7 @@ function RaftServer:handleAddServerRequest(request)
                                                              end)
 
     -- add server to NPL
-    Rutils.addServerToNPLRuntime(server)
+    Rutils.addServerToNPLRuntime(self.id, server)
 
     self:inviteServerToJoinCluster();
     response.accepted = true;
@@ -1316,10 +1316,9 @@ function RaftServer:syncLogsToNewComingServer(startIndex)
     -- only sync committed logs
     local gap = self.quickCommitIndex - startIndex;
     if(gap < self.context.raftParameters.logSyncStopGap) then
-
-        self.logger.info("LogSync is done for server %d with log gap %d, now put the server into cluster", self.serverToJoin.getId(), gap);
+        self.logger.info("LogSync is done for server %d with log gap %d, now put the server into cluster", self.serverToJoin:getId(), gap);
         local newConfig = ClusterConfiguration:new(self.config)
-        newConfig.lastLogIndex = self.logStore:getFirstAvailableIndex()
+        newConfig.logIndex = self.logStore:getFirstAvailableIndex()
         newConfig.servers[#newConfig.servers+1] = ClusterServer:new(self.serverToJoin.clusterConfig)
         local configEntry = LogEntry:new(self.state.term, newConfig:toBytes(), LogValueType.Configuration);
         self.logStore:append(configEntry);
@@ -1341,13 +1340,13 @@ function RaftServer:syncLogsToNewComingServer(startIndex)
             source = self.id,
             term = self.state.term,
             messageType = RaftMessageType.SyncLogRequest,
-            LastLogIndex = startIndex - 1,
+            lastLogIndex = startIndex - 1,
             logEntries = {LogEntry:new(self.state.term, logPack, LogValueType.LogPack)}
         }
     end
 
     local this = self;
-    self.serverToJoin.SendRequest(request, function (response, error)
+    self.serverToJoin:SendRequest(request, function (response, error)
         this:handleExtendedResponse(response, error);
     end);
 end
@@ -1407,6 +1406,12 @@ function RaftServer:handleJoinClusterRequest(request)
     self:reconfigure(newConfig);
     response.term = self.state.term;
     response.accepted = true;
+
+    local this = self
+    response.callbackFunc = function ()
+        -- handle send error
+        self.catchingUp = false;
+    end
     return response;
 end
 
@@ -1476,7 +1481,8 @@ function RaftServer:createSyncSnapshotRequest(peer, lastLogIndex, term, commitIn
         snapshot = lastSnapshot;
 
         if(snapshot == nil or lastLogIndex > snapshot.lastLogIndex) then
-            self.logger.error("system is running into fatal errors, failed to find a snapshot for peer %d(snapshot nil: %s, snapshot doesn't contais lastLogIndex: %s)", peer.getId(), String.valueOf(snapshot == nil), String.valueOf(lastLogIndex > snapshot.lastLogIndex));
+            self.logger.error("system is running into fatal errors, failed to find a snapshot for peer %d(snapshot nil: %s, snapshot doesn't contais lastLogIndex: %s)",
+                               peer:getId(), (snapshot == nil and "true") or "false", (lastLogIndex > snapshot.lastLogIndex and "true") or "false");
             self.stateMachine:exit(-1);
             return nil;
         end

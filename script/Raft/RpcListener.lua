@@ -23,16 +23,22 @@ local Rutils = commonlib.gettable("Raft.Rutils");
 
 local RpcListener = commonlib.gettable("Raft.RpcListener");
 
-function RpcListener:new(ip, port, servers) 
+function RpcListener:new(ip, port, serverId, servers) 
     local o = {
         ip = ip,
         port = port,
+        thisServerId = serverId,
         servers = servers,
         logger = LoggerFactory.getLogger("RpcListener"),
     };
-    
+
+    -- for init connect
+    Rpc:new():init("RaftRequestRPCInit", function(self, msg) end);
+    RaftRequestRPCInit:MakePublic();
+
+    -- used also by client
     for _, server in ipairs(o.servers) do
-        Rutils.addServerToNPLRuntime(server)
+        Rutils.addServerToNPLRuntime(o.thisServerId, server)
     end
 
     setmetatable(o, self);
@@ -51,10 +57,11 @@ end
 --Starts listening and handle all incoming messages with messageHandler
 function RpcListener:startListening(messageHandler)
     self.logger.info("startListening")
-    local o = self
+
     -- use Rpc for incoming Request message
+    local this = self
     Rpc:new():init("RaftRequestRPC", function(self, msg) 
-        o.logger.trace("RaftRequestRPC:%s",util.table_tostring(msg));
+        this.logger.trace("RaftRequestRPC:%s",util.table_tostring(msg));
         msg = messageHandler:processRequest(msg)
         return msg;
     end)

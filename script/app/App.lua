@@ -58,7 +58,7 @@ end
 local localEndpoint = thisServer.endpoint
 local parsed_url = url.parse(localEndpoint)
 logger.info("local state info"..util.table_tostring(parsed_url))
-local rpcListener = RpcListener:new(parsed_url.host, parsed_url.port, config.servers)
+local rpcListener = RpcListener:new(parsed_url.host, parsed_url.port, thisServer.id, config.servers)
 
 -- message printer
 mp = MessagePrinter:new(baseDir, parsed_url.host, mpPort)
