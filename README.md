@@ -45,7 +45,20 @@ The implementation is basically a port from [jraft](https://github.com/datatechn
 
 Note: every time you start a new client(whether Send Commands, Add server or Remove server), you should stop the previous client.
 
-
 The Raft cluster is *fault tolerate* and *highly available*. You can stop the cluster and client with `stopNPL.bat`.
+
+#### Unit Test
+
+```lua
+NPL.load("(gl)script/ide/UnitTest/luaunit.lua");
+NPL.load("(gl)script/Raft/test/TestClusterConfiguration.lua");
+NPL.load("(gl)script/Raft/test/TestSnapshotSyncRequest.lua");
+NPL.load("(gl)script/Raft/test/TestSequentialLogStore.lua");
+NPL.load("(gl)script/Raft/test/TestServerStateManager.lua");
+LuaUnit:run('TestSequentialLogStore') 
+LuaUnit:run('TestClusterConfiguration')
+LuaUnit:run('TestSnapshotSyncRequest')
+ParaGlobal.Exit(LuaUnit:run('TestServerStateManager'))
+```
 
 welcome for more feedbacks.:)
