@@ -130,7 +130,8 @@ function SequentialLogStore:append(logEntry)
     -- self.dataFile:seek(dataFileLength);
     self.dataFile:WriteDouble(logEntry.term);
     self.dataFile:WriteBytes(1, {logEntry.valueType});
-    self.dataFile:WriteBytes(#logEntry.value, {logEntry.value:byte(1, -1)});
+    -- self.dataFile:WriteBytes(#logEntry.value, {logEntry.value:byte(1, -1)});
+    self.dataFile:write(logEntry.value, #logEntry.value);
 
     self.entriesInStore = self.entriesInStore + 1;
     self.buffer:append(logEntry);
@@ -168,7 +169,8 @@ function SequentialLogStore:writeAt(logIndex, logEntry)
     self.indexFile:WriteDouble(dataPosition);
     self.dataFile:WriteDouble(logEntry.term);
     self.dataFile:WriteBytes(1, {logEntry.valueType});
-    self.dataFile:WriteBytes(#logEntry.value, {logEntry.value:byte(1, -1)});
+    -- self.dataFile:WriteBytes(#logEntry.value, {logEntry.value:byte(1, -1)});
+    self.dataFile:write(logEntry.value, #logEntry.value);
 
     -- trim the files if necessary
     if(indexFileSize > self.indexFile:getpos()) then
@@ -327,13 +329,15 @@ function SequentialLogStore:packLog(logIndex, itemsToPack)
         local indexBuffer = self.indexFile:GetText(indexPosition, indexBytes)
         assert(#indexBuffer == indexBytes, format("indexBuffer:%d len ~= indexBytes:%d len", #indexBuffer, indexBytes));
         -- writeBytes(file, indexBuffer)
-        file:WriteBytes(indexBytes, {indexBuffer:byte(1, -1)})
+        -- file:WriteBytes(indexBytes, {indexBuffer:byte(1, -1)})
+        file:write(indexBuffer, indexBytes)
 
         -- data
         local dataBuffer = self.dataFile:GetText(startOfLog, dataBytes);
         assert(#dataBuffer == dataBytes, format("dataBuffer:%d len ~= dataBytes:%d len", #dataBuffer, dataBytes));
         -- writeBytes(file, dataBuffer)
-        file:WriteBytes(dataBytes, {dataBuffer:byte(1, -1)})
+        -- file:WriteBytes(dataBytes, {dataBuffer:byte(1, -1)})
+        file:write(dataBuffer, dataBytes)
 
 
         bytes = file:GetText(0, -1)
@@ -375,7 +379,8 @@ function SequentialLogStore:applyLogPack(logIndex, logPack)
     -- "<memory>" is a special name for memory file, both read/write is possible. 
     local file = ParaIO.open("<memory>", "w");
     if(file:IsValid()) then
-        file:WriteBytes(#bytes, {bytes:byte(1, -1)})
+        -- file:WriteBytes(#bytes, {bytes:byte(1, -1)})
+        file:write(bytes, #bytes)
         file:seek(0)
 
         local indexBytes = file:ReadDouble()
@@ -609,6 +614,7 @@ function writeBytes(file, indexBuffer)
             end_pos = end_pos + 1024;
         end
     else
-        file:WriteBytes(#indexBuffer, {indexBuffer:byte(1, -1)})
+        -- file:WriteBytes(#indexBuffer, {indexBuffer:byte(1, -1)})
+        file:write(indexBuffer, indexBuffer)
     end
 end
