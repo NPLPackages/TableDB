@@ -76,7 +76,7 @@ function RaftServer:new(ctx)
     end
 
     --[[
-     * I found this implementation is also a victim of bug https:--groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
+     * I found this implementation is also a victim of bug https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
      * As the implementation is based on Diego's thesis
      * Fix:
      * We should never load configurations that is not committed, 
@@ -116,7 +116,6 @@ function RaftServer:new(ctx)
         end
     end
     o.quickCommitIndex = o.state.commitIndex;
-    -- FIXME: why???
     -- what's wrong with o.logger.debug
     -- o.logger.debug(o.peers)
 
@@ -486,10 +485,8 @@ function RaftServer:handleAppendEntriesResponse(response)
     -- If there are pending logs to be synced or commit index need to be advanced, continue to send appendEntries to this peer
     local needToCatchup = true;
     if(response.accepted) then
-        -- synchronized(peer){
         peer.nextLogIndex = response.nextIndex;
         peer.matchedIndex = response.nextIndex - 1;
-        -- }
 
         -- try to commit with this response
         local matchedIndexes = {};
@@ -501,7 +498,7 @@ function RaftServer:handleAppendEntriesResponse(response)
         self.logger.trace("all matchedIndexes:%s", util.table_tostring(matchedIndexes))
         table.sort(matchedIndexes, indexComparator);
         self.logger.trace("sorted matchedIndexes:%s", util.table_tostring(matchedIndexes))
-        -- majority is a float without math.floor
+        -- majority is a float without math.ceil
         -- lua index start form 1
         local majority = math.ceil((Rutils.table_size(self.peers) + 1) / 2);
         self.logger.trace("total server num:%d, major num:%d", Rutils.table_size(self.peers) + 1, majority)
@@ -1131,7 +1128,7 @@ function RaftServer:handleExtendedResponseError(error)
                          *      assume there could be two config changes at a time
                          *      this means there must be a leader after previous leader offline, which is impossible 
                          *      (no leader could be elected after one server goes offline in case of only two servers in a cluster)
-                         * so the bug https:--groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E 
+                         * so the bug https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E 
                          * does not apply to cluster which only has two members
                          ]]--
                         if(Rutils.table_size(self.peers) == 1) then
