@@ -27,21 +27,21 @@ The implementation is basically a port from [jraft](https://github.com/datatechn
   Now the implementation is Single thread. To improve performance, we can put the I/O operation into one thread(eg. the commit）
   
 #### Logic
-  The Core Raft algorithm logic is in RaftServer, its implementation is straight forward
+  The Core Raft algorithm logic is in RaftServer, whoes implementation is straight forward
   
 ### Test
 
 #### Start a 3 Raft Nodes cluster
- `cd setup && setup.bat` will start 3 Raft nodes. The 3 Node will automatically elect a leader. we can stop one node(whether it is leader or not) and the cluster still function correctly. Raft will tolerate `N/2 + 1` nodes failue, where N is the total nodes in the cluster.
+ `cd setup && setup.bat` will start 3 Raft nodes. The 3 Node will automatically elect a leader. we can stop one node(whether it is leader or not) and the cluster can still function correctly. Raft can tolerate `N/2 + 1` nodes failue, where N is the total nodes in cluster.
 
 #### Send Commands to the Cluster
-`setup.bat client appendEntries` will start 1 client node, and it will send commands to the cluster and automaticlly retry in a backoff way if the command not succeed. All 3 Raft nodes will recv the same commands, either succeed or not the client's callback will be called. One known issue is the command may commit twice in the cluster due to the retry. A not so good we to fix this is disable the retry.
+`setup.bat client appendEntries` will start 1 client node, and the client node will send commands to the cluster and automaticlly retry in a backoff way if the command not succeed. All 3 Raft nodes will recv the same commands, either succeed or not the client's callback will be called. One already known issue is the command may commit twice in the cluster due to the retry. A not so good way to fix this is disable the retry.
  
 #### Add a server to the Cluster
-`addsrv 5` will start a node which id is 5. To add the server to the cluster you can execute `setup.bat client addServer 5`. You may need to add twice(execute `setup.bat client addServer 5`) because the initial connect caused by `NPL.activate()`. The cluster will automatically sync the logs previous commited to the new add server. And if you start a client to send Commands the new server will also recv these commands.
+`addsrv 5` will start a node whose id is 5. To add the node to the cluster, execute `setup.bat client addServer 5`. This command may need to be executed twice because of the initial connect caused by `NPL.activate()`. The cluster will automatically sync the logs previously commited to this new added server. Now if you start a client to send commands to the cluster, the new server will also recv these commands.
 
 #### Remove a server in the Cluster
-`setup.bat client removeServer 5` will remove the node 5 in the cluster. Now you can not request to remove leader.
+`setup.bat client removeServer 5` will remove the node 5 in the cluster. But you can not request to remove the leader.
 
 Note: every time you start a new client(whether Send Commands, Add server or Remove server), you should stop the previous client.
 
