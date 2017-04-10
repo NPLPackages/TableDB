@@ -170,10 +170,13 @@ function Rpc:OnActivated(msg)
 			-- handle memory leak
 			if activate_result ~= 0 then
 				-- FIXME:
-				-- this will cause remote side memory leak, how to handle this
+				-- this will cause remote side memory leak, to handle this, we
 				-- should give run_callbacks a TTL
 				-- self.run_callbacks[callbackId] = nil
-				self.logger.error("activate on %s failed %d", vFileId, activate_result)
+				self.logger.error("activate on %s failed %d, msg type:%s", vFileId, activate_result, response.type)
+				if result.callbackFunc then
+					result.callbackFunc();
+				end
 			end
 
 		elseif(msg.type== "result" and msg.callbackId) then
@@ -267,7 +270,7 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
 	-- handle memory leak
 	if activate_result ~= 0 then
 		self.run_callbacks[callbackId] = nil
-		self.logger.error("activate on %s failed %d", vFileId, activate_result)
+		self.logger.error("activate on %s failed %d, msg type:%s", vFileId, activate_result, msg.type)
 	else
 		-- FIXME:
 		-- to avoid memory leak, we 

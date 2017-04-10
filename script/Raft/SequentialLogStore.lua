@@ -4,6 +4,8 @@ Author: liuluheng
 Date: 2017.03.25
 Desc: 
 
+NPL file API dose not support u GetFileSize in "rw" mode(and variou things like this),
+so the code is a bit ugly :(
 
 ------------------------------------------------------------
 NPL.load("(gl)script/Raft/SequentialLogStore.lua");
@@ -36,6 +38,7 @@ local BUFFER_SIZE = 1000;
 -- it should be
 local DoubleBytes = 8; -- 64 bits
 
+local openFile;
 
 function SequentialLogStore:new(logContainer) 
     local o = {
@@ -46,35 +49,37 @@ function SequentialLogStore:new(logContainer)
     };
     setmetatable(o, self);
 
+    o.indexFileName = o.logContainer..LOG_INDEX_FILE
+    o.dataFileName = o.logContainer..LOG_STORE_FILE
+    o.startIndexFileName = o.logContainer..LOG_START_INDEX_FILE
 
-    -- index file
-    local indexFileName = o.logContainer..LOG_INDEX_FILE
-    o.indexFile = ParaIO.open(indexFileName, "rw");
-    assert(o.indexFile:IsValid(), "indexFile not Valid")
+    o.backupIndexFileName = o.logContainer..LOG_INDEX_FILE_BAK
+    o.backupDataFileName = o.logContainer..LOG_STORE_FILE_BAK
+    o.backupStartIndexFileName = o.logContainer..LOG_START_INDEX_FILE_BAK
 
-    -- data file
-    local dataFileName = o.logContainer..LOG_STORE_FILE
-    o.dataFile = ParaIO.open(dataFileName, "rw");
-    assert(o.dataFile:IsValid(), "dataFile not Valid")
+    openFile(o, "r");
+    local startIndexFileSize = o.startIndexFile:GetFileSize()
+    local indexFileSize = o.indexFile:GetFileSize()
 
-    -- startIndex file
-    local startIndexFileName = o.logContainer..LOG_START_INDEX_FILE
-    o.startIndexFile = ParaIO.open(startIndexFileName, "rw");
-    assert(o.startIndexFile:IsValid(), "startIndexFile not Valid")
+    o.logger.trace("SequentialLogStore:new>startIndexFileSize:%d, indexFileSize:%d", startIndexFileSize, indexFileSize)
 
-    if(o.startIndexFile:GetFileSize() == 0) then
+    if(startIndexFileSize == 0) then
+        openFile(o, "rw");
         o.startIndex = 1;
         o.startIndexFile:WriteDouble(o.startIndex);
     else
         o.startIndex = o.startIndexFile:ReadDouble();
     end
 
-    o.entriesInStore = o.indexFile:GetFileSize() / DoubleBytes;
+    o.entriesInStore = indexFileSize / DoubleBytes;
 
     o.buffer = LogBuffer:new((o.entriesInStore > o.bufferSize and (o.entriesInStore + o.startIndex - o.bufferSize)) or o.startIndex, o.bufferSize);
 
+    o:fillBuffer();
     o.logger.debug("log store started with entriesInStore=%d, startIndex=%d", o.entriesInStore, o.startIndex);
 
+
+    openFile(o, "rw");
     return o;
 end
 
@@ -118,13 +123,15 @@ end
    @return the last appended log index
 ]]--
 function SequentialLogStore:append(logEntry)
-    self.indexFile:seek(self.indexFile:GetFileSize());
-    local dataFileLength = self.dataFile:GetFileSize();
-    self.indexFile:WriteDouble(dataFileLength);
-    self.dataFile:seek(dataFileLength);
+    self.indexFile:SetFilePointer(0, 2)
+    self.dataFile:SetFilePointer(0, 2)
+    self.indexFile:WriteDouble(self.dataFile:getpos());
+    -- self.logger.trace("datafile pos:%d, indexfile pos:%d", self.dataFile:getpos(), self.indexFile:getpos())
+    -- self.dataFile:seek(dataFileLength);
     self.dataFile:WriteDouble(logEntry.term);
     self.dataFile:WriteBytes(1, {logEntry.valueType});
-    self.dataFile:WriteBytes(#logEntry.value, {logEntry.value:byte(1, -1)});
+    -- self.dataFile:WriteBytes(#logEntry.value, {logEntry.value:byte(1, -1)});
+    self.dataFile:write(logEntry.value, #logEntry.value);
 
     self.entriesInStore = self.entriesInStore + 1;
     self.buffer:append(logEntry);
@@ -141,7 +148,9 @@ function SequentialLogStore:writeAt(logIndex, logEntry)
         return;
     end
 
-    local index = logIndex - self.startIndex + 1
+    openFile(self, "r")
+
+    local index = logIndex - self.startIndex
     -- find the positions for index and data files
     local dataPosition = self.dataFile:GetFileSize();
     local indexPosition = (index - 1) * DoubleBytes;
@@ -150,21 +159,25 @@ function SequentialLogStore:writeAt(logIndex, logEntry)
         dataPosition = self.indexFile:ReadDouble();
     end
 
+    local dataFileSize = self.dataFile:GetFileSize();
+    local indexFileSize = self.indexFile:GetFileSize();
+
+    openFile(self, "rw")
     -- write the data at the specified position
     self.indexFile:seek(indexPosition);
     self.dataFile:seek(dataPosition);
     self.indexFile:WriteDouble(dataPosition);
     self.dataFile:WriteDouble(logEntry.term);
     self.dataFile:WriteBytes(1, {logEntry.valueType});
-    self.dataFile:WriteBytes(#logEntry.value, {logEntry.value:byte(1, -1)});
-
+    -- self.dataFile:WriteBytes(#logEntry.value, {logEntry.value:byte(1, -1)});
+    self.dataFile:write(logEntry.value, #logEntry.value);
 
     -- trim the files if necessary
-    if(self.indexFile:GetFileSize() > self.indexFile:getpos()) then
+    if(indexFileSize > self.indexFile:getpos()) then
         self.indexFile:SetEndOfFile();
     end
 
-    if(self.dataFile:GetFileSize() > self.dataFile:getpos()) then
+    if(dataFileSize > self.dataFile:getpos()) then
         self.dataFile:SetEndOfFile();
     end
 
@@ -203,24 +216,37 @@ function SequentialLogStore:getLogEntries(startIndex, endIndex)
     self.logger.trace("getLogEntries:pre fill entries len:%d", #entries)
     -- fill with buffer
     local bufferFirstIndex = self.buffer:fill(startIndex, targetEndIndex, entries);
-    self.logger.trace("getLogEntries:bufferFirstIndex:%d, got entries len:%d", bufferFirstIndex, #entries)
     
     -- Assumption: buffer.lastIndex() == this.entriesInStore + this.startIndex
     -- (Yes, for sure, we need to enforce this assumption to be true)
     if(startIndex < bufferFirstIndex) then
         -- in this case, we need to read from store file
+        local fileEntries = {}
         local endi = bufferFirstIndex - self.startIndex;
-        self.indexFile:seek(start * DoubleBytes);
+
+        openFile(self, "r")
+
+        self.indexFile:seek(start * DoubleBytes)
+        self.logger.trace("getLogEntries: start bytes:%d, indexfile pos:%d",  start * DoubleBytes, self.indexFile:getpos())
         local dataStart = self.indexFile:ReadDouble();
         for i = 1, (endi - start) do
             local dataEnd = self.indexFile:ReadDouble();
             local dataSize = dataEnd - dataStart;
             self.dataFile:seek(dataStart);
+            -- self.logger.trace("getLogEntries: dataStart:%d, dataEnd:%d, indexfile pos:%d, datafile pos:%d", dataStart, dataEnd, self.indexFile:getpos(), self.dataFile:getpos());
             -- here we should use i to index
-            entries[i] = self:readEntry(dataSize);
+            fileEntries[i] = self:readEntry(dataSize);
             dataStart = dataEnd;
         end
+        for i=1,#entries do
+            fileEntries[#fileEntries+1] = entries[i];
+        end
+        entries = fileEntries
+
+
+        openFile(self, "rw")
     end
+
     return entries;
 end
 
@@ -261,6 +287,8 @@ function SequentialLogStore:getLogEntryAt(logIndex)
    @return log pack
 ]]--
 function SequentialLogStore:packLog(logIndex, itemsToPack)
+    self.logger.trace("SequentialLogStore:packLog>logIndex:%d, itemsToPack:%d, self.startIndex:%d, entriesInStore:%d",
+                       logIndex, itemsToPack, self.startIndex, self.entriesInStore);
     if logIndex < self.startIndex then
         return;
     end
@@ -270,19 +298,22 @@ function SequentialLogStore:packLog(logIndex, itemsToPack)
         return {};
     end
 
+    openFile(self, "r")
+
     local endIndex = math.min(index + itemsToPack, self.entriesInStore + 1);
     local readToEnd = (endIndex == self.entriesInStore + 1);
     local indexPosition = (index - 1) * DoubleBytes;
     self.indexFile:seek(indexPosition);
 
+    local startOfLog = self.indexFile:ReadDouble();
     local endOfLog = self.dataFile:GetFileSize();
     local indexBytes = DoubleBytes * (endIndex - index)
     if(not readToEnd) then
-        self.indexFile:seek(indexBytes)
+        self.indexFile:seekRelative(indexPosition + indexBytes)
+        -- self.indexFile:seek(indexPosition + indexBytes)
         endOfLog = self.indexFile:ReadDouble();
     end
 
-    local startOfLog = self.indexFile:ReadDouble();
     self.dataFile:seek(startOfLog);
 
     -- "<memory>" is a special name for memory file, both read/write is possible. 
@@ -290,12 +321,25 @@ function SequentialLogStore:packLog(logIndex, itemsToPack)
     local bytes;
     if(file:IsValid()) then
         local dataBytes = endOfLog - startOfLog
+        self.logger.trace("SequentialLogStore:packLog>indexBytes:%d, dataBytes:%d", indexBytes, dataBytes)
         file:WriteDouble(indexBytes)
         file:WriteDouble(dataBytes)
        
         -- index data
-        file:WriteBytes(indexBytes, {self.indexFile:GetText(indexPosition, -1):byte(1, -1)})
-        file:WriteBytes(dataBytes, {self.dataFile:GetText(startOfLog, -1):byte(1, -1)})
+        local indexBuffer = self.indexFile:GetText(indexPosition, indexBytes)
+        assert(#indexBuffer == indexBytes, format("indexBuffer:%d len ~= indexBytes:%d len", #indexBuffer, indexBytes));
+        -- writeBytes(file, indexBuffer)
+        -- file:WriteBytes(indexBytes, {indexBuffer:byte(1, -1)})
+        file:write(indexBuffer, indexBytes)
+
+        -- data
+        local dataBuffer = self.dataFile:GetText(startOfLog, dataBytes);
+        assert(#dataBuffer == dataBytes, format("dataBuffer:%d len ~= dataBytes:%d len", #dataBuffer, dataBytes));
+        -- writeBytes(file, dataBuffer)
+        -- file:WriteBytes(dataBytes, {dataBuffer:byte(1, -1)})
+        file:write(dataBuffer, dataBytes)
+
+
         bytes = file:GetText(0, -1)
         file:close()
 	 
@@ -305,6 +349,8 @@ function SequentialLogStore:packLog(logIndex, itemsToPack)
             bytes = data.result;
         end
     end
+    openFile(self, "rw")
+    
     return bytes;
 
     -- error handle
@@ -325,15 +371,16 @@ function SequentialLogStore:applyLogPack(logIndex, logPack)
 
     local bytes;
     local data = {content=logPack, method="gzip"};
+    
     if(NPL.Decompress(data)) then
         bytes = data.result;
     end
 
     -- "<memory>" is a special name for memory file, both read/write is possible. 
     local file = ParaIO.open("<memory>", "w");
-    local bytes;
     if(file:IsValid()) then
-        file:WriteBytes(#bytes, {bytes:byte(1, -1)})
+        -- file:WriteBytes(#bytes, {bytes:byte(1, -1)})
+        file:write(bytes, #bytes)
         file:seek(0)
 
         local indexBytes = file:ReadDouble()
@@ -348,11 +395,13 @@ function SequentialLogStore:applyLogPack(logIndex, logPack)
 
         local indexFilePosition, dataFilePosition;
         if(index == self.entriesInStore + 1) then
+            openFile(self, "r")
             indexFilePosition = self.indexFile:GetFileSize();
             dataFilePosition = self.dataFile:GetFileSize();
+            openFile(self, "rw")
         else
             indexFilePosition = (index - 1) * DoubleBytes;
-            self.indexFile.seek(indexFilePosition);
+            self.indexFile:seek(indexFilePosition);
             dataFilePosition = self.indexFile:ReadDouble();
         end
 
@@ -398,6 +447,7 @@ function SequentialLogStore:compact(lastLogIndex)
         self.buffer:reset(lastLogIndex + 1);
         return true;
     else
+        openFile(self, "r")
         local dataPosition = -1;
         local indexPosition = DoubleBytes * (lastIndex + 1);
         self.indexFile:seek(indexPosition);
@@ -405,10 +455,11 @@ function SequentialLogStore:compact(lastLogIndex)
         local indexFileNewLength = self.indexFile:GetFileSize() - indexPosition;
         local dataFileNewLength = self.dataFile:GetFileSize() - dataPosition;
 
+        openFile(self, "rw")
+
         -- copy the log data
         -- data file
-        local backupDataFileName = o.logContainer..LOG_STORE_FILE_BAK
-        local backupFile = ParaIO.open(backupDataFileName, "r");
+        local backupFile = ParaIO.open(self.backupDataFileName, "r");
         assert(backupFile:IsValid(), "dataFile not Valid")
 
         -- we don't have an channel, so this is inefficient and ugly
@@ -422,12 +473,10 @@ function SequentialLogStore:compact(lastLogIndex)
 
         -- copy the index data
         -- index file
-        local backupIndexFileName = o.logContainer..LOG_INDEX_FILE_BAK
-        backupFile = ParaIO.open(backupIndexFileName, "r");
+        backupFile = ParaIO.open(self.backupIndexFileName, "r");
         assert(backupFile:IsValid(), "backupFile not Valid")
 
         
-        backupFile = new RandomAccessFile(self.logContainer.resolve(LOG_INDEX_FILE_BAK).toString(), "r");
         backupFile:seek(indexPosition);
         self.indexFile:seek(0);
         for  i = 1, indexFileNewLength / DoubleBytes do
@@ -442,7 +491,7 @@ function SequentialLogStore:compact(lastLogIndex)
         self.startIndexFile:WriteDouble(lastLogIndex + 1);
         self.entriesInStore = self.entriesInStore - (lastLogIndex - self.startIndex + 1);
         self.startIndex = lastLogIndex + 1;
-        self.buffer.reset(self.entriesInStore > self.bufferSize and self.entriesInStore + self.startIndex - self.bufferSize or self.startIndex);
+        self.buffer:reset(self.entriesInStore > self.bufferSize and self.entriesInStore + self.startIndex - self.bufferSize or self.startIndex);
         self:fillBuffer();
         return true;
     end
@@ -453,107 +502,119 @@ function SequentialLogStore:compact(lastLogIndex)
 end
 
 function SequentialLogStore:fillBuffer()
+    openFile(self, "r")
     local startIndex = self.buffer:firstIndex();
     local indexFileSize = self.indexFile:GetFileSize();
     if(indexFileSize > 0) then
         local indexPosition = (startIndex - self.startIndex) * DoubleBytes;
         self.indexFile:seek(indexPosition);        
-        local dataStart = self.indexFile:readDouble(indexData);
+        local dataStart = self.indexFile:ReadDouble();
         self.dataFile:seek(dataStart);
         while(self.indexFile:getpos() < indexFileSize) do
-            local dataEnd = self:readDouble(indexData);
-            self.buffer:append(self:readEntry(dataEnd - dataStart));
+            local dataEnd = self.indexFile:ReadDouble();
+            local entry = self:readEntry(dataEnd - dataStart);
+            -- util.table_print(entry)
+            self.buffer:append(entry);
             dataStart = dataEnd;
         end
+        local entry = self:readEntry(indexFileSize - dataStart);
+        self.buffer:append(entry);
     end
+    self.logger.trace("SequentialLogStore:fillBuffer>buffer firstIndex:%d, entries:%d", self.buffer:firstIndex(), self.buffer:bufferSize())
+    openFile(self, "rw")
 end
 
 
 function SequentialLogStore:restore()
-    self.indexFile:close();
-    self.dataFile:close();
-    self.startIndexFile:close();
-    local indexFileName = self.logContainer..LOG_INDEX_FILE
-    local dataFileName = self.logContainer..LOG_STORE_FILE
-    local startIndexFileName = self.logContainer..LOG_START_INDEX_FILE
-    
-    local backupIndexFileName = self.logContainer..LOG_INDEX_FILE_BAK
-    local backupDataFileName = self.logContainer..LOG_STORE_FILE_BAK
-    local backupStartIndexFileName = self.logContainer..LOG_START_INDEX_FILE_BAK
+    self:closeFiles();
 
-    if (ParaIO.CopyFile(backupIndexFileName, indexFileName, true) and
-        ParaIO.CopyFile(backupDataFileName, dataFileName, true) and
-        ParaIO.CopyFile(backupStartIndexFileName, startIndexFileName, true)) then
-
-        self.indexFile = ParaIO.open(indexFileName, "rw");
-        self.dataFile = ParaIO.open(dataFileName, "rw");
-        self.startIndexFile = ParaIO.open(startIndexFileName, "rw");
-    
-    else
+    if not (ParaIO.CopyFile(self.backupIndexFileName, self.indexFileName, true) and
+        ParaIO.CopyFile(self.backupDataFileName, self.dataFileName, true) and
+        ParaIO.CopyFile(self.backupStartIndexFileName, self.startIndexFileName, true)) then
         -- this is fatal...
         self.logger.fatal("cannot restore from failure, please manually restore the log files");
     end
-
+    openFile(self, "rw")
 end
 
 function SequentialLogStore:backup()
+    self:close()
     --decide not to use ParaIO.BackupFile
-    local indexFileName = self.logContainer..LOG_INDEX_FILE
-    local dataFileName = self.logContainer..LOG_STORE_FILE
-    local startIndexFileName = self.logContainer..LOG_START_INDEX_FILE
-    
-    local backupIndexFileName = self.logContainer..LOG_INDEX_FILE_BAK
-    local backupDataFileName = self.logContainer..LOG_STORE_FILE_BAK
-    local backupStartIndexFileName = self.logContainer..LOG_START_INDEX_FILE_BAK
+    ParaIO.DeleteFile(self.backupDataFileName)
+    ParaIO.DeleteFile(self.backupIndexFileName)
+    ParaIO.DeleteFile(self.backupStartIndexFileName)
 
-    ParaIO.DeleteFile(backupDataFileName)
-    ParaIO.DeleteFile(backupIndexFileName)
-    ParaIO.DeleteFile(backupStartIndexFileName)
-
-    if not (ParaIO.CopyFile(indexFileName, backupIndexFileName, true) and
-        ParaIO.CopyFile(dataFileName, backupDataFileName, true) and
-        ParaIO.CopyFile(startIndexFileName, backupStartIndexFileName, true)) then
+    if not (ParaIO.CopyFile(self.indexFileName, self.backupIndexFileName, true) and
+        ParaIO.CopyFile(self.dataFileName, self.backupDataFileName, true) and
+        ParaIO.CopyFile(self.startIndexFileName, self.backupStartIndexFileName, true)) then
         self.logger.error("failed to create a backup folder")
     end
+
+    openFile(self, "rw")
 end
 
 
 function SequentialLogStore:readEntry(size)
     local term = self.dataFile:ReadDouble();
-    local value = {}
-    self.dataFile:ReadBytes(size-DoubleBytes, value);
-    local valueType = value[1]
-    value[1] = nil
+    local valueTypeByte = {}
+    self.dataFile:ReadBytes(1, valueTypeByte);
+    local valueType = valueTypeByte[1]
+    local valueBytes = {}
+    self.dataFile:ReadBytes(size-DoubleBytes-1, valueBytes);
+    local value = string.char(unpack(valueBytes))
+    -- local value = self.dataFile:ReadBytes(size-DoubleBytes-1, nil);
     return LogEntry:new(term, value, valueType);
 end
 
+function SequentialLogStore:closeFiles()
+    self.indexFile:close()
+    self.dataFile:close()
+    self.startIndexFile:close()
+end
+function SequentialLogStore:close()
+    self:closeFiles()
+    self.prevMode = nil;
+end
 
--- assume little endian and unsigned
--- function SequentialLogStore:readUInt(t)
---     local n = 0
---     for k=1,UIntBytes do
---         n = n + t[k]*2^((k-1)*8)
---         -- set nil
---         t[k] = nil
---     end
---     return n;
--- end
+function openFile(logStore, mode)
+    if mode == logStore.prevMode then
+        return;
+    else
+        logStore.prevMode = mode
+    end
+    if logStore.indexFile and logStore.dataFile and logStore.startIndexFile then
+        logStore:closeFiles()
+    end
+    -- index file
+    logStore.indexFile = ParaIO.open(logStore.indexFileName, mode);
+    -- assert(logStore.indexFile:IsValid(), "indexFile not Valid")
 
--- local function bytes_to_int(str,endian,signed) -- use length of string to determine 8,16,32,64 bits
---     local t={str:byte(1,-1)}
---     if endian=="big" then --reverse bytes
---         local tt={}
---         for k=1,#t do
---             tt[#t-k+1]=t[k]
---         end
---         t=tt
---     end
---     local n=0
---     for k=1,#t do
---         n=n+t[k]*2^((k-1)*8)
---     end
---     if signed then
---         n = (n > 2^(#t-1) -1) and (n - 2^#t) or n -- if last bit set, negative.
---     end
---     return n
--- end
+    -- data file
+    logStore.dataFile = ParaIO.open(logStore.dataFileName, mode);
+    -- assert(logStore.dataFile:IsValid(), "dataFile not Valid")
+
+    -- startIndex file
+    logStore.startIndexFile = ParaIO.open(logStore.startIndexFileName, mode);
+    -- assert(logStore.startIndexFile:IsValid(), "startIndexFile not Valid")
+
+    local valid = logStore.indexFile:IsValid() and logStore.dataFile:IsValid() and logStore.startIndexFile:IsValid();
+    if not valid then
+        mode = "rw"
+        return openFile(logStore, mode)
+    end
+end
+
+function writeBytes(file, indexBuffer)
+    if #indexBuffer > 1024 then
+        local start_pos = 1
+        local end_pos = 1024
+        while start_pos < #indexBuffer do
+            file:WriteBytes(end_pos - start_pos + 1, {indexBuffer:byte(start_pos, end_pos)})
+            start_pos = end_pos + 1;
+            end_pos = end_pos + 1024;
+        end
+    else
+        -- file:WriteBytes(#indexBuffer, {indexBuffer:byte(1, -1)})
+        file:write(indexBuffer, indexBuffer)
+    end
+end

@@ -31,7 +31,8 @@ function ClusterServer:new(bytesOrTable)
             local file = ParaIO.open("<memory>", "w");
             if(file:IsValid()) then	
                 -- can not use file:WriteString(bytes);, use WriteBytes
-                file:WriteBytes(#bytes, {bytes:byte(1, -1)});
+                -- file:WriteBytes(#bytes, {bytes:byte(1, -1)});
+                file:write(bytes, #bytes);
                 file:seek(0)
                 o.id = file:ReadInt()
                 local endpointLength = file:ReadInt()

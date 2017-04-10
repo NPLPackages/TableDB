@@ -12,7 +12,7 @@ local RaftConsensus = commonlib.gettable("Raft.RaftConsensus");
 ]]--
 
 NPL.load("(gl)script/Raft/RaftServer.lua");
-local raftServer = commonlib.gettable("Raft.RaftServer");
+local RaftServer = commonlib.gettable("Raft.RaftServer");
 local LoggerFactory = NPL.load("(gl)script/Raft/LoggerFactory.lua");
 
 local logger = LoggerFactory.getLogger("RaftConsensus")
@@ -27,7 +27,7 @@ function RaftConsensus.run(context)
         return;
     end
 
-    local server = raftServer:new(context);
+    local server = RaftServer:new(context);
     local messageSender = server:createMessageSender();
     context.stateMachine:start(messageSender);
     context.rpcListener:startListening(server);

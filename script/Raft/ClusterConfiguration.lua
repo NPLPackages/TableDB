@@ -65,7 +65,8 @@ function ClusterConfiguration:fromBytes(bytes)
     if(file:IsValid()) then	
         -- can not use file:WriteString(bytes);, use WriteBytes
         if type(bytes) == "string" then
-            file:WriteBytes(#bytes, {bytes:byte(1, -1)});
+            -- file:WriteBytes(#bytes, {bytes:byte(1, -1)});
+            file:write(bytes, #bytes);
         elseif type(bytes) == "table" then
             file:WriteBytes(#bytes, bytes);
         end
@@ -103,7 +104,8 @@ function ClusterConfiguration:toBytes()
 
         for _,server in ipairs(self.servers) do
             local b = server:toBytes()
-            file:WriteBytes(#b, {b:byte(1, -1)})
+            -- file:WriteBytes(#b, {b:byte(1, -1)})
+            file:write(b, #b)
         end
 
         bytes = file:GetText(0, -1)

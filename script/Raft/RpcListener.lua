@@ -18,20 +18,27 @@ local url = commonlib.gettable("commonlib.socket.url")
 NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 local util = commonlib.gettable("System.Compiler.lib.util")
 local LoggerFactory = NPL.load("(gl)script/Raft/LoggerFactory.lua");
+NPL.load("(gl)script/Raft/Rutils.lua");
+local Rutils = commonlib.gettable("Raft.Rutils");
 
 local RpcListener = commonlib.gettable("Raft.RpcListener");
 
-function RpcListener:new(ip, port, servers) 
+function RpcListener:new(ip, port, serverId, servers) 
     local o = {
         ip = ip,
         port = port,
+        thisServerId = serverId,
         servers = servers,
         logger = LoggerFactory.getLogger("RpcListener"),
     };
-    
+
+    -- for init connect
+    Rpc:new():init("RaftRequestRPCInit", function(self, msg) end);
+    RaftRequestRPCInit:MakePublic();
+
+    -- used also by client
     for _, server in ipairs(o.servers) do
-        local parsed_url = url.parse(server.endpoint)
-        NPL.AddNPLRuntimeAddress({host = parsed_url.host, port = tostring(parsed_url.port), nid = "server"..server.id})
+        Rutils.addServerToNPLRuntime(o.thisServerId, server)
     end
 
     setmetatable(o, self);
@@ -50,12 +57,13 @@ end
 --Starts listening and handle all incoming messages with messageHandler
 function RpcListener:startListening(messageHandler)
     self.logger.info("startListening")
-    local o = self
+
     -- use Rpc for incoming Request message
+    local this = self
     Rpc:new():init("RaftRequestRPC", function(self, msg) 
-        o.logger.trace("RaftRequestRPC:%s",util.table_tostring(msg));
+        this.logger.trace("RaftRequestRPC:%s",util.table_tostring(msg));
         msg = messageHandler:processRequest(msg)
-        return msg; 
+        return msg;
     end)
 
     -- port is need to be string here??

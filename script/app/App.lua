@@ -38,6 +38,8 @@ local logger = LoggerFactory.getLogger("App")
 local baseDir = ParaEngine.GetAppCommandLineByParam("baseDir", "./");
 local mpPort = ParaEngine.GetAppCommandLineByParam("mpPort", "8090");
 local raftMode = ParaEngine.GetAppCommandLineByParam("raftMode", "server");
+local clientMode = ParaEngine.GetAppCommandLineByParam("clientMode", "appendEntries");
+local serverId = tonumber(ParaEngine.GetAppCommandLineByParam("serverId", "5"));
 
 logger.info("app arg:"..baseDir..mpPort..raftMode)
 
@@ -50,13 +52,13 @@ local thisServer = config:getServer(stateManager.serverId)
 if not thisServer then
   -- perhaps thisServer has been removed last time
   ParaGlobal.Exit(0);
-  --- C/C++ API call is counted as one instruction, so Exit does not a block
+  --- C/C++ API call is counted as one instruction, so Exit does not block
   return;
 end
 local localEndpoint = thisServer.endpoint
 local parsed_url = url.parse(localEndpoint)
 logger.info("local state info"..util.table_tostring(parsed_url))
-local rpcListener = RpcListener:new(parsed_url.host, parsed_url.port, config.servers)
+local rpcListener = RpcListener:new(parsed_url.host, parsed_url.port, thisServer.id, config.servers)
 
 -- message printer
 mp = MessagePrinter:new(baseDir, parsed_url.host, mpPort)
@@ -85,36 +87,43 @@ end
 local function executeAsClient(localAddress, RequestRPC, configuration, loggerFactory)
     local raftClient = RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory)
 
-    -- local values = {
-    --   "test:1111",
-    --   "test:1112",
-    --   "test:1113",
-    --   "test:1114",
-    --   "test:1115",
-    -- }
+    if clientMode == "appendEntries" then
+      local values = {
+        "test:1111",
+        "test:1112",
+        "test:1113",
+        "test:1114",
+        "test:1115",
+      }
 
-    -- raftClient:appendEntries(values, function (response, err)
-    --   local result = (err == nil and response.accepted and "accepted") or "denied"
-    --   logger.info("the appendEntries request has been %s", result)
-    -- end)
+      raftClient:appendEntries(values, function (response, err)
+        local result = (err == nil and response.accepted and "accepted") or "denied"
+        logger.info("the appendEntries request has been %s", result)
+      end)
+    
+    elseif clientMode == "addServer" then
+      local serverToJoin = {
+        id = serverId,
+        endpoint = "tcp://localhost:900"..serverId,
+      }
 
-    -- -- add server
-    -- local serverToJoin = {
-    --   id = 5,
-    --   endpoint = "tcp://localhost:9005",
-    -- }
+      raftClient:addServer(ClusterServer:new(serverToJoin), function (response, err)
+        local result = (err == nil and response.accepted and "accepted") or "denied"
+        logger.info("the addServer request has been %s", result)
+      end)
+    
+    elseif clientMode == "removeServer" then
+      -- remove server
+      local serverIdToRemove = serverId;
+      raftClient:removeServer(serverIdToRemove, function (response, err)
+        local result = (err == nil and response.accepted and "accepted") or "denied"
+        logger.info("the removeServer request has been %s", result)
+      end)
+    else
+      logger.error("unknown client command:%s", clientMode)
+    end
 
-    -- raftClient:addServer(ClusterServer:new(serverToJoin), function (response, err)
-    --   local result = (err == nil and response.accepted and "accepted") or "denied"
-    --   logger.info("the addServer request has been %s", result)
-    -- end)
 
-    -- remove server
-    local serverIdToRemove = 2
-    raftClient:removeServer(serverIdToRemove, function (response, err)
-      local result = (err == nil and response.accepted and "accepted") or "denied"
-      logger.info("the removeServer request has been %s", result)
-    end)
 
 end
 

@@ -76,7 +76,7 @@ function RaftServer:new(ctx)
     end
 
     --[[
-     * I found this implementation is also a victim of bug https:--groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
+     * I found this implementation is also a victim of bug https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
      * As the implementation is based on Diego's thesis
      * Fix:
      * We should never load configurations that is not committed, 
@@ -116,7 +116,6 @@ function RaftServer:new(ctx)
         end
     end
     o.quickCommitIndex = o.state.commitIndex;
-    -- FIXME: why???
     -- what's wrong with o.logger.debug
     -- o.logger.debug(o.peers)
 
@@ -486,10 +485,8 @@ function RaftServer:handleAppendEntriesResponse(response)
     -- If there are pending logs to be synced or commit index need to be advanced, continue to send appendEntries to this peer
     local needToCatchup = true;
     if(response.accepted) then
-        -- synchronized(peer){
         peer.nextLogIndex = response.nextIndex;
         peer.matchedIndex = response.nextIndex - 1;
-        -- }
 
         -- try to commit with this response
         local matchedIndexes = {};
@@ -501,7 +498,7 @@ function RaftServer:handleAppendEntriesResponse(response)
         self.logger.trace("all matchedIndexes:%s", util.table_tostring(matchedIndexes))
         table.sort(matchedIndexes, indexComparator);
         self.logger.trace("sorted matchedIndexes:%s", util.table_tostring(matchedIndexes))
-        -- majority is a float without math.floor
+        -- majority is a float without math.ceil
         -- lua index start form 1
         local majority = math.ceil((Rutils.table_size(self.peers) + 1) / 2);
         self.logger.trace("total server num:%d, major num:%d", Rutils.table_size(self.peers) + 1, majority)
@@ -872,8 +869,10 @@ function RaftServer:reconfigure(newConfig)
            peer.nextLogIndex = self.logStore:getFirstAvailableIndex();
            self.peers[server.id] = peer;
            self.logger.info("server %d is added to cluster", peer:getId());
+           -- add server to NPL
+           Rutils.addServerToNPLRuntime(self.id, server)
            if(self.role == ServerRole.Leader) then
-               self.logger.info("enable heartbeating for server %d", peer.getId());
+               self.logger.info("enable heartbeating for server %d", peer:getId());
                self:enableHeartbeatForPeer(peer);
                if(self.serverToJoin ~= nil and self.serverToJoin:getId() == peer:getId()) then
                    peer.nextLogIndex = self.serverToJoin.nextLogIndex;
@@ -1129,7 +1128,7 @@ function RaftServer:handleExtendedResponseError(error)
                          *      assume there could be two config changes at a time
                          *      this means there must be a leader after previous leader offline, which is impossible 
                          *      (no leader could be elected after one server goes offline in case of only two servers in a cluster)
-                         * so the bug https:--groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E 
+                         * so the bug https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E 
                          * does not apply to cluster which only has two members
                          ]]--
                         if(Rutils.table_size(self.peers) == 1) then
@@ -1270,6 +1269,9 @@ function RaftServer:handleAddServerRequest(request)
                                                               o:handleHeartbeatTimeout(s)
                                                              end)
 
+    -- add server to NPL
+    Rutils.addServerToNPLRuntime(self.id, server)
+
     self:inviteServerToJoinCluster();
     response.accepted = true;
     return response;
@@ -1311,10 +1313,9 @@ function RaftServer:syncLogsToNewComingServer(startIndex)
     -- only sync committed logs
     local gap = self.quickCommitIndex - startIndex;
     if(gap < self.context.raftParameters.logSyncStopGap) then
-
-        self.logger.info("LogSync is done for server %d with log gap %d, now put the server into cluster", self.serverToJoin.getId(), gap);
+        self.logger.info("LogSync is done for server %d with log gap %d, now put the server into cluster", self.serverToJoin:getId(), gap);
         local newConfig = ClusterConfiguration:new(self.config)
-        newConfig.lastLogIndex = self.logStore:getFirstAvailableIndex()
+        newConfig.logIndex = self.logStore:getFirstAvailableIndex()
         newConfig.servers[#newConfig.servers+1] = ClusterServer:new(self.serverToJoin.clusterConfig)
         local configEntry = LogEntry:new(self.state.term, newConfig:toBytes(), LogValueType.Configuration);
         self.logStore:append(configEntry);
@@ -1336,13 +1337,13 @@ function RaftServer:syncLogsToNewComingServer(startIndex)
             source = self.id,
             term = self.state.term,
             messageType = RaftMessageType.SyncLogRequest,
-            LastLogIndex = startIndex - 1,
+            lastLogIndex = startIndex - 1,
             logEntries = {LogEntry:new(self.state.term, logPack, LogValueType.LogPack)}
         }
     end
 
     local this = self;
-    self.serverToJoin.SendRequest(request, function (response, error)
+    self.serverToJoin:SendRequest(request, function (response, error)
         this:handleExtendedResponse(response, error);
     end);
 end
@@ -1402,6 +1403,12 @@ function RaftServer:handleJoinClusterRequest(request)
     self:reconfigure(newConfig);
     response.term = self.state.term;
     response.accepted = true;
+
+    local this = self
+    response.callbackFunc = function ()
+        -- handle send error
+        self.catchingUp = false;
+    end
     return response;
 end
 
@@ -1471,7 +1478,8 @@ function RaftServer:createSyncSnapshotRequest(peer, lastLogIndex, term, commitIn
         snapshot = lastSnapshot;
 
         if(snapshot == nil or lastLogIndex > snapshot.lastLogIndex) then
-            self.logger.error("system is running into fatal errors, failed to find a snapshot for peer %d(snapshot nil: %s, snapshot doesn't contais lastLogIndex: %s)", peer.getId(), String.valueOf(snapshot == nil), String.valueOf(lastLogIndex > snapshot.lastLogIndex));
+            self.logger.error("system is running into fatal errors, failed to find a snapshot for peer %d(snapshot nil: %s, snapshot doesn't contais lastLogIndex: %s)",
+                               peer:getId(), (snapshot == nil and "true") or "false", (lastLogIndex > snapshot.lastLogIndex and "true") or "false");
             self.stateMachine:exit(-1);
             return nil;
         end

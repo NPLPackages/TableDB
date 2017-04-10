@@ -51,11 +51,13 @@ function SnapshotSyncRequest:toBytes()
         file:WriteDouble(self.snapshot.lastLogIndex)
         file:WriteDouble(self.snapshot.lastLogTerm)
         file:WriteInt(#configData)
-        file:WriteBytes(#configData, {configData:byte(1, -1)})
+        -- file:WriteBytes(#configData, {configData:byte(1, -1)})
+        file:write(configData, #configData)
         file:WriteDouble(self.offset)
         file:WriteInt(#self.data)
         if type(self.data) == "string" then
-            file:WriteBytes(#self.data, {self.data:byte(1, -1)})
+            -- file:WriteBytes(#self.data, {self.data:byte(1, -1)})
+            file:write(self.data, #self.data)
         end
         file:WriteBytes(1, {(self.done and 1) or 0})
 
@@ -73,7 +75,8 @@ function SnapshotSyncRequest:fromBytes(bytes)
     local snapshotSyncRequest;
 	if(file:IsValid()) then
         -- can not use file:WriteString(bytes);, use WriteBytes
-        file:WriteBytes(#bytes, {bytes:byte(1, -1)});
+        -- file:WriteBytes(#bytes, {bytes:byte(1, -1)});
+        file:write(bytes, #bytes);
         file:seek(0)
         local lastLogIndex = file:ReadDouble()
         local lastLogTerm = file:ReadDouble()
