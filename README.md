@@ -43,7 +43,7 @@ The implementation is basically a port from [jraft](https://github.com/datatechn
 #### Remove a server in the Cluster
 `setup.bat client removeServer 5` will remove the node 5 in the cluster. But you can not request to remove the leader.
 
-Note: every time you start a new client(whether Send Commands, Add server or Remove server), you should stop the previous client.
+> Note: every time you start a new client(whether Send Commands, Add server or Remove server), you should stop the previous client.
 
 The Raft cluster is *fault tolerate* and *highly available*. You can stop the cluster and client with `stopNPL.bat`.
 
