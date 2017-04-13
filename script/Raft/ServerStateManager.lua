@@ -15,9 +15,9 @@ NPL.load("(gl)script/ide/Files.lua");
 NPL.load("(gl)script/ide/Json.lua");
 NPL.load("(gl)script/Raft/ClusterConfiguration.lua");
 NPL.load("(gl)script/Raft/ServerState.lua");
-NPL.load("(gl)script/Raft/SequentialLogStore.lua");
+NPL.load("(gl)script/Raft/FileBasedSequentialLogStore.lua");
 local LoggerFactory = NPL.load("(gl)script/Raft/LoggerFactory.lua");
-local SequentialLogStore = commonlib.gettable("Raft.SequentialLogStore");
+local FileBasedSequentialLogStore = commonlib.gettable("Raft.FileBasedSequentialLogStore");
 local ServerState = commonlib.gettable("Raft.ServerState");
 local ClusterConfiguration = commonlib.gettable("Raft.ClusterConfiguration");
 local ServerStateManager = commonlib.gettable("Raft.ServerStateManager");
@@ -30,7 +30,7 @@ local CLUSTER_CONFIG_FILE = "cluster.json";
 function ServerStateManager:new(dataDirectory)
     local o = {
         container = dataDirectory,
-        logStore = SequentialLogStore:new(dataDirectory),
+        logStore = FileBasedSequentialLogStore:new(dataDirectory),
         logger = LoggerFactory.getLogger("ServerStateManager")
     };
     setmetatable(o, self);

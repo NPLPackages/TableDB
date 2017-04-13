@@ -63,12 +63,12 @@ end
  ]]--
 function RaftTableDBStateMachine:start(raftMessageSender)
     self.messageSender = raftMessageSender;
-    local o = self;
-
+    
+    local this = self;
     -- use Rpc for incoming Request message
     Rpc:new():init("RTDBRequestRPC", function(self, msg) 
-        -- o.logger.trace(msg);
-        msg = o:processMessage(msg)
+        -- this.logger.trace(msg);
+        msg = this:processMessage(msg)
         return msg; 
     end)
 

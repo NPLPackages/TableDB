@@ -1478,7 +1478,7 @@ function RaftServer:createSyncSnapshotRequest(peer, lastLogIndex, term, commitIn
         snapshot = lastSnapshot;
 
         if(snapshot == nil or lastLogIndex > snapshot.lastLogIndex) then
-            self.logger.error("system is running into fatal errors, failed to find a snapshot for peer %d(snapshot nil: %s, snapshot doesn't contais lastLogIndex: %s)",
+            self.logger.error("system is running into fatal errors, failed to find a snapshot for peer %d(snapshot nil: %s, snapshot doesn't contains lastLogIndex: %s)",
                                peer:getId(), (snapshot == nil and "true") or "false", (lastLogIndex > snapshot.lastLogIndex and "true") or "false");
             self.stateMachine:exit(-1);
             return nil;
