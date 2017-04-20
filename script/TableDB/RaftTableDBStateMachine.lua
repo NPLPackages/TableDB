@@ -103,7 +103,9 @@ end
  * @param data
  ]]--
 function RaftTableDBStateMachine:rollback(logIndex, data)
-
+    -- need more thought here
+    -- rollback on last root pair
+    -- self._db:exec("ROLLBACK");
 end
 
 --[[
@@ -128,7 +130,8 @@ function RaftTableDBStateMachine:saveSnapshotData(snapshot, offset, data)
         local snapshotConf = self.snapshotStore..string.format("%d.cnf", snapshot.lastLogIndex);
         local sConf = ParaIO.open(snapshotConf, "rw");
         local bytes = snapshot.lastConfig:toBytes();
-        sConf:WriteBytes(#bytes, {bytes:byte(1, -1)})
+        -- sConf:WriteBytes(#bytes, {bytes:byte(1, -1)})
+        sConf:write(bytes, #bytes);
     end
 
     local snapshotFile = ParaIO.open(filePath, "rw");
@@ -196,11 +199,12 @@ function RaftTableDBStateMachine:getLastSnapshot()
   local search_result = ParaIO.SearchFiles(self.snapshotStore, "*.s", "", 15, 10000, 0);
   local nCount = search_result:GetNumOfResult();
   
-    local latestSnapshotFilename;
-    local maxLastLogIndex = 0;
-    local maxTerm = 0
+  local latestSnapshotFilename;
+  local maxLastLogIndex = 0;
+  local maxTerm = 0
   local i;
-    -- start from 0, inconsistent with lua
+  
+  -- start from 0, inconsistent with lua
   for i = 0, nCount-1 do 
     local filename = search_result:GetItem(i);
         local lastLogIndex, term = string.match( filename,"(%d+)%-(%d+)%.s")
@@ -209,16 +213,16 @@ function RaftTableDBStateMachine:getLastSnapshot()
             maxTerm = term;
             latestSnapshotFilename = filename;
         end
-    end
-    search_result:Release();
+  end
+  search_result:Release();
 
-    if latestSnapshotFilename then
-        local snapshotConf = self.snapshotStore..string.format("%d.cnf", snapshot.lastLogIndex);
-        local sConf = ParaIO.open(snapshotConf, "r");
-        local config = ClusterConfiguration:fromBytes(sConf:GetText(0, -1))
-        local latestSnapshotFileSize = ParaIO.open(latestSnapshotFilename, "r"):GetFileSize();
-        return Snapshot:new(maxLastLogIndex, term, config, latestSnapshotFileSize)
-    end
+  if latestSnapshotFilename then
+      local snapshotConf = self.snapshotStore..string.format("%d.cnf", snapshot.lastLogIndex);
+      local sConf = ParaIO.open(snapshotConf, "r");
+      local config = ClusterConfiguration:fromBytes(sConf:GetText(0, -1))
+      local latestSnapshotFileSize = ParaIO.open(latestSnapshotFilename, "r"):GetFileSize();
+      return Snapshot:new(maxLastLogIndex, term, config, latestSnapshotFileSize)
+  end
 
 end
 
