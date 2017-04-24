@@ -18,7 +18,7 @@ function RaftLogEntryValue:new(query_type, collection, query)
     local o = {
       query_type = query_type, 
       collection = collection,
-      query = query, 
+      query = query,
     };
     setmetatable(o, self);
     return o;
