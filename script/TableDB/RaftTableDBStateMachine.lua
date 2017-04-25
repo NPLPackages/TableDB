@@ -106,6 +106,8 @@ function RaftTableDBStateMachine:commit(logIndex, data)
     -- a dedicated IOThread
     IORequest:Send(raftLogEntryValue.query_type, collection, raftLogEntryValue.query);
 
+    IORequest:Send(raftLogEntryValue.query_type, self, raftLogEntryValue.query);
+
     self.commitIndex = logIndex;
 end
 
@@ -163,7 +165,7 @@ function RaftTableDBStateMachine:applySnapshot(snapshot)
         return false;
     end
 
-    local snapshotFile = ParaIO.open(filePath, "rw");
+    local snapshotFile = ParaIO.open(filePath, "r");
 
     self.messages = {}
     local line = snapshotFile:readline();
@@ -192,14 +194,10 @@ function RaftTableDBStateMachine:readSnapshotData(snapshot, offset, buffer, expe
         return -1;
     end
 
-   local snapshotFile = ParaIO.open(filePath, "rw");
-
+   local snapshotFile = ParaIO.open(filePath, "r");
    snapshotFile:seek(offset);
-
    snapshotFile:ReadBytes(expectedSize, buffer);
-
    return expectedSize;
-
 end
 
 --[[
@@ -282,7 +280,6 @@ function RaftTableDBStateMachine:createSnapshot(snapshot)
     end
 
     self.snapshotInprogress = false;
-
 
     return true;
 end

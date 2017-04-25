@@ -17,6 +17,10 @@ NPL.load("(gl)script/TableDB/RaftSqliteStore.lua");
 local RaftSqliteStore = commonlib.gettable("TableDB.RaftSqliteStore");
 ------------------------------------------------------------
 ]]
+
+NPL.load("(gl)script/Raft/RaftClient.lua");
+local RaftClient = commonlib.gettable("Raft.RaftClient");
+
 local RaftSqliteStore = commonlib.inherit(commonlib.gettable("System.Database.Store"), commonlib.gettable("TableDB.RaftSqliteStore"));
 
 function RaftSqliteStore:ctor()
@@ -72,6 +76,32 @@ function RaftSqliteStore:InvokeCallback(callbackFunc, err, data)
 		return data;
 	end
 end
+
+
+function RaftSqliteStore:connnect(db, data, callbackFunc)
+	local query_type = "connect"
+  local collection = {
+		ToData = function (...)	end,
+  }
+
+  local query = {
+    rootFolder = data.rootFolder,
+  }
+
+  local raftLogEntryValue = RaftLogEntryValue:new(query_type, collection, query);
+  local bytes = raftLogEntryValue:toBytes();
+
+	-- an instance ??
+	RaftClient:appendEntries(bytes, function (response, err)
+        local result = (err == nil and response.accepted and "accepted") or "denied"
+        logger.info("the appendEntries request has been %s", result)
+				if callbackFunc then
+					callbackFunc();
+				end
+      end)
+
+end
+
 
 -- virtual: 
 -- please note, index will be automatically created for query field if not exist.

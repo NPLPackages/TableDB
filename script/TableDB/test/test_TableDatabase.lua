@@ -18,9 +18,15 @@ function TestSQLOperations()
 
 	-- use raft storage
 	StorageProvider:SetStorageClass(RaftSqliteStore);
-	TableDatabase.connect = function (self, ...)
-		print(...)
-		return self
+	
+	TableDatabase.connect = function (self, rootFolder, callbackFunc)
+		self.rootFolder = rootFolder;
+		RaftSqliteStore:connect(self, {rootFolder = self.rootFolder}, function(...)
+			if(callbackFunc) then
+				callbackFunc(...);
+			end
+		end)
+		return self;
 	end
 
 	-- this will start both db client and db server if not.
