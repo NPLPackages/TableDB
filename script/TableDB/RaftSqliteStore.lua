@@ -21,6 +21,10 @@ local RaftSqliteStore = commonlib.gettable("TableDB.RaftSqliteStore");
 NPL.load("(gl)script/Raft/RaftClient.lua");
 local RaftClient = commonlib.gettable("Raft.RaftClient");
 
+
+local LoggerFactory = NPL.load("(gl)script/Raft/LoggerFactory.lua");
+
+
 local RaftSqliteStore = commonlib.inherit(commonlib.gettable("System.Database.Store"), commonlib.gettable("TableDB.RaftSqliteStore"));
 
 function RaftSqliteStore:ctor()
@@ -30,6 +34,25 @@ function RaftSqliteStore:ctor()
 		insert = 0,
 		delete = 0,
 	};
+
+
+	local baseDir = "./"
+	local stateManager = ServerStateManager:new(baseDir);
+	local config = stateManager:loadClusterConfiguration();
+
+	rtdb = RaftTableDBStateMachine:new(baseDir)
+
+  local localAddress = {
+    host = "localhost",
+    port = "9004",
+    id = "server4:",
+  }
+  NPL.StartNetServer(localAddress.host, localAddress.port);
+	-- only for RTDBRequestRPC can be used
+  rtdb:start()
+
+  self.raftClient = RaftClient:new(localAddress, RTDBRequestRPC, config, LoggerFactory)
+
 end
 
 function RaftSqliteStore:init(collection)
@@ -91,8 +114,7 @@ function RaftSqliteStore:connnect(db, data, callbackFunc)
   local raftLogEntryValue = RaftLogEntryValue:new(query_type, collection, query);
   local bytes = raftLogEntryValue:toBytes();
 
-	-- an instance ??
-	RaftClient:appendEntries(bytes, function (response, err)
+	self.raftClient:appendEntries(bytes, function (response, err)
         local result = (err == nil and response.accepted and "accepted") or "denied"
         logger.info("the appendEntries request has been %s", result)
 				if callbackFunc then

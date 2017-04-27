@@ -47,11 +47,13 @@ function RaftClient:appendEntries(values, callbackFunc)
     if values and #values == 0 then
         return
     end
-
     local logEntries = {}
-
-    for i,v in ipairs(values) do
-        logEntries[#logEntries + 1] = LogEntry:new(0, v)
+    if type(values) == "string" then
+        for i,v in ipairs(values) do
+            logEntries[#logEntries + 1] = LogEntry:new(0, v)
+        end
+    elseif type(values) == "table" then
+        logEntries[#logEntries + 1] = LogEntry:new(0, values)
     end
 
     request = {

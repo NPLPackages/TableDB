@@ -106,8 +106,6 @@ function RaftTableDBStateMachine:commit(logIndex, data)
     -- a dedicated IOThread
     IORequest:Send(raftLogEntryValue.query_type, collection, raftLogEntryValue.query);
 
-    IORequest:Send(raftLogEntryValue.query_type, self, raftLogEntryValue.query);
-
     self.commitIndex = logIndex;
 end
 
