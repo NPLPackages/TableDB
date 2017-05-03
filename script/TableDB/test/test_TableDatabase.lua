@@ -65,7 +65,7 @@ function TestSQLOperations()
 	-- replace the entire document
 	db.User:replaceOne({name="LXZ2",}, {name="LXZ2", email="lixizhi@yeah.net"}, function(err, data)  assert(data.updated==nil) end)
 	-- force flush to disk, otherwise the db IO thread will do this at fixed interval
-    db.User:flush({}, function(err, bFlushed) assert(bFlushed==true) end);
+  db.User:flush({}, function(err, bFlushed) assert(bFlushed==true) end);
 	-- select one, this will automatically create `name` index
 	db.User:findOne({name="LXZ"}, function(err, user) assert(user.password=="1");	end)
 	-- array field such as {"password", "1"} are additional checks, but does not use index. 
