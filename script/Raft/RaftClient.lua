@@ -11,6 +11,8 @@ local RaftClient = commonlib.gettable("Raft.RaftClient");
 ------------------------------------------------------------
 ]]--
 
+NPL.load("(gl)script/TableDB/RaftLogEntryValue.lua");
+local RaftLogEntryValue = commonlib.gettable("TableDB.RaftLogEntryValue");
 NPL.load("(gl)script/Raft/LogEntry.lua");
 NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 local LogValueType = NPL.load("(gl)script/Raft/LogValueType.lua");
@@ -48,13 +50,13 @@ function RaftClient:appendEntries(values, callbackFunc)
         return
     end
     local logEntries = {}
-    if type(values) == "string" then
-        for i,v in ipairs(values) do
-            logEntries[#logEntries + 1] = LogEntry:new(0, v)
-        end
-    elseif type(values) == "table" then
+    -- if type(values) == "string" then
+    --     for i,v in ipairs(values) do
+    --         logEntries[#logEntries + 1] = LogEntry:new(0, v)
+    --     end
+    -- elseif type(values) == "table" then
         logEntries[#logEntries + 1] = LogEntry:new(0, values)
-    end
+    -- end
 
     request = {
         messageType = RaftMessageType.ClientRequest,

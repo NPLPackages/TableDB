@@ -570,6 +570,10 @@ end
 
 
 function FileBasedSequentialLogStore:readEntry(size)
+    -- we need this ??
+    if size <= 0 then
+        return self.zeroEntry;
+    end
     local term = self.dataFile:ReadDouble();
     local valueTypeByte = {}
     self.dataFile:ReadBytes(1, valueTypeByte);

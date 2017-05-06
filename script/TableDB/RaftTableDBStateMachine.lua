@@ -97,7 +97,7 @@ function RaftTableDBStateMachine:commit(logIndex, data)
 
 
     --add to collections
-    if not self.collections[raftLogEntryValue.collection.name] then
+    if raftLogEntryValue.collection.name and not self.collections[raftLogEntryValue.collection.name] then
         self.collections[raftLogEntryValue.collection.name] = raftLogEntryValue.collection.db .. "/" .. raftLogEntryValue.collection.name
     end
 

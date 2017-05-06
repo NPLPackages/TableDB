@@ -18,12 +18,16 @@ local RaftSqliteStore = commonlib.gettable("TableDB.RaftSqliteStore");
 ------------------------------------------------------------
 ]]
 
+NPL.load("(gl)script/TableDB/RaftLogEntryValue.lua");
+local RaftLogEntryValue = commonlib.gettable("TableDB.RaftLogEntryValue");
+NPL.load("(gl)script/Raft/ServerStateManager.lua");
+local ServerStateManager = commonlib.gettable("Raft.ServerStateManager");
+NPL.load("(gl)script/TableDB/RaftTableDBStateMachine.lua");
+local RaftTableDBStateMachine = commonlib.gettable("TableDB.RaftTableDBStateMachine");
 NPL.load("(gl)script/Raft/RaftClient.lua");
 local RaftClient = commonlib.gettable("Raft.RaftClient");
-
-
 local LoggerFactory = NPL.load("(gl)script/Raft/LoggerFactory.lua");
-
+local logger = LoggerFactory.getLogger("RaftSqliteStore")
 
 local RaftSqliteStore = commonlib.inherit(commonlib.gettable("System.Database.Store"), commonlib.gettable("TableDB.RaftSqliteStore"));
 
@@ -108,7 +112,7 @@ function RaftSqliteStore:InvokeCallback(callbackFunc, err, data)
 end
 
 
-function RaftSqliteStore:connnect(db, data, callbackFunc)
+function RaftSqliteStore:connect(db, data, callbackFunc)
 	local query_type = "connect"
   local collection = {
 		ToData = function (...)	end,

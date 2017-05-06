@@ -18,7 +18,9 @@ NPL.load("(gl)script/ide/socket/url.lua");
 NPL.load("(gl)script/Raft/RaftConsensus.lua");
 NPL.load("(gl)script/Raft/RpcClient.lua");
 NPL.load("(gl)script/Raft/ClusterServer.lua");
+NPL.load("(gl)script/TableDB/RaftTableDBStateMachine.lua");
 
+local RaftTableDBStateMachine = commonlib.gettable("TableDB.RaftTableDBStateMachine");
 local ClusterServer = commonlib.gettable("Raft.ClusterServer");
 local RaftClient = commonlib.gettable("Raft.RaftClient");
 local ServerStateManager = commonlib.gettable("Raft.ServerStateManager");
@@ -61,9 +63,13 @@ logger.info("local state info"..util.table_tostring(parsed_url))
 local rpcListener = RpcListener:new(parsed_url.host, parsed_url.port, thisServer.id, config.servers)
 
 -- message printer
-mp = MessagePrinter:new(baseDir, parsed_url.host, mpPort)
+-- mp = MessagePrinter:new(baseDir, parsed_url.host, mpPort)
 
-local function executeInServerMode(...)
+-- raft stateMachine
+rtdb = RaftTableDBStateMachine:new(baseDir, parsed_url.host, mpPort)
+
+
+local function executeInServerMode(stateMachine)
     local raftParameters = RaftParameters:new()
     raftParameters.electionTimeoutUpperBound = 5000;
     raftParameters.electionTimeoutLowerBound = 3000;
@@ -76,7 +82,7 @@ local function executeInServerMode(...)
     raftParameters.snapshotBlockSize = 0;
 
     local context = RaftContext:new(stateManager,
-                                    mp,
+                                    stateMachine,
                                     raftParameters,
                                     rpcListener,
                                     LoggerFactory);
@@ -85,69 +91,74 @@ end
 
 
 local function executeAsClient(localAddress, RequestRPC, configuration, loggerFactory)
-    local raftClient = RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory)
 
-    if clientMode == "appendEntries" then
-      local values = {
-        "test:1111",
-        "test:1112",
-        "test:1113",
-        "test:1114",
-        "test:1115",
-      }
+    NPL.load("(gl)script/TableDB/test/test_TableDatabase.lua");
+    TestSQLOperations();
+    -- return
 
-      raftClient:appendEntries(values, function (response, err)
-        local result = (err == nil and response.accepted and "accepted") or "denied"
-        logger.info("the appendEntries request has been %s", result)
-      end)
+    -- local raftClient = RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory)
+
+    -- if clientMode == "appendEntries" then
+    --   local values = {
+    --     "test:1111",
+    --     "test:1112",
+    --     "test:1113",
+    --     "test:1114",
+    --     "test:1115",
+    --   }
+
+    --   raftClient:appendEntries(values, function (response, err)
+    --     local result = (err == nil and response.accepted and "accepted") or "denied"
+    --     logger.info("the appendEntries request has been %s", result)
+    --   end)
     
-    elseif clientMode == "addServer" then
-      local serverToJoin = {
-        id = serverId,
-        endpoint = "tcp://localhost:900"..serverId,
-      }
+    -- elseif clientMode == "addServer" then
+    --   local serverToJoin = {
+    --     id = serverId,
+    --     endpoint = "tcp://localhost:900"..serverId,
+    --   }
 
-      raftClient:addServer(ClusterServer:new(serverToJoin), function (response, err)
-        local result = (err == nil and response.accepted and "accepted") or "denied"
-        logger.info("the addServer request has been %s", result)
-      end)
+    --   raftClient:addServer(ClusterServer:new(serverToJoin), function (response, err)
+    --     local result = (err == nil and response.accepted and "accepted") or "denied"
+    --     logger.info("the addServer request has been %s", result)
+    --   end)
     
-    elseif clientMode == "removeServer" then
-      -- remove server
-      local serverIdToRemove = serverId;
-      raftClient:removeServer(serverIdToRemove, function (response, err)
-        local result = (err == nil and response.accepted and "accepted") or "denied"
-        logger.info("the removeServer request has been %s", result)
-      end)
-    else
-      logger.error("unknown client command:%s", clientMode)
-    end
+    -- elseif clientMode == "removeServer" then
+    --   -- remove server
+    --   local serverIdToRemove = serverId;
+    --   raftClient:removeServer(serverIdToRemove, function (response, err)
+    --     local result = (err == nil and response.accepted and "accepted") or "denied"
+    --     logger.info("the removeServer request has been %s", result)
+    --   end)
+    -- else
+    --   logger.error("unknown client command:%s", clientMode)
+    -- end
 
 
 
 end
 
 if raftMode:lower() == "server" then
-  executeInServerMode()
+  executeInServerMode(rtdb)
 elseif raftMode:lower() == "client" then
-  local localAddress = {
-    host = "localhost",
-    port = "9004",
-    id = "server4:",
-  }
-  NPL.StartNetServer(localAddress.host, localAddress.port);
-  mp:start()
+  -- local localAddress = {
+  --   host = "localhost",
+  --   port = "9004",
+  --   id = "server4:",
+  -- }
+  -- NPL.StartNetServer(localAddress.host, localAddress.port);
+  -- rtdb:start()
   executeAsClient(localAddress, MPRequestRPC, config, LoggerFactory)
 end
 
 
 
 local function activate()
-  --  if(msg) then
+   if(msg) then
       --- C/C++ API call is counted as one instruction, so if you call ParaEngine.Sleep(10), 
       --it will block all concurrent jobs on that NPL thread for 10 seconds
       -- ParaEngine.Sleep(0.5);
-  --  end
+   end
 end
 
-NPL.this(activate);
+NPL.this(function() end);
