@@ -104,6 +104,12 @@ function RaftTableDBStateMachine:commit(logIndex, data)
     NPL.load("(gl)script/ide/System/Database/IORequest.lua");
     local IORequest = commonlib.gettable("System.Database.IORequest");
     -- a dedicated IOThread
+    if raftLogEntryValue.query_type == "connect" and not collection then
+        collection = { 
+            ToData = function (...)  end,
+            GetWriterThreadName = function (...) return "main" end,
+        }
+    end
     IORequest:Send(raftLogEntryValue.query_type, collection, raftLogEntryValue.query);
 
     self.commitIndex = logIndex;
