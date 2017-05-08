@@ -19,7 +19,9 @@ NPL.load("(gl)script/Raft/RaftConsensus.lua");
 NPL.load("(gl)script/Raft/RpcClient.lua");
 NPL.load("(gl)script/Raft/ClusterServer.lua");
 NPL.load("(gl)script/TableDB/RaftTableDBStateMachine.lua");
+NPL.load("(gl)script/TableDB/RaftSqliteStore.lua");
 
+local RaftSqliteStore = commonlib.gettable("TableDB.RaftSqliteStore");
 local RaftTableDBStateMachine = commonlib.gettable("TableDB.RaftTableDBStateMachine");
 local ClusterServer = commonlib.gettable("Raft.ClusterServer");
 local RaftClient = commonlib.gettable("Raft.RaftClient");
@@ -91,48 +93,48 @@ end
 
 
 local function executeAsClient(localAddress, RequestRPC, configuration, loggerFactory)
+    local raftClient = RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory)
+    -- RaftSqliteStore:setRaftClient(raftClient)
 
-    NPL.load("(gl)script/TableDB/test/test_TableDatabase.lua");
-    TestSQLOperations();
-    -- return
+    if clientMode == "appendEntries" then
+      NPL.load("(gl)script/TableDB/test/test_TableDatabase.lua");
+      TestSQLOperations();
 
-    -- local raftClient = RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory)
 
-    -- if clientMode == "appendEntries" then
-    --   local values = {
-    --     "test:1111",
-    --     "test:1112",
-    --     "test:1113",
-    --     "test:1114",
-    --     "test:1115",
-    --   }
+      -- local values = {
+      --   "test:1111",
+      --   "test:1112",
+      --   "test:1113",
+      --   "test:1114",
+      --   "test:1115",
+      -- }
 
-    --   raftClient:appendEntries(values, function (response, err)
-    --     local result = (err == nil and response.accepted and "accepted") or "denied"
-    --     logger.info("the appendEntries request has been %s", result)
-    --   end)
+      -- raftClient:appendEntries(values, function (response, err)
+      --   local result = (err == nil and response.accepted and "accepted") or "denied"
+      --   logger.info("the appendEntries request has been %s", result)
+      -- end)
     
-    -- elseif clientMode == "addServer" then
-    --   local serverToJoin = {
-    --     id = serverId,
-    --     endpoint = "tcp://localhost:900"..serverId,
-    --   }
+    elseif clientMode == "addServer" then
+      local serverToJoin = {
+        id = serverId,
+        endpoint = "tcp://localhost:900"..serverId,
+      }
 
-    --   raftClient:addServer(ClusterServer:new(serverToJoin), function (response, err)
-    --     local result = (err == nil and response.accepted and "accepted") or "denied"
-    --     logger.info("the addServer request has been %s", result)
-    --   end)
+      raftClient:addServer(ClusterServer:new(serverToJoin), function (response, err)
+        local result = (err == nil and response.accepted and "accepted") or "denied"
+        logger.info("the addServer request has been %s", result)
+      end)
     
-    -- elseif clientMode == "removeServer" then
-    --   -- remove server
-    --   local serverIdToRemove = serverId;
-    --   raftClient:removeServer(serverIdToRemove, function (response, err)
-    --     local result = (err == nil and response.accepted and "accepted") or "denied"
-    --     logger.info("the removeServer request has been %s", result)
-    --   end)
-    -- else
-    --   logger.error("unknown client command:%s", clientMode)
-    -- end
+    elseif clientMode == "removeServer" then
+      -- remove server
+      local serverIdToRemove = serverId;
+      raftClient:removeServer(serverIdToRemove, function (response, err)
+        local result = (err == nil and response.accepted and "accepted") or "denied"
+        logger.info("the removeServer request has been %s", result)
+      end)
+    else
+      logger.error("unknown client command:%s", clientMode)
+    end
 
 
 

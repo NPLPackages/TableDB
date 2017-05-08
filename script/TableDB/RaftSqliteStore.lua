@@ -53,6 +53,9 @@ function RaftSqliteStore:createRaftClient()
   self.raftClient = RaftClient:new(localAddress, RTDBRequestRPC, config, LoggerFactory)
 end
 
+function RaftSqliteStore:setRaftClient(raftClient)
+	self.raftClient = raftClient
+end
 
 function RaftSqliteStore:ctor()
 	self.stats = {
@@ -135,7 +138,7 @@ function RaftSqliteStore:connect(db, data, callbackFunc)
       local result = (err == nil and response.accepted and "accepted") or "denied"
       logger.info("the appendEntries request has been %s", result)
 			if callbackFunc then
-				callbackFunc();
+				callbackFunc(err, response.data);
 			end
     end)
 end
@@ -152,7 +155,7 @@ function RaftSqliteStore:findOne(query, callbackFunc)
       local result = (err == nil and response.accepted and "accepted") or "denied"
       logger.info("the appendEntries request has been %s", result)
 			if callbackFunc then
-				callbackFunc();
+				callbackFunc(err, response.data);
 			end
     end)
 end
@@ -170,7 +173,7 @@ function RaftSqliteStore:find(query, callbackFunc)
       local result = (err == nil and response.accepted and "accepted") or "denied"
       logger.info("the appendEntries request has been %s", result)
 			if callbackFunc then
-				callbackFunc();
+				callbackFunc(err, response.data);
 			end
     end)
 end
@@ -186,7 +189,7 @@ function RaftSqliteStore:deleteOne(query, callbackFunc)
       local result = (err == nil and response.accepted and "accepted") or "denied"
       logger.info("the appendEntries request has been %s", result)
 			if callbackFunc then
-				callbackFunc();
+				callbackFunc(err, response.data);
 			end
     end)
 end
@@ -202,7 +205,7 @@ function RaftSqliteStore:delete(query, callbackFunc)
       local result = (err == nil and response.accepted and "accepted") or "denied"
       logger.info("the appendEntries request has been %s", result)
 			if callbackFunc then
-				callbackFunc();
+				callbackFunc(err, response.data);
 			end
     end)
 end
@@ -220,7 +223,7 @@ function RaftSqliteStore:updateOne(query, update, callbackFunc)
       local result = (err == nil and response.accepted and "accepted") or "denied"
       logger.info("the appendEntries request has been %s", result)
 			if callbackFunc then
-				callbackFunc();
+				callbackFunc(err, response.data);
 			end
     end)
 end
@@ -238,7 +241,7 @@ function RaftSqliteStore:replaceOne(query, replacement, callbackFunc)
       local result = (err == nil and response.accepted and "accepted") or "denied"
       logger.info("the appendEntries request has been %s", result)
 			if callbackFunc then
-				callbackFunc();
+				callbackFunc(err, response.data);
 			end
     end)
 end
@@ -253,7 +256,7 @@ function RaftSqliteStore:update(query, update, callbackFunc)
       local result = (err == nil and response.accepted and "accepted") or "denied"
       logger.info("the appendEntries request has been %s", result)
 			if callbackFunc then
-				callbackFunc();
+				callbackFunc(err, response.data);
 			end
     end)
 end
@@ -272,7 +275,7 @@ function RaftSqliteStore:insertOne(query, update, callbackFunc)
       local result = (err == nil and response.accepted and "accepted") or "denied"
       logger.info("the appendEntries request has been %s", result)
 			if callbackFunc then
-				callbackFunc();
+				callbackFunc(err, response.data);
 			end
     end)
 end
@@ -289,7 +292,7 @@ function RaftSqliteStore:count(query, callbackFunc)
       local result = (err == nil and response.accepted and "accepted") or "denied"
       logger.info("the appendEntries request has been %s", result)
 			if callbackFunc then
-				callbackFunc();
+				callbackFunc(err, response.data);
 			end
     end)
 end
@@ -306,7 +309,7 @@ function RaftSqliteStore:flush(query, callbackFunc)
       local result = (err == nil and response.accepted and "accepted") or "denied"
       logger.info("the appendEntries request has been %s", result)
 			if callbackFunc then
-				callbackFunc();
+				callbackFunc(err, response.data);
 			end
     end)
 end
@@ -322,7 +325,7 @@ function RaftSqliteStore:removeIndex(query, callbackFunc)
       local result = (err == nil and response.accepted and "accepted") or "denied"
       logger.info("the appendEntries request has been %s", result)
 			if callbackFunc then
-				callbackFunc();
+				callbackFunc(err, response.data);
 			end
     end)
 end
@@ -342,7 +345,7 @@ function RaftSqliteStore:waitflush(query, callbackFunc, timeout)
       local result = (err == nil and response.accepted and "accepted") or "denied"
       logger.info("the appendEntries request has been %s", result)
 			if callbackFunc then
-				callbackFunc();
+				callbackFunc(err, response.data);
 			end
     end)
 end
@@ -374,7 +377,7 @@ function RaftSqliteStore:exec(query, callbackFunc)
       local result = (err == nil and response.accepted and "accepted") or "denied"
       logger.info("the appendEntries request has been %s", result)
 			if callbackFunc then
-				callbackFunc();
+				callbackFunc(err, response.data);
 			end
     end)
 end
@@ -389,7 +392,7 @@ function RaftSqliteStore:silient(query)
       local result = (err == nil and response.accepted and "accepted") or "denied"
       logger.info("the appendEntries request has been %s", result)
 			if callbackFunc then
-				callbackFunc();
+				callbackFunc(err, response.data);
 			end
     end)
 end
@@ -404,7 +407,7 @@ function RaftSqliteStore:makeEmpty(query, callbackFunc)
       local result = (err == nil and response.accepted and "accepted") or "denied"
       logger.info("the appendEntries request has been %s", result)
 			if callbackFunc then
-				callbackFunc();
+				callbackFunc(err, response.data);
 			end
     end)
 

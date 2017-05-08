@@ -312,7 +312,6 @@ function RaftServer:handleClientRequest(request)
     local term = self.state.term
 
     if request.logEntries and #request.logEntries > 0 then
-
         for i,v in ipairs(request.logEntries) do
             local logEntry = LogEntry:new(term, v.value)
             local logIndex = self.logStore:append(logEntry)
