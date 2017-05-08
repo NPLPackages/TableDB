@@ -18,6 +18,8 @@ local RaftSqliteStore = commonlib.gettable("TableDB.RaftSqliteStore");
 ------------------------------------------------------------
 ]]
 
+NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
+local util = commonlib.gettable("System.Compiler.lib.util")
 NPL.load("(gl)script/TableDB/RaftLogEntryValue.lua");
 local RaftLogEntryValue = commonlib.gettable("TableDB.RaftLogEntryValue");
 NPL.load("(gl)script/Raft/ServerStateManager.lua");
@@ -262,6 +264,7 @@ end
 -- @param query: nil or query fields. if it contains query fields, it will first do a findOne(), 
 -- if there is record, this function actually falls back to updateOne. 
 function RaftSqliteStore:insertOne(query, update, callbackFunc)
+  logger.info("insertOne")
 	local raftLogEntryValue = RaftLogEntryValue:new("insertOne", self.collection, {query = query, update = update});
   local bytes = raftLogEntryValue:toBytes();
 
@@ -393,6 +396,7 @@ end
 
 -- virtual: 
 function RaftSqliteStore:makeEmpty(query, callbackFunc)
+	assert(self.raftClient,"client null")
   local raftLogEntryValue = RaftLogEntryValue:new("removeIndex", self.collection, query);
   local bytes = raftLogEntryValue:toBytes();
 

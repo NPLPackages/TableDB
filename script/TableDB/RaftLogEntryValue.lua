@@ -45,7 +45,12 @@ function RaftLogEntryValue:fromBytes(bytes)
 
         local n = file:ReadInt();
         local str = file:ReadString(n)
+        -- print(str)
         local o = commonlib.LoadTableFromString(str)
+        if not o then
+            str = string.gsub( str, "(%+[%a+%+]+)", "[\"%1\"]")
+            o = commonlib.LoadTableFromString(str)
+        end
         setmetatable(o, self);
         return o;
     end
@@ -53,7 +58,13 @@ end
 
 
 function RaftLogEntryValue:toBytes()
-   local str = commonlib.serialize_compact2(self)
+   local data = {
+       query_type = self.query_type,
+       collection = self.collection:ToData(),
+       query = self.query,
+   }
+   local str = commonlib.serialize_compact2(data)
+   print(str)
    -- "<memory>" is a special name for memory file, both read/write is possible.
    local file = ParaIO.open("<memory>", "w");
    local bytes;

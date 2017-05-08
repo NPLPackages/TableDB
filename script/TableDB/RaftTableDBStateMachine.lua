@@ -91,13 +91,14 @@ end
 function RaftTableDBStateMachine:commit(logIndex, data)
     -- data is logEntry.value
     local raftLogEntryValue = RaftLogEntryValue:fromBytes(data);
+    print("commit value"..util.table_tostring(raftLogEntryValue))
     NPL.load("(gl)script/ide/System/Database/IOThread.lua");
     local IOThread = commonlib.gettable("System.Database.IOThread");
     local collection = IOThread:GetSingleton():GetServerCollection(raftLogEntryValue.collection)
 
 
     --add to collections
-    if raftLogEntryValue.collection.name and not self.collections[raftLogEntryValue.collection.name] then
+    if raftLogEntryValue.collection and raftLogEntryValue.collection.name and not self.collections[raftLogEntryValue.collection.name] then
         self.collections[raftLogEntryValue.collection.name] = raftLogEntryValue.collection.db .. "/" .. raftLogEntryValue.collection.name
     end
 

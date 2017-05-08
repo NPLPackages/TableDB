@@ -13,6 +13,8 @@ LuaUnit:run('TestRaftLogEntryValue')
 ]]--
 
 NPL.load("(gl)script/ide/commonlib.lua");
+NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
+local util = commonlib.gettable("System.Compiler.lib.util")
 NPL.load("(gl)script/TableDB/RaftLogEntryValue.lua");
 local RaftLogEntryValue = commonlib.gettable("TableDB.RaftLogEntryValue");
 
@@ -29,6 +31,10 @@ function TestRaftLogEntryValue:testSerialization()
   local collection = {
     name = "test",
     db = "temp/database",
+    ToData = function (...)
+      return { name = "test",
+               db = "temp/database",}
+    end
   }
   local query = {
     filed = "test",
@@ -39,7 +45,9 @@ function TestRaftLogEntryValue:testSerialization()
   local bytes = raftLogEntryValue:toBytes();
   local raftLogEntryValue2 = RaftLogEntryValue:fromBytes(bytes);
 
-  assert(commonlib.compare(raftLogEntryValue, raftLogEntryValue2))
+  -- util.table_print(raftLogEntryValue)
+  -- util.table_print(raftLogEntryValue2)
+  assert(commonlib.partialcompare(raftLogEntryValue, raftLogEntryValue2))
 
 
   local query_type = "update"
@@ -56,7 +64,7 @@ function TestRaftLogEntryValue:testSerialization()
   local bytes = raftLogEntryValue:toBytes();
   local raftLogEntryValue2 = RaftLogEntryValue:fromBytes(bytes);
 
-  assert(commonlib.compare(raftLogEntryValue, raftLogEntryValue2))
+  assert(commonlib.partialcompare(raftLogEntryValue, raftLogEntryValue2))
 
 
 end
