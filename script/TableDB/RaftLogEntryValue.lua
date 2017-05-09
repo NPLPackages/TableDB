@@ -14,11 +14,13 @@ local RaftLogEntryValue = commonlib.gettable("TableDB.RaftLogEntryValue");
 NPL.load("(gl)script/ide/commonlib.lua");
 local RaftLogEntryValue = commonlib.gettable("TableDB.RaftLogEntryValue");
 
-function RaftLogEntryValue:new(query_type, collection, query) 
+function RaftLogEntryValue:new(query_type, collection, query, index, serverId) 
     local o = {
       query_type = query_type, 
       collection = collection,
       query = query,
+      cb_index = index,
+      serverId = serverId,
     };
     setmetatable(o, self);
     return o;
@@ -62,6 +64,8 @@ function RaftLogEntryValue:toBytes()
        query_type = self.query_type,
        collection = self.collection:ToData(),
        query = self.query,
+       cb_index = self.cb_index,
+       serverId = self.serverId,
    }
    local str = commonlib.serialize_compact2(data)
    print(str)

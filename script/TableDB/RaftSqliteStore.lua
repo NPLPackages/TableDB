@@ -33,22 +33,23 @@ local logger = LoggerFactory.getLogger("RaftSqliteStore")
 
 local RaftSqliteStore = commonlib.inherit(commonlib.gettable("System.Database.Store"), commonlib.gettable("TableDB.RaftSqliteStore"));
 
+local callbackQueue = {};
+
 
 function RaftSqliteStore:createRaftClient()
 	local baseDir = "./"
 	local stateManager = ServerStateManager:new(baseDir);
 	local config = stateManager:loadClusterConfiguration();
 
-	rtdb = RaftTableDBStateMachine:new(baseDir)
-
   local localAddress = {
     host = "localhost",
     port = "9004",
     id = "server4:",
   }
+	rtdb = RaftTableDBStateMachine:new(baseDir, localAddress.host, localAddress.port, localAddress.id)
+
   NPL.StartNetServer(localAddress.host, localAddress.port);
-	-- only for RTDBRequestRPC can be used
-  rtdb:start()
+  rtdb:start2(self)
 
   self.raftClient = RaftClient:new(localAddress, RTDBRequestRPC, config, LoggerFactory)
 end
@@ -75,6 +76,127 @@ function RaftSqliteStore:init(collection)
 	self.collection = collection;
 	return self;
 end
+
+
+
+-- how many seconds to wait on busy database, before we send "queue_full" error. This parameter only takes effect when self.WaitOnBusyDB is true.
+RaftSqliteStore.MaxWaitSeconds = 5;
+-- default time out for a given request. default to 5 seconds
+RaftSqliteStore.DefaultTimeout = 5000;
+-- internal timer period
+RaftSqliteStore.monitorPeriod = 5000;
+-- true to log everything.
+RaftSqliteStore.debug_log = false;
+
+function RaftSqliteStore:OneTimeInit()
+	if(self.inited) then
+		return;
+	end
+	self.inited = true;
+	NPL.load("(gl)script/ide/timer.lua");
+	self.mytimer = commonlib.Timer:new({callbackFunc = function(timer)
+		self:CheckTimedOutRequests();
+	end})
+	self.mytimer:Change(self.monitorPeriod, self.monitorPeriod);
+end
+
+-- remove any timed out request.
+function RaftSqliteStore:CheckTimedOutRequests()
+	local curTime = ParaGlobal.timeGetTime();
+	local timeout_pool;
+	for i, cb in pairs(callbackQueue) do
+		if((curTime - cb.startTime) > (cb.timeout or self.DefaultTimeout) ) then
+			timeout_pool = timeout_pool or {};
+			timeout_pool[i] = cb;
+		end
+	end
+	if(timeout_pool) then
+		for i, cb in pairs(timeout_pool) do
+			callbackQueue[i] = nil;
+			if(cb.callbackFunc) then
+				cb.callbackFunc("timeout", nil);
+			end
+		end
+	end
+end
+
+local next_id = 0;
+function getNextId()
+	next_id = next_id + 1;
+	return next_id;
+end
+-- get next callback pool index. may return nil if max queue size is reached. 
+-- @return index or nil
+function RaftSqliteStore:PushCallback(callbackFunc, timeout)
+	if(not callbackFunc) then
+		return -1;
+	end
+	local index = getNextId();
+	callbackQueue[index] = {callbackFunc = callbackFunc, startTime = ParaGlobal.timeGetTime(), timeout=timeout};
+	return index;
+end
+
+function RaftSqliteStore:PopCallback(index)
+	if(index) then
+		local cb = callbackQueue[index];
+		if(cb) then
+			callbackQueue[index] = nil;
+			return cb;
+		end
+	end
+end
+
+-- return err, data.
+function RaftSqliteStore:WaitForSyncModeReply(timeout)
+	timeout = timeout or self.DefaultTimeout;
+	local thread = __rts__;
+	local reply_msg;
+	local startTime = ParaGlobal.timeGetTime();
+	while (not reply_msg) do
+		local nSize = thread:GetCurrentQueueSize();
+		for i=0, nSize-1 do
+			local msg = thread:PeekMessage(i, {filename=true});
+			if(msg.filename == "script/ide/System/Database/IORequest.lua") then
+				local msg = thread:PopMessageAt(i, {filename=true, msg=true});
+				local out_msg = msg.msg;
+				if(out_msg.cb_idx == -1) then
+					reply_msg = out_msg;
+					break;
+				end
+			end
+		end
+		if( (ParaGlobal.timeGetTime() - startTime) > timeout) then
+			LOG.std(nil, "warn", "RaftSqliteStore", "timed out");
+			return "timeout", nil;
+		end
+		if(reply_msg == nil) then
+			if(ParaEngine.GetAttributeObject():GetField("HasClosingRequest", false) == true) then
+				return "app_exit", nil;
+			end
+			if(thread:GetCurrentQueueSize() == nSize) then
+				thread:WaitForMessage(nSize);
+			end
+		end
+	end
+	if(reply_msg) then
+		return reply_msg.err, reply_msg.data;
+	end
+end
+
+
+
+
+
+function RaftSqliteStore:handleResponse(msg)
+	local cb = self:PopCallback(msg.cb_index);
+	if(cb and cb.callbackFunc) then
+		cb.callbackFunc(msg.err, msg.data);
+	end
+
+end
+
+
+
 
 -- called when a single command is finished. 
 function RaftSqliteStore:CommandTick(commandname)
@@ -143,21 +265,33 @@ function RaftSqliteStore:connect(db, data, callbackFunc)
     end)
 end
 
+
+function RaftSqliteStore:Send(query_type, query, callbackFunc)
+	self:OneTimeInit();
+	local index = self:PushCallback(callbackFunc);
+	if(index) then
+		local raftLogEntryValue = RaftLogEntryValue:new(query_type, self.collection, query,
+																										index, self.raftClient.localAddress.id);
+		local bytes = raftLogEntryValue:toBytes();
+
+		self.raftClient:appendEntries(bytes, function (response, err)
+				local result = (err == nil and response.accepted and "accepted") or "denied"
+				logger.info("the %s request has been %s", query_type, result)
+				-- if callbackFunc then
+				-- 	callbackFunc(err);
+				-- end
+			end)
+	end
+
+end
+
+
 -- virtual: 
 -- please note, index will be automatically created for query field if not exist.
 --@param query: key, value pair table, such as {name="abc"}
 --@param callbackFunc: function(err, row) end, where row._id is the internal row id.
 function RaftSqliteStore:findOne(query, callbackFunc)
-	local raftLogEntryValue = RaftLogEntryValue:new("findOne", self.collection, query);
-  local bytes = raftLogEntryValue:toBytes();
-
-	self.raftClient:appendEntries(bytes, function (response, err)
-      local result = (err == nil and response.accepted and "accepted") or "denied"
-      logger.info("the appendEntries request has been %s", result)
-			if callbackFunc then
-				callbackFunc(err, response.data);
-			end
-    end)
+	self:Send("findOne", query, callbackFunc)
 end
 
 -- virtual: 
@@ -166,48 +300,21 @@ end
 -- @param query: key, value pair table, such as {name="abc"}. if nil or {}, it will return all the rows
 -- @param callbackFunc: function(err, rows) end, where rows is array of rows found
 function RaftSqliteStore:find(query, callbackFunc)
-	local raftLogEntryValue = RaftLogEntryValue:new("find", self.collection, query);
-  local bytes = raftLogEntryValue:toBytes();
-
-	self.raftClient:appendEntries(bytes, function (response, err)
-      local result = (err == nil and response.accepted and "accepted") or "denied"
-      logger.info("the appendEntries request has been %s", result)
-			if callbackFunc then
-				callbackFunc(err, response.data);
-			end
-    end)
+		self:Send("find", query, callbackFunc)
 end
 
 -- virtual: 
 -- @param query: key, value pair table, such as {name="abc"}. 
 -- @param callbackFunc: function(err, count) end
 function RaftSqliteStore:deleteOne(query, callbackFunc)
-	local raftLogEntryValue = RaftLogEntryValue:new("deleteOne", self.collection, query);
-  local bytes = raftLogEntryValue:toBytes();
-
-	self.raftClient:appendEntries(bytes, function (response, err)
-      local result = (err == nil and response.accepted and "accepted") or "denied"
-      logger.info("the appendEntries request has been %s", result)
-			if callbackFunc then
-				callbackFunc(err, response.data);
-			end
-    end)
+		self:Send("deleteOne", query, callbackFunc)
 end
 
 -- virtual: delete multiple records
 -- @param query: key, value pair table, such as {name="abc"}. 
 -- @param callbackFunc: function(err, count) end
 function RaftSqliteStore:delete(query, callbackFunc)
-	local raftLogEntryValue = RaftLogEntryValue:new("delete", self.collection, query);
-  local bytes = raftLogEntryValue:toBytes();
-
-	self.raftClient:appendEntries(bytes, function (response, err)
-      local result = (err == nil and response.accepted and "accepted") or "denied"
-      logger.info("the appendEntries request has been %s", result)
-			if callbackFunc then
-				callbackFunc(err, response.data);
-			end
-    end)
+		self:Send("delete", query, callbackFunc)
 end
 
 -- virtual: 
@@ -216,16 +323,7 @@ end
 -- @param query: key, value pair table, such as {name="abc"}. 
 -- @param update: additional fields to be merged with existing data; this can also be callbackFunc
 function RaftSqliteStore:updateOne(query, update, callbackFunc)
-	local raftLogEntryValue = RaftLogEntryValue:new("updateOne", self.collection, {query = query, update = update});
-  local bytes = raftLogEntryValue:toBytes();
-
-	self.raftClient:appendEntries(bytes, function (response, err)
-      local result = (err == nil and response.accepted and "accepted") or "denied"
-      logger.info("the appendEntries request has been %s", result)
-			if callbackFunc then
-				callbackFunc(err, response.data);
-			end
-    end)
+		self:Send("updateOne", {query = query, update = update}, callbackFunc)
 end
 
 -- virtual: 
@@ -234,31 +332,13 @@ end
 -- @param query: key, value pair table, such as {name="abc"}. 
 -- @param replacement: wholistic fields to be replace any existing doc. 
 function RaftSqliteStore:replaceOne(query, replacement, callbackFunc)
-	local raftLogEntryValue = RaftLogEntryValue:new("replaceOne", self.collection, {query = query, replacement = replacement});
-  local bytes = raftLogEntryValue:toBytes();
-
-	self.raftClient:appendEntries(bytes, function (response, err)
-      local result = (err == nil and response.accepted and "accepted") or "denied"
-      logger.info("the appendEntries request has been %s", result)
-			if callbackFunc then
-				callbackFunc(err, response.data);
-			end
-    end)
+		self:Send("replaceOne", {query = query, replacement = replacement}, callbackFunc)
 end
 
 
 -- virtual: update multiple records, see also updateOne()
 function RaftSqliteStore:update(query, update, callbackFunc)
-	local raftLogEntryValue = RaftLogEntryValue:new("update", self.collection, {query = query, update = update});
-  local bytes = raftLogEntryValue:toBytes();
-
-	self.raftClient:appendEntries(bytes, function (response, err)
-      local result = (err == nil and response.accepted and "accepted") or "denied"
-      logger.info("the appendEntries request has been %s", result)
-			if callbackFunc then
-				callbackFunc(err, response.data);
-			end
-    end)
+		self:Send("update", {query = query, update = update}, callbackFunc)
 end
 
 -- virtual: 
@@ -267,17 +347,7 @@ end
 -- @param query: nil or query fields. if it contains query fields, it will first do a findOne(), 
 -- if there is record, this function actually falls back to updateOne. 
 function RaftSqliteStore:insertOne(query, update, callbackFunc)
-  logger.info("insertOne")
-	local raftLogEntryValue = RaftLogEntryValue:new("insertOne", self.collection, {query = query, update = update});
-  local bytes = raftLogEntryValue:toBytes();
-
-	self.raftClient:appendEntries(bytes, function (response, err)
-      local result = (err == nil and response.accepted and "accepted") or "denied"
-      logger.info("the appendEntries request has been %s", result)
-			if callbackFunc then
-				callbackFunc(err, response.data);
-			end
-    end)
+		self:Send("insertOne", {query = query, update = update}, callbackFunc)
 end
 
 -- virtual: 
@@ -285,16 +355,7 @@ end
 -- avoiding calling this function for big table. 
 -- @param callbackFunc: function(err, count) end
 function RaftSqliteStore:count(query, callbackFunc)
-	local raftLogEntryValue = RaftLogEntryValue:new("count", self.collection, query);
-  local bytes = raftLogEntryValue:toBytes();
-
-	self.raftClient:appendEntries(bytes, function (response, err)
-      local result = (err == nil and response.accepted and "accepted") or "denied"
-      logger.info("the appendEntries request has been %s", result)
-			if callbackFunc then
-				callbackFunc(err, response.data);
-			end
-    end)
+		self:Send("count", query, callbackFunc)
 end
 
 -- virtual: 
@@ -302,32 +363,14 @@ end
 -- the store should flush at fixed interval.
 -- @param callbackFunc: function(err, fFlushed) end
 function RaftSqliteStore:flush(query, callbackFunc)
-	local raftLogEntryValue = RaftLogEntryValue:new("flush", self.collection, query);
-  local bytes = raftLogEntryValue:toBytes();
-
-	self.raftClient:appendEntries(bytes, function (response, err)
-      local result = (err == nil and response.accepted and "accepted") or "denied"
-      logger.info("the appendEntries request has been %s", result)
-			if callbackFunc then
-				callbackFunc(err, response.data);
-			end
-    end)
+		self:Send("flush", query, callbackFunc)
 end
 
 -- virtual:
 -- @param query: {"indexName"}
 -- @param callbackFunc: function(err, bRemoved) end
 function RaftSqliteStore:removeIndex(query, callbackFunc)
-	local raftLogEntryValue = RaftLogEntryValue:new("removeIndex", self.collection, query);
-  local bytes = raftLogEntryValue:toBytes();
-
-	self.raftClient:appendEntries(bytes, function (response, err)
-      local result = (err == nil and response.accepted and "accepted") or "denied"
-      logger.info("the appendEntries request has been %s", result)
-			if callbackFunc then
-				callbackFunc(err, response.data);
-			end
-    end)
+		self:Send("removeIndex", query, callbackFunc)
 end
 
 
@@ -338,16 +381,7 @@ end
 -- may take up to 3 seconds or RaftSqliteStore.AutoFlushInterval to return. 
 -- @param callbackFunc: function(err, fFlushed) end
 function RaftSqliteStore:waitflush(query, callbackFunc, timeout)
-	local raftLogEntryValue = RaftLogEntryValue:new("waitflush", self.collection, query);
-  local bytes = raftLogEntryValue:toBytes();
-
-	self.raftClient:appendEntries(bytes, function (response, err)
-      local result = (err == nil and response.accepted and "accepted") or "denied"
-      logger.info("the appendEntries request has been %s", result)
-			if callbackFunc then
-				callbackFunc(err, response.data);
-			end
-    end)
+		self:Send("waitflush", query, callbackFunc)
 end
 
 -- virtual:
@@ -365,50 +399,21 @@ function RaftSqliteStore:exec(query, callbackFunc)
 				end
 			end
 			if(query.SyncMode~=nil) then
-				IORequest.EnableSyncMode = query.SyncMode;
+				RaftSqliteStore.EnableSyncMode = query.SyncMode;
 				LOG.std(nil, "system", "TableDatabase", "sync mode api is %s in thread %s", query.SyncMode and "enabled" or "disabled", __rts__:GetName());
 			end
 		end
 
-	local raftLogEntryValue = RaftLogEntryValue:new("exec", self.collection, query);
-  local bytes = raftLogEntryValue:toBytes();
-
-	self.raftClient:appendEntries(bytes, function (response, err)
-      local result = (err == nil and response.accepted and "accepted") or "denied"
-      logger.info("the appendEntries request has been %s", result)
-			if callbackFunc then
-				callbackFunc(err, response.data);
-			end
-    end)
+		self:Send("exec", query, callbackFunc)
 end
 
 -- virtual:
 -- this function never reply. the client will always timeout
 function RaftSqliteStore:silient(query)
-	local raftLogEntryValue = RaftLogEntryValue:new("silient", self.collection, query);
-  local bytes = raftLogEntryValue:toBytes();
-
-	self.raftClient:appendEntries(bytes, function (response, err)
-      local result = (err == nil and response.accepted and "accepted") or "denied"
-      logger.info("the appendEntries request has been %s", result)
-			if callbackFunc then
-				callbackFunc(err, response.data);
-			end
-    end)
+		self:Send("silient", query, callbackFunc)
 end
 
 -- virtual: 
 function RaftSqliteStore:makeEmpty(query, callbackFunc)
-	assert(self.raftClient,"client null")
-  local raftLogEntryValue = RaftLogEntryValue:new("removeIndex", self.collection, query);
-  local bytes = raftLogEntryValue:toBytes();
-
-	self.raftClient:appendEntries(bytes, function (response, err)
-      local result = (err == nil and response.accepted and "accepted") or "denied"
-      logger.info("the appendEntries request has been %s", result)
-			if callbackFunc then
-				callbackFunc(err, response.data);
-			end
-    end)
-
+		self:Send("makeEmpty", query, callbackFunc)
 end

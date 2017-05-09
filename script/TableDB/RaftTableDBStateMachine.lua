@@ -27,10 +27,11 @@ NPL.load("(gl)script/sqlite/sqlite3.lua");
 local LoggerFactory = NPL.load("(gl)script/Raft/LoggerFactory.lua");
 local RaftTableDBStateMachine = commonlib.gettable("TableDB.RaftTableDBStateMachine");
 
-function RaftTableDBStateMachine:new(baseDir, ip, listeningPort) 
+function RaftTableDBStateMachine:new(baseDir, ip, listeningPort, clientId) 
     local o = {
-        -- ip = ip,
-        -- port = listeningPort,
+        ip = ip,
+        port = listeningPort,
+        clientId = clientId,
         logger = LoggerFactory.getLogger("RaftTableDBStateMachine"),
         snapshotStore = baseDir.."snapshot/",
         commitIndex = 0,
@@ -72,9 +73,29 @@ function RaftTableDBStateMachine:start(raftMessageSender)
     local this = self;
     -- use Rpc for incoming Request message
     Rpc:new():init("RTDBRequestRPC", function(self, msg) 
-        -- this.logger.trace(msg);
         msg = this:processMessage(msg)
         return msg; 
+    end)
+
+    -- port is need to be string here??
+    -- NPL.StartNetServer(self.ip, tostring(self.port));
+    RTDBRequestRPC:MakePublic();
+
+end
+
+
+
+--[[
+ * Starts the client side TableDB, called by RaftConsensus, RaftConsensus will pass an instance of
+ * RaftMessageSender for the state machine to send logs to cluster, so that all state machines
+ * in the same cluster could be in synced
+ * @param raftMessageSender
+ ]]--
+function RaftTableDBStateMachine:start2(RaftSqliteStore)
+    -- use Rpc for incoming Response message
+    Rpc:new():init("RTDBRequestRPC", function(self, msg)
+        print(format("Response:%s", util.table_tostring(msg)))
+        RaftSqliteStore:handleResponse(msg)
     end)
 
     -- port is need to be string here??
@@ -96,7 +117,6 @@ function RaftTableDBStateMachine:commit(logIndex, data)
     local IOThread = commonlib.gettable("System.Database.IOThread");
     local collection = IOThread:GetSingleton():GetServerCollection(raftLogEntryValue.collection)
 
-
     --add to collections
     if raftLogEntryValue.collection and raftLogEntryValue.collection.name and not self.collections[raftLogEntryValue.collection.name] then
         self.collections[raftLogEntryValue.collection.name] = raftLogEntryValue.collection.db .. "/" .. raftLogEntryValue.collection.name
@@ -111,7 +131,18 @@ function RaftTableDBStateMachine:commit(logIndex, data)
             GetWriterThreadName = function (...) return "main" end,
         }
     end
-    IORequest:Send(raftLogEntryValue.query_type, collection, raftLogEntryValue.query);
+    IORequest:Send(raftLogEntryValue.query_type, collection, raftLogEntryValue.query,
+        function (err, data)
+            local msg = {
+                err = err,
+                data = data,
+                cb_index = raftLogEntryValue.cb_index,
+            }
+            -- send Response
+            -- we need handle active failure here
+            RTDBRequestRPC(nil, raftLogEntryValue.serverId, msg)
+
+        end);
 
     self.commitIndex = logIndex;
 end
