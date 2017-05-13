@@ -93,7 +93,7 @@ end
 
 
 local function executeAsClient(localAddress, RequestRPC, configuration, loggerFactory)
-    local raftClient = RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory)
+    -- local raftClient = RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory)
     -- RaftSqliteStore:setRaftClient(raftClient)
 
     if clientMode == "appendEntries" then

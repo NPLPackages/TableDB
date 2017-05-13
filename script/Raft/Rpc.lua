@@ -120,18 +120,24 @@ function Rpc:OnActivated(msg)
             added_runtime[remoteAddress.id] = true
             -- can not contain ':'
             local nid = string.sub(remoteAddress.id, 1, #remoteAddress.id-1);
-            self.logger.trace("accepted nid is %s", nid)
+            self.logger.info("accepted nid is %s", nid)
             NPL.AddNPLRuntimeAddress({host = remoteAddress.host, port = remoteAddress.port, nid = nid})
+            RaftRequestRPCInit(nil, remoteAddress.id, {});
           end
           NPL.accept(msg.tid, remoteAddress.id or "default_user");
           msg.nid = remoteAddress.id or "default_user"
         else
           -- this must be Raft internal message exclue the above 3
+          if msg.msg.source then
+            remoteAddress = "server"..msg.msg.source..":"
+          end      
+          self.logger.info("recv msg %s", util.table_tostring(msg))
           NPL.accept(msg.tid, remoteAddress or "default_user");
           msg.nid = remoteAddress or "default_user"
         end
      else
-        NPL.reject(msg.tid);
+       util.table_print(msg)
+       NPL.reject(msg.tid);
      end
   end
   
@@ -153,7 +159,9 @@ function Rpc:OnActivated(msg)
       if type(msg.remoteAddress) == "table" and msg.remoteAddress.id then
         msg.remoteAddress = msg.remoteAddress.id
       end
-      local vFileId = format("%s%s%s", msg.callbackThread, msg.remoteAddress, self.filename)
+      -- here we could use msg.nid or msg.remoteAddress
+      -- be clear about the nid!
+      local vFileId = format("%s%s%s", msg.callbackThread, msg.nid, self.filename)
       local response = {
         name = self.fullname,
         type="result",
@@ -173,9 +181,12 @@ function Rpc:OnActivated(msg)
         -- this will cause remote side memory leak, to handle this, we
         -- should give run_callbacks a TTL
         -- self.run_callbacks[callbackId] = nil
-        self.logger.error("activate on %s failed %d, msg type:%s", vFileId, activate_result, response.type)
-        if result.callbackFunc then
-          result.callbackFunc();
+        activate_result = NPL.activate_with_timeout(3, vFileId, response)
+        if activate_result ~= 0 then
+          self.logger.error("activate on %s failed %d, msg type:%s", vFileId, activate_result, response.type)
+          if result.callbackFunc then
+            result.callbackFunc();
+          end
         end
       end
 

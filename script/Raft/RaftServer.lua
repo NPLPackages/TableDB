@@ -179,6 +179,9 @@ function RaftServer:processRequest(request)
                 (response.accepted and "true") or "false",
                 response.term,
                 response.nextIndex);
+    else
+        self.logger.error("why goes here?? response is nil")
+        self.stateMachine:exit(-1);
     end
     return response;
 end

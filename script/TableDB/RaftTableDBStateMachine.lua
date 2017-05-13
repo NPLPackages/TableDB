@@ -112,7 +112,7 @@ end
 function RaftTableDBStateMachine:commit(logIndex, data)
     -- data is logEntry.value
     local raftLogEntryValue = RaftLogEntryValue:fromBytes(data);
-    print("commit value"..util.table_tostring(raftLogEntryValue))
+    print("commit value:"..util.table_tostring(raftLogEntryValue))
     NPL.load("(gl)script/ide/System/Database/IOThread.lua");
     local IOThread = commonlib.gettable("System.Database.IOThread");
     local collection = IOThread:GetSingleton():GetServerCollection(raftLogEntryValue.collection)
@@ -125,7 +125,7 @@ function RaftTableDBStateMachine:commit(logIndex, data)
     NPL.load("(gl)script/ide/System/Database/IORequest.lua");
     local IORequest = commonlib.gettable("System.Database.IORequest");
     -- a dedicated IOThread
-    if raftLogEntryValue.query_type == "connect" and not collection then
+    if raftLogEntryValue.query_type == "connect" then
         collection = { 
             ToData = function (...)  end,
             GetWriterThreadName = function (...) return "main" end,
@@ -138,6 +138,7 @@ function RaftTableDBStateMachine:commit(logIndex, data)
                 data = data,
                 cb_index = raftLogEntryValue.cb_index,
             }
+
             -- send Response
             -- we need handle active failure here
             RTDBRequestRPC(nil, raftLogEntryValue.serverId, msg)
@@ -164,7 +165,10 @@ end
  * @param data
  ]]--
 function RaftTableDBStateMachine:preCommit(logIndex, data)
-
+    -- add cb_index to response
+    -- local raftLogEntryValue = RaftLogEntryValue:fromBytes(data);
+    -- self.messages[raftLogEntryValue.cb_index] = raftLogEntryValue;
+    -- self.pendingMessages[raftLogEntryValue.cb_index] = raftLogEntryValue;
 end
 
 --[[
@@ -230,10 +234,10 @@ function RaftTableDBStateMachine:readSnapshotData(snapshot, offset, buffer, expe
         return -1;
     end
 
-   local snapshotFile = ParaIO.open(filePath, "r");
-   snapshotFile:seek(offset);
-   snapshotFile:ReadBytes(expectedSize, buffer);
-   return expectedSize;
+    local snapshotFile = ParaIO.open(filePath, "r");
+    snapshotFile:seek(offset);
+    snapshotFile:ReadBytes(expectedSize, buffer);
+    return expectedSize;
 end
 
 --[[

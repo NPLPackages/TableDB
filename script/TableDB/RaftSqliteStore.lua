@@ -46,12 +46,12 @@ function RaftSqliteStore:createRaftClient()
     port = "9004",
     id = "server4:",
   }
+
+
 	rtdb = RaftTableDBStateMachine:new(baseDir, localAddress.host, localAddress.port, localAddress.id)
-
-  NPL.StartNetServer(localAddress.host, localAddress.port);
   rtdb:start2(self)
-
   self.raftClient = RaftClient:new(localAddress, RTDBRequestRPC, config, LoggerFactory)
+
 end
 
 function RaftSqliteStore:setRaftClient(raftClient)
@@ -156,12 +156,18 @@ function RaftSqliteStore:WaitForSyncModeReply(timeout)
 		local nSize = thread:GetCurrentQueueSize();
 		for i=0, nSize-1 do
 			local msg = thread:PeekMessage(i, {filename=true});
-			if(msg.filename == "script/ide/System/Database/IORequest.lua") then
+			if(msg.filename == "Rpc/RTDBRequestRPC.lua") then
 				local msg = thread:PopMessageAt(i, {filename=true, msg=true});
 				local out_msg = msg.msg;
-				if(out_msg.cb_idx == -1) then
+				util.table_print(out_msg);
+				--{ msg = { destination = -1, messageType = { int = 3, string = "AppendEntriesResponse" }, accepted = false }, tid = "~1", type = "result", name = "RTDBRequestRPC", callbackId = 3 }
+				-- we use this only in connect and we should ensure connect's cb_index should be -1
+				self.raftClient.HandleResponse(nil, out_msg.msg);
+				if(out_msg.cb_index == -1 or (out_msg.msg and out_msg.msg.destination ~= -1)) then
+					logger.info("connect success!!")
 					reply_msg = out_msg;
 					break;
+				-- else
 				end
 			end
 		end
@@ -192,7 +198,6 @@ function RaftSqliteStore:handleResponse(msg)
 	if(cb and cb.callbackFunc) then
 		cb.callbackFunc(msg.err, msg.data);
 	end
-
 end
 
 
@@ -249,20 +254,24 @@ function RaftSqliteStore:connect(db, data, callbackFunc)
     rootFolder = data.rootFolder,
   }
 
-  local raftLogEntryValue = RaftLogEntryValue:new(query_type, collection, query);
+  local raftLogEntryValue = RaftLogEntryValue:new(query_type, collection, query, -1);
   local bytes = raftLogEntryValue:toBytes();
 
 	if not self.raftClient then
 		self:createRaftClient()
 	end
 
+
 	self.raftClient:appendEntries(bytes, function (response, err)
       local result = (err == nil and response.accepted and "accepted") or "denied"
-      logger.info("the appendEntries request has been %s", result)
+      logger.info("the %s request has been %s", query_type, result)
 			if callbackFunc then
 				callbackFunc(err, response.data);
 			end
     end)
+
+	self:WaitForSyncModeReply(60000);
+	-- ParaEngine.Sleep(60000);
 end
 
 
