@@ -68,7 +68,7 @@ function RaftLogEntryValue:toBytes()
        serverId = self.serverId,
    }
    local str = commonlib.serialize_compact2(data)
-   print(str)
+   -- print(str)
    -- "<memory>" is a special name for memory file, both read/write is possible.
    local file = ParaIO.open("<memory>", "w");
    local bytes;

@@ -47,7 +47,6 @@ function RaftSqliteStore:createRaftClient()
     id = "server4:",
   }
 
-
 	rtdb = RaftTableDBStateMachine:new(baseDir, localAddress.host, localAddress.port, localAddress.id)
   rtdb:start2(self)
   self.raftClient = RaftClient:new(localAddress, RTDBRequestRPC, config, LoggerFactory)
@@ -159,15 +158,13 @@ function RaftSqliteStore:WaitForSyncModeReply(timeout)
 			if(msg.filename == "Rpc/RTDBRequestRPC.lua") then
 				local msg = thread:PopMessageAt(i, {filename=true, msg=true});
 				local out_msg = msg.msg;
-				util.table_print(out_msg);
-				--{ msg = { destination = -1, messageType = { int = 3, string = "AppendEntriesResponse" }, accepted = false }, tid = "~1", type = "result", name = "RTDBRequestRPC", callbackId = 3 }
+				logger.debug("recv msg:%s", util.table_tostring(out_msg));
 				-- we use this only in connect and we should ensure connect's cb_index should be -1
 				self.raftClient.HandleResponse(nil, out_msg.msg);
 				if(out_msg.cb_index == -1 or (out_msg.msg and out_msg.msg.destination ~= -1)) then
 					logger.info("connect success!!")
 					reply_msg = out_msg;
 					break;
-				-- else
 				end
 			end
 		end
@@ -190,18 +187,12 @@ function RaftSqliteStore:WaitForSyncModeReply(timeout)
 end
 
 
-
-
-
 function RaftSqliteStore:handleResponse(msg)
 	local cb = self:PopCallback(msg.cb_index);
 	if(cb and cb.callbackFunc) then
 		cb.callbackFunc(msg.err, msg.data);
 	end
 end
-
-
-
 
 -- called when a single command is finished. 
 function RaftSqliteStore:CommandTick(commandname)
@@ -261,7 +252,6 @@ function RaftSqliteStore:connect(db, data, callbackFunc)
 		self:createRaftClient()
 	end
 
-
 	self.raftClient:appendEntries(bytes, function (response, err)
       local result = (err == nil and response.accepted and "accepted") or "denied"
       logger.info("the %s request has been %s", query_type, result)
@@ -270,8 +260,7 @@ function RaftSqliteStore:connect(db, data, callbackFunc)
 			end
     end)
 
-	self:WaitForSyncModeReply(60000);
-	-- ParaEngine.Sleep(60000);
+	self:WaitForSyncModeReply(10000);
 end
 
 

@@ -65,10 +65,10 @@ logger.info("local state info"..util.table_tostring(parsed_url))
 local rpcListener = RpcListener:new(parsed_url.host, parsed_url.port, thisServer.id, config.servers)
 
 -- message printer
--- mp = MessagePrinter:new(baseDir, parsed_url.host, mpPort)
+-- local mp = MessagePrinter:new(baseDir, parsed_url.host, mpPort)
 
 -- raft stateMachine
-rtdb = RaftTableDBStateMachine:new(baseDir, parsed_url.host, mpPort)
+local rtdb = RaftTableDBStateMachine:new(baseDir, parsed_url.host, mpPort)
 
 
 local function executeInServerMode(stateMachine)
@@ -93,13 +93,12 @@ end
 
 
 local function executeAsClient(localAddress, RequestRPC, configuration, loggerFactory)
-    -- local raftClient = RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory)
-    -- RaftSqliteStore:setRaftClient(raftClient)
+    local raftClient = RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory)
+    RaftSqliteStore:setRaftClient(raftClient)
 
     if clientMode == "appendEntries" then
       NPL.load("(gl)script/TableDB/test/test_TableDatabase.lua");
-      TestSQLOperations();
-
+      TestSQLOperations(RaftSqliteStore);
 
       -- local values = {
       --   "test:1111",
@@ -141,16 +140,19 @@ local function executeAsClient(localAddress, RequestRPC, configuration, loggerFa
 end
 
 if raftMode:lower() == "server" then
+  -- executeInServerMode(mp)
   executeInServerMode(rtdb)
 elseif raftMode:lower() == "client" then
-  -- local localAddress = {
-  --   host = "localhost",
-  --   port = "9004",
-  --   id = "server4:",
-  -- }
-  -- NPL.StartNetServer(localAddress.host, localAddress.port);
-  -- rtdb:start()
-  executeAsClient(localAddress, MPRequestRPC, config, LoggerFactory)
+  local localAddress = {
+    host = "localhost",
+    port = "9004",
+    id = "server4:",
+  }
+  NPL.StartNetServer(localAddress.host, localAddress.port);
+  -- mp:start()
+  -- executeAsClient(localAddress, MPRequestRPC, config, LoggerFactory)
+  rtdb:start2(RaftSqliteStore)
+  executeAsClient(localAddress, RTDBRequestRPC, config, LoggerFactory)
 end
 
 

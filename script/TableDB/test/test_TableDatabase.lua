@@ -12,12 +12,13 @@ local StorageProvider = commonlib.gettable("System.Database.StorageProvider");
 
 
 -- basic tabledb command testing with asserts
-function TestSQLOperations()
+function TestSQLOperations(raftSqliteStore)
 	NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
 	local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
 
+	local raftSqliteStore = raftSqliteStore or RaftSqliteStore
 	-- use raft storage
-	StorageProvider:SetStorageClass(RaftSqliteStore);
+	StorageProvider:SetStorageClass(raftSqliteStore);
 	
 	TableDatabase.connect = function (self, rootFolder, callbackFunc)
 		self.rootFolder = rootFolder;

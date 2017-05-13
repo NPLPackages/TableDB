@@ -131,12 +131,12 @@ function Rpc:OnActivated(msg)
           if msg.msg.source then
             remoteAddress = "server"..msg.msg.source..":"
           end      
-          self.logger.info("recv msg %s", util.table_tostring(msg))
+          self.logger.trace("recv msg %s", util.table_tostring(msg))
           NPL.accept(msg.tid, remoteAddress or "default_user");
           msg.nid = remoteAddress or "default_user"
         end
      else
-       util.table_print(msg)
+       self.logger.trace("who r u? msg:%s", util.table_tostring(msg))
        NPL.reject(msg.tid);
      end
   end
