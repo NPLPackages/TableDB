@@ -4,7 +4,7 @@ Author: liuluheng
 Date: 2017.03.25
 Desc: 
 
-NPL file API dose not support u GetFileSize in "w" mode(and variou things like this),
+NPL file API dose not support u GetFileSize in "rw" mode(and variou things like this),
 so the code is a bit ugly :(
 
 ------------------------------------------------------------
@@ -64,7 +64,7 @@ function FileBasedSequentialLogStore:new(logContainer)
     o.logger.trace("FileBasedSequentialLogStore:new>startIndexFileSize:%d, indexFileSize:%d", startIndexFileSize, indexFileSize)
 
     if(startIndexFileSize == 0) then
-        openFile(o, "w");
+        openFile(o, "rw");
         o.startIndex = 1;
         o.startIndexFile:WriteDouble(o.startIndex);
     else
@@ -79,7 +79,7 @@ function FileBasedSequentialLogStore:new(logContainer)
     o.logger.debug("log store started with entriesInStore=%d, startIndex=%d", o.entriesInStore, o.startIndex);
 
 
-    openFile(o, "w");
+    openFile(o, "rw");
     return o;
 end
 
@@ -162,7 +162,7 @@ function FileBasedSequentialLogStore:writeAt(logIndex, logEntry)
     local dataFileSize = self.dataFile:GetFileSize();
     local indexFileSize = self.indexFile:GetFileSize();
 
-    openFile(self, "w")
+    openFile(self, "rw")
     -- write the data at the specified position
     self.indexFile:seek(indexPosition);
     self.dataFile:seek(dataPosition);
@@ -244,7 +244,7 @@ function FileBasedSequentialLogStore:getLogEntries(startIndex, endIndex)
         entries = fileEntries
 
 
-        openFile(self, "w")
+        openFile(self, "rw")
     end
 
     return entries;
@@ -321,7 +321,7 @@ function FileBasedSequentialLogStore:packLog(logIndex, itemsToPack)
     self.logger.trace("FileBasedSequentialLogStore:packLog>startOfLog:%d, endOfLog:%d", startOfLog, endOfLog);
 
     -- "<memory>" is a special name for memory file, both read/write is possible. 
-    local file = ParaIO.open("<memory>", "w");
+    local file = ParaIO.open("<memory>", "rw");
     local bytes;
     if(file:IsValid()) then
         local dataBytes = endOfLog - startOfLog
@@ -353,7 +353,7 @@ function FileBasedSequentialLogStore:packLog(logIndex, itemsToPack)
             bytes = data.result;
         end
     end
-    openFile(self, "w")
+    openFile(self, "rw")
     
     return bytes;
 
@@ -383,7 +383,7 @@ function FileBasedSequentialLogStore:applyLogPack(logIndex, logPack)
     end
 
     -- "<memory>" is a special name for memory file, both read/write is possible. 
-    local file = ParaIO.open("<memory>", "w");
+    local file = ParaIO.open("<memory>", "rw");
     if(file:IsValid()) then
         file:write(bytes, #bytes)
         file:seek(0)
@@ -411,7 +411,7 @@ function FileBasedSequentialLogStore:applyLogPack(logIndex, logPack)
             self.indexFile:seek(indexFilePosition);
             dataFilePosition = self.indexFile:ReadDouble();
         end
-        openFile(self, "w")
+        openFile(self, "rw")
 
         self.logger.trace("FileBasedSequentialLogStore:applyLogPack>indexFilePosition:%d, dataFilePosition:%d", indexFilePosition, dataFilePosition);
         self.indexFile:seek(indexFilePosition);
@@ -428,7 +428,7 @@ function FileBasedSequentialLogStore:applyLogPack(logIndex, logPack)
         -- openFile(self, "r")
         -- assert(indexFilePosition+indexBytes == self.indexFile:GetFileSize(), format("index pos:%d ~= filesize:%d",indexFilePosition+indexBytes,self.indexFile:GetFileSize()))
         -- assert(dataFilePosition+dataBytes == self.dataFile:GetFileSize(), format("data pos:%d ~= filesize:%d",dataFilePosition+dataBytes,self.dataFile:GetFileSize()))
-        -- openFile(self, "w")
+        -- openFile(self, "rw")
 
         self.buffer:reset(self.entriesInStore > self.bufferSize and self.entriesInStore + self.startIndex - self.bufferSize or self.startIndex);
         self:fillBuffer();
@@ -471,7 +471,7 @@ function FileBasedSequentialLogStore:compact(lastLogIndex)
         local indexFileNewLength = self.indexFile:GetFileSize() - indexPosition;
         local dataFileNewLength = self.dataFile:GetFileSize() - dataPosition;
 
-        openFile(self, "w")
+        openFile(self, "rw")
 
         -- copy the log data
         -- data file
@@ -539,7 +539,7 @@ function FileBasedSequentialLogStore:fillBuffer()
         self.buffer:append(entry);
     end
     -- self.logger.trace("FileBasedSequentialLogStore:fillBuffer>buffer firstIndex:%d, entries:%d", self.buffer:firstIndex(), self.buffer:bufferSize())
-    openFile(self, "w")
+    openFile(self, "rw")
 end
 
 
@@ -552,7 +552,7 @@ function FileBasedSequentialLogStore:restore()
         -- this is fatal...
         self.logger.fatal("cannot restore from failure, please manually restore the log files");
     end
-    openFile(self, "w")
+    openFile(self, "rw")
 end
 
 function FileBasedSequentialLogStore:backup()
@@ -568,7 +568,7 @@ function FileBasedSequentialLogStore:backup()
         self.logger.error("failed to create a backup folder")
     end
 
-    openFile(self, "w")
+    openFile(self, "rw")
 end
 
 
@@ -608,6 +608,7 @@ function openFile(logStore, mode)
         logStore.prevMode = mode
     end
     if logStore.indexFile and logStore.dataFile and logStore.startIndexFile then
+        logStore.logger.trace("closing files")
         logStore:closeFiles()
     end
     -- index file
@@ -626,7 +627,7 @@ function openFile(logStore, mode)
     if not valid then
         logStore.logger.trace("open invalid, this should happen once, index:%s, data:%s, startIndex:%s",
          logStore.indexFileName,logStore.dataFileName,logStore.startIndexFileName);
-        mode = "w"
+        mode = "rw"
         return openFile(logStore, mode)
     end
 end
