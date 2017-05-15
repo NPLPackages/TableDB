@@ -53,12 +53,15 @@ The Raft cluster is *fault tolerate* and *highly available*. You can stop the cl
 NPL.load("(gl)script/ide/UnitTest/luaunit.lua");
 NPL.load("(gl)script/Raft/test/TestClusterConfiguration.lua");
 NPL.load("(gl)script/Raft/test/TestSnapshotSyncRequest.lua");
-NPL.load("(gl)script/Raft/test/TestSequentialLogStore.lua");
+NPL.load("(gl)script/Raft/test/TestFileBasedSequentialLogStore.lua");
 NPL.load("(gl)script/Raft/test/TestServerStateManager.lua");
-LuaUnit:run('TestSequentialLogStore') 
+NPL.load("(gl)script/TableDB/test/TestRaftLogEntryValue.lua");
+LuaUnit:run('TestRaftLogEntryValue') 
+LuaUnit:run('TestFileBasedSequentialLogStore') 
 LuaUnit:run('TestClusterConfiguration')
 LuaUnit:run('TestSnapshotSyncRequest')
-ParaGlobal.Exit(LuaUnit:run('TestServerStateManager'))
+LuaUnit:run('TestServerStateManager')
+ParaGlobal.Exit(0)
 ```
 
 welcome for more feedbacks.:)
