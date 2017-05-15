@@ -1,5 +1,5 @@
 @echo off
-cd /d d:/code/npl/TableDB/setup
+REM cd /d d:/code/npl/TableDB/setup
 set curdir=%~dp0
 if "%1" == "dummy" goto setupDummy
 if "%1" == "client" goto setupClient
