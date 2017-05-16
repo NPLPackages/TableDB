@@ -179,19 +179,19 @@ end
  * @param data part of snapshot data
  ]]--
 function RaftTableDBStateMachine:saveSnapshotData(snapshot, offset, data)
-    local filePath = self.snapshotStore..string.format("%d-%d_s.db", snapshot.lastLogIndex, snapshot.lastLogTerm);
+    local filePath = self.snapshotStore..string.format("%d-%d_User_s.db", snapshot.lastLogIndex, snapshot.lastLogTerm);
 
     if(not ParaIO.DoesFileExist(filePath)) then
         local snapshotConf = self.snapshotStore..string.format("%d.cnf", snapshot.lastLogIndex);
         local sConf = ParaIO.open(snapshotConf, "rw");
         local bytes = snapshot.lastConfig:toBytes();
-        -- sConf:WriteBytes(#bytes, {bytes:byte(1, -1)})
         sConf:write(bytes, #bytes);
     end
 
     local snapshotFile = ParaIO.open(filePath, "rw");
     snapshotFile:seek(offset);
-    snapshotFile:write(data);
+    snapshotFile:WriteBytes(#data, data);
+
     snapshotFile:close();
 end
 
@@ -204,7 +204,7 @@ end
  how to handle multi snapshot data
  ]]--
 function RaftTableDBStateMachine:applySnapshot(snapshot)
-    local filePath = self.snapshotStore..string.format("%d-%d_s.db", snapshot.lastLogIndex, snapshot.lastLogTerm);
+    local filePath = self.snapshotStore..string.format("%d-%d_User_s.db", snapshot.lastLogIndex, snapshot.lastLogTerm);
     if(not ParaIO.DoesFileExist(filePath)) then
         return false;
     end
@@ -228,7 +228,7 @@ end
  how to handle multi snapshot data
  ]]--
 function RaftTableDBStateMachine:readSnapshotData(snapshot, offset, buffer, expectedSize)
-    local filePath = self.snapshotStore..string.format("%d-%d_s.db", snapshot.lastLogIndex, snapshot.lastLogTerm);
+    local filePath = self.snapshotStore..string.format("%d-%d_User_s.db", snapshot.lastLogIndex, snapshot.lastLogTerm);
     if(not ParaIO.DoesFileExist(filePath)) then
         return -1;
     end
@@ -275,7 +275,7 @@ function RaftTableDBStateMachine:getLastSnapshot()
       local snapshotConf = self.snapshotStore..string.format("%d.cnf", maxLastLogIndex);
       local sConf = ParaIO.open(snapshotConf, "r");
       local config = ClusterConfiguration:fromBytes(sConf:GetText(0, -1))
-      local latestSnapshotFileSize = ParaIO.open(latestSnapshotFilename, "r"):GetFileSize();
+      local latestSnapshotFileSize = ParaIO.open(self.snapshotStore..latestSnapshotFilename, "r"):GetFileSize();
       return Snapshot:new(maxLastLogIndex, maxTerm, config, latestSnapshotFileSize)
   end
 

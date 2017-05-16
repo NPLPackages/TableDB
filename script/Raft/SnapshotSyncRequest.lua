@@ -55,10 +55,10 @@ function SnapshotSyncRequest:toBytes()
         file:write(configData, #configData)
         file:WriteDouble(self.offset)
         file:WriteInt(#self.data)
-        if type(self.data) == "string" then
-            -- file:WriteBytes(#self.data, {self.data:byte(1, -1)})
-            file:write(self.data, #self.data)
-        end
+        -- if type(self.data) == "string" then
+        file:WriteBytes(#self.data, self.data)
+        -- file:write(self.data, #self.data)
+        -- end
         file:WriteBytes(1, {(self.done and 1) or 0})
 
         bytes = file:GetText(0, -1)
@@ -89,7 +89,7 @@ function SnapshotSyncRequest:fromBytes(bytes)
         local data = {}
         if dataSize ~= 0 then
             file:ReadBytes(dataSize, data)
-            data = string.char(unpack(data))
+            -- data = string.char(unpack(data))
         end
         local doneByte = {}
         file:ReadBytes(1, doneByte)
