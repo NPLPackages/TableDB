@@ -201,7 +201,7 @@ end
  * @return true if successfully applied, otherwise false
  
 
- how to handle multi snapshot data
+ how to handle multi collection snapshot data
  ]]--
 function RaftTableDBStateMachine:applySnapshot(snapshot)
     local filePath = self.snapshotStore..string.format("%d-%d_User_s.db", snapshot.lastLogIndex, snapshot.lastLogTerm);
@@ -225,7 +225,7 @@ end
  * @return bytes read
 
 
- how to handle multi snapshot data
+ how to handle multi collection snapshot data
  ]]--
 function RaftTableDBStateMachine:readSnapshotData(snapshot, offset, buffer, expectedSize)
     local filePath = self.snapshotStore..string.format("%d-%d_User_s.db", snapshot.lastLogIndex, snapshot.lastLogTerm);
@@ -244,7 +244,7 @@ end
  * @return last snapshot information in the state machine or null if none
  
 
- how to handle multi snapshot data
+ how to handle multi collection snapshot data
  ]]--
 function RaftTableDBStateMachine:getLastSnapshot()
   -- list all files in the initial directory.
