@@ -30,6 +30,8 @@ NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 local util = commonlib.gettable("System.Compiler.lib.util")
 NPL.load("(gl)script/Raft/ClusterConfiguration.lua");
 local ClusterConfiguration = commonlib.gettable("Raft.ClusterConfiguration");
+NPL.load("(gl)script/Raft/Snapshot.lua");
+local Snapshot = commonlib.gettable("Raft.Snapshot");
 NPL.load("(gl)script/Raft/SnapshotSyncRequest.lua");
 local SnapshotSyncRequest = commonlib.gettable("Raft.SnapshotSyncRequest");
 NPL.load("(gl)script/Raft/Rutils.lua");
@@ -68,7 +70,6 @@ function RaftServer:new(ctx)
         configChanging = false;
         catchingUp = false;
         steppingDown = 0;
-        snapshotInProgress = 0;
         -- end fields for extended messages
     };
     if not o.state then
@@ -1552,7 +1553,7 @@ function real_commit(server)
     local currentCommitIndex = server.state.commitIndex;
     while(currentCommitIndex < server.quickCommitIndex and currentCommitIndex < server.logStore:getFirstAvailableIndex() - 1) do
         currentCommitIndex = currentCommitIndex + 1;
-        server.logger.trace("commiting...currentCommitIndex:%d, quickCommitIndex:%d, logStore:FirstAvailableIndex:%d",
+        server.logger.trace("committing...currentCommitIndex:%d, quickCommitIndex:%d, logStore:FirstAvailableIndex:%d",
                              currentCommitIndex, server.quickCommitIndex, server.logStore:getFirstAvailableIndex())
         local logEntry = server.logStore:getLogEntryAt(currentCommitIndex);
 
