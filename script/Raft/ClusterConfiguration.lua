@@ -62,7 +62,7 @@ function ClusterConfiguration:fromBytes(bytes)
         servers = {},
     }
     local file = ParaIO.open("<memory>", "w");
-    if(file:IsValid()) then	
+    if(file:IsValid()) then  
         -- can not use file:WriteString(bytes);, use WriteBytes
         if type(bytes) == "string" then
             -- file:WriteBytes(#bytes, {bytes:byte(1, -1)});
@@ -96,9 +96,9 @@ end
 ]]--
 function ClusterConfiguration:toBytes()
     -- "<memory>" is a special name for memory file, both read/write is possible. 
-	local file = ParaIO.open("<memory>", "w");
+    local file = ParaIO.open("<memory>", "w");
     local bytes;
-	if(file:IsValid()) then
+    if(file:IsValid()) then
         file:WriteDouble(self.logIndex)
         file:WriteDouble(self.lastLogIndex)
 

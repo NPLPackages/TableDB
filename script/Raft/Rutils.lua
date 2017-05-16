@@ -42,9 +42,13 @@ end
 function Rutils.addServerToNPLRuntime(thisId, server)
     local parsed_url = url.parse(server.endpoint)
     NPL.AddNPLRuntimeAddress({host = parsed_url.host, port = tostring(parsed_url.port), nid = "server"..server.id})
+
+end
+
+function Rutils.initConnect(thisId, server)
     -- local vFileId = format("%s%s:Rpc/RaftRequestRPC.lua", msg.callbackThread, "server"..server.id)
     
-    local activate_result = RaftRequestRPCInit("server"..thisId..":", "server"..server.id..":", {});
+    local activate_result = RaftRequestRPCInit("server"..thisId..":", "server"..server.id..":", {serverId="server"..server.id});
     -- if ( activate_result ~= 0) then
     -- end
 end

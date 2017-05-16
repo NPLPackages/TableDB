@@ -11,6 +11,10 @@ local RaftClient = commonlib.gettable("Raft.RaftClient");
 ------------------------------------------------------------
 ]]--
 
+NPL.load("(gl)script/Raft/Rutils.lua");
+local Rutils = commonlib.gettable("Raft.Rutils");
+NPL.load("(gl)script/TableDB/RaftLogEntryValue.lua");
+local RaftLogEntryValue = commonlib.gettable("TableDB.RaftLogEntryValue");
 NPL.load("(gl)script/Raft/LogEntry.lua");
 NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 local LogValueType = NPL.load("(gl)script/Raft/LogValueType.lua");
@@ -27,9 +31,17 @@ function RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory)
         configuration = configuration,
         leaderId = configuration.servers[math.random(#configuration.servers)].id,
         randomLeader = true,
+        -- connected = false,
         logger = loggerFactory.getLogger("RaftClient"),
     }
     setmetatable(o, self);
+    
+    NPL.StartNetServer(localAddress.host, localAddress.port);
+    
+    for _, server in ipairs(configuration.servers) do
+        Rutils.initConnect(4, server)
+    end
+
     return o;
 end
 
@@ -47,11 +59,13 @@ function RaftClient:appendEntries(values, callbackFunc)
     if values and #values == 0 then
         return
     end
-
     local logEntries = {}
-
-    for i,v in ipairs(values) do
-        logEntries[#logEntries + 1] = LogEntry:new(0, v)
+    if type(values) == "table" then
+        for i,v in ipairs(values) do
+            logEntries[#logEntries + 1] = LogEntry:new(0, v)
+        end
+    elseif type(values) == "string" then
+        logEntries[#logEntries + 1] = LogEntry:new(0, values)
     end
 
     request = {
@@ -59,7 +73,7 @@ function RaftClient:appendEntries(values, callbackFunc)
         logEntries = logEntries,
     }
 
-    self:tryCurrentLeader(request, callbackFunc, 500, 0)
+    self:tryCurrentLeader(request, callbackFunc, 0, 0)
 end
 
 
@@ -96,8 +110,9 @@ function RaftClient:removeServer(serverId, callbackFunc)
 end
 
 
+
 function RaftClient:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry)
-    self.logger.info("trying request to %d as current leader from %s, trying %ds", self.leaderId, self.localAddress.id, retry);
+    self.logger.debug("trying request to %d as current leader from %s, trying %dth", self.leaderId, self.localAddress.id, retry);
 
     local this = self
 
@@ -105,60 +120,73 @@ function RaftClient:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry)
         if this.randomLeader then
             -- try a random server as leader
             this.leaderId = this.configuration.servers[math.random(#this.configuration.servers)].id;
-            this.logger.trace("next should try server: %d", this.leaderId)
+            this.logger.debug("next should try server: %d", this.leaderId)
             this.randomLeader = true;
         end
+
         if(rpcBackoff > 0) then
-            local backoff_timer = commonlib.Timer:new({callbackFunc = function(timer)
-                                               this:tryCurrentLeader(request, callbackFunc, rpcBackoff + 500, retry + 1);
-                                           end})
-            backoff_timer:Change(rpcBackoff, nil);
+            -- local backoff_timer = commonlib.Timer:new({callbackFunc = function(timer)
+            --                                    this:tryCurrentLeader(request, callbackFunc, rpcBackoff + 500, retry + 1);
+            --                                end})
+            -- backoff_timer:Change(rpcBackoff, nil);
+            ParaEngine.Sleep(rpcBackoff/1000);
+        end
+        this:tryCurrentLeader(request, callbackFunc, rpcBackoff + 500, retry + 1);
+    end
+
+    local HandleResponse = function(err, response)
+        if not err then
+            this.logger.debug("response from remote server, leader: %d, accepted: %s",
+                            response.destination, response.accepted and "true" or "false");
+            if(not response.accepted) then
+                -- set the leader return from the server
+                if(this.leaderId == response.destination and not this.randomLeader) then
+                    -- no more retry
+                    -- skip here
+                else
+                    if response.destination == -1 then
+                        -- try a random server as leader
+                        this.logger.debug("there is not a leader in the cluster, try a random one");
+                        this.leaderId = this.configuration.servers[math.random(#this.configuration.servers)].id;
+                        this.logger.debug("next should try server: %d", this.leaderId)
+                        this.randomLeader = true;
+                    else
+                        this.randomLeader = false;
+                        this.leaderId = response.destination;
+                    end
+
+                    this.logger.debug("tried %ds, server len:%d", retry, #self.configuration.servers)
+                    if(retry <= 3 * #self.configuration.servers) then
+                        -- return this:tryCurrentLeader(request, callbackFunc, rpcBackoff + 5000, retry + 1);
+                        return backoff_retry_func();
+                    end
+                end
+            end
+
+            if callbackFunc then
+                callbackFunc( response, err)
+            end
+        elseif err == "timeout" then
+            self.logger.debug("the request is timeout")
+            -- backoff_retry_func()
         else
-            this:tryCurrentLeader(request, callbackFunc, rpcBackoff + 500, retry + 1);
+            self.logger.debug("rpc error, failed(%d) to send request to remote server, err:%s. tried %d, no more try here", activate_result, err, retry);
         end
     end
-    local activate_result = self.RequestRPC(self.localAddress, "server"..self.leaderId..":", request, function(err, response)
-                       if not err then
-                           this.logger.info("response from remote server, leader: %d, accepted: %s",
-                                           response.destination, response.accepted and "true" or "false");
-                           if(not response.accepted) then
-                               -- set the leader return from the server
-                               if(this.leaderId == response.destination and not this.randomLeader) then
-                                   -- no more retry
-                                   -- skip here
-                               else
-                                   this.randomLeader = false;
-                                   this.leaderId = response.destination;
-                               end
-                               if(retry <= 3 * #self.configuration.servers) then
-                                   return this:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry + 1);
-                               end
-                           end
 
-                           if callbackFunc then
-                               callbackFunc( response, err)
-                           end
-                       elseif err == "timeout" then
-                           -- we handle connected here
-                           -- this:tryCurrentLeader(request, rpcBackoff, retry);
-                           backoff_retry_func()
-                       else
-                           self.logger.info("rpc error, failed(%d) to send request to remote server, err:%s. tried %d, no more try here", activate_result, err, retry);
-                       end
-                   end, 1);
+    self.HandleResponse = HandleResponse;
+
+    local activate_result = self.RequestRPC(self.localAddress, "server"..self.leaderId..":", request, HandleResponse, nil);
     if (activate_result ~= 0) then
-        self.logger.info("rpc error, failed(%d) to send request to remote server. tried %ds", activate_result, retry);
+        self.logger.debug("rpc error, failed(%d) to send request to remote server. tried %dth", activate_result, retry);
         if(retry > 3 * #self.configuration.servers) then
-            self.logger.info("FAILED. reach to the max retry. tried %ds", retry);
+            self.logger.error("FAILED. reach to the max retry. tried %ds", retry);
             if callbackFunc then
-                callbackFunc(nil, "FAILED")
+                callbackFunc({}, "FAILED")
             end
             return;
         end
 
         backoff_retry_func()
     end
-
-
-
 end

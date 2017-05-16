@@ -18,7 +18,11 @@ NPL.load("(gl)script/ide/socket/url.lua");
 NPL.load("(gl)script/Raft/RaftConsensus.lua");
 NPL.load("(gl)script/Raft/RpcClient.lua");
 NPL.load("(gl)script/Raft/ClusterServer.lua");
+NPL.load("(gl)script/TableDB/RaftTableDBStateMachine.lua");
+NPL.load("(gl)script/TableDB/RaftSqliteStore.lua");
 
+local RaftSqliteStore = commonlib.gettable("TableDB.RaftSqliteStore");
+local RaftTableDBStateMachine = commonlib.gettable("TableDB.RaftTableDBStateMachine");
 local ClusterServer = commonlib.gettable("Raft.ClusterServer");
 local RaftClient = commonlib.gettable("Raft.RaftClient");
 local ServerStateManager = commonlib.gettable("Raft.ServerStateManager");
@@ -61,9 +65,13 @@ logger.info("local state info"..util.table_tostring(parsed_url))
 local rpcListener = RpcListener:new(parsed_url.host, parsed_url.port, thisServer.id, config.servers)
 
 -- message printer
-mp = MessagePrinter:new(baseDir, parsed_url.host, mpPort)
+-- local mp = MessagePrinter:new(baseDir, parsed_url.host, mpPort)
 
-local function executeInServerMode(...)
+-- raft stateMachine
+local rtdb = RaftTableDBStateMachine:new(baseDir, parsed_url.host, mpPort)
+
+
+local function executeInServerMode(stateMachine)
     local raftParameters = RaftParameters:new()
     raftParameters.electionTimeoutUpperBound = 5000;
     raftParameters.electionTimeoutLowerBound = 3000;
@@ -76,7 +84,7 @@ local function executeInServerMode(...)
     raftParameters.snapshotBlockSize = 0;
 
     local context = RaftContext:new(stateManager,
-                                    mp,
+                                    stateMachine,
                                     raftParameters,
                                     rpcListener,
                                     LoggerFactory);
@@ -86,20 +94,24 @@ end
 
 local function executeAsClient(localAddress, RequestRPC, configuration, loggerFactory)
     local raftClient = RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory)
+    RaftSqliteStore:setRaftClient(raftClient)
 
     if clientMode == "appendEntries" then
-      local values = {
-        "test:1111",
-        "test:1112",
-        "test:1113",
-        "test:1114",
-        "test:1115",
-      }
+      NPL.load("(gl)script/TableDB/test/test_TableDatabase.lua");
+      TestSQLOperations(RaftSqliteStore);
 
-      raftClient:appendEntries(values, function (response, err)
-        local result = (err == nil and response.accepted and "accepted") or "denied"
-        logger.info("the appendEntries request has been %s", result)
-      end)
+      -- local values = {
+      --   "test:1111",
+      --   "test:1112",
+      --   "test:1113",
+      --   "test:1114",
+      --   "test:1115",
+      -- }
+
+      -- raftClient:appendEntries(values, function (response, err)
+      --   local result = (err == nil and response.accepted and "accepted") or "denied"
+      --   logger.info("the appendEntries request has been %s", result)
+      -- end)
     
     elseif clientMode == "addServer" then
       local serverToJoin = {
@@ -128,7 +140,8 @@ local function executeAsClient(localAddress, RequestRPC, configuration, loggerFa
 end
 
 if raftMode:lower() == "server" then
-  executeInServerMode()
+  -- executeInServerMode(mp)
+  executeInServerMode(rtdb)
 elseif raftMode:lower() == "client" then
   local localAddress = {
     host = "localhost",
@@ -136,18 +149,20 @@ elseif raftMode:lower() == "client" then
     id = "server4:",
   }
   NPL.StartNetServer(localAddress.host, localAddress.port);
-  mp:start()
-  executeAsClient(localAddress, MPRequestRPC, config, LoggerFactory)
+  -- mp:start()
+  -- executeAsClient(localAddress, MPRequestRPC, config, LoggerFactory)
+  rtdb:start2(RaftSqliteStore)
+  executeAsClient(localAddress, RTDBRequestRPC, config, LoggerFactory)
 end
 
 
 
 local function activate()
-  --  if(msg) then
+   if(msg) then
       --- C/C++ API call is counted as one instruction, so if you call ParaEngine.Sleep(10), 
       --it will block all concurrent jobs on that NPL thread for 10 seconds
       -- ParaEngine.Sleep(0.5);
-  --  end
+   end
 end
 
-NPL.this(activate);
+NPL.this(function() end);

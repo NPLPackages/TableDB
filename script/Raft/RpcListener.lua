@@ -68,6 +68,10 @@ function RpcListener:startListening(messageHandler)
 
     -- port is need to be string here??
     NPL.StartNetServer(self.ip, tostring(self.port));
+    
+    for _, server in ipairs(self.servers) do
+        Rutils.initConnect(self.thisServerId, server)
+    end
 
     RaftRequestRPC:MakePublic();
 

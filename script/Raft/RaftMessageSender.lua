@@ -46,20 +46,20 @@ function RaftMessageSender:sendMessageToLeader(request)
     local leaderId = self.server.leader;
     local config = self.server.config;
     
+    local response = {
+        messageType = RaftMessageType.AppendEntriesResponse,
+        destination = leaderId,
+        accepted = false,
+    }
+
     if(leaderId == -1) then
         self.logger.error("no leader in the cluster now")
-        return;
+        return response;
     end
-
 
     if(leaderId == self.server.id) then
         return self.server:processRequest(request);
     else
-        local response = {
-            messageType = RaftMessageType.AppendEntriesResponse,
-            destination = leaderId,
-            accepted = false,
-        }
         return response;
     end
 

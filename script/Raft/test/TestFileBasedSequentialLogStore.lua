@@ -3,19 +3,19 @@ Title:
 Author: liuluheng
 Date: 2017.04.03
 Desc: 
-TEST SequentialLogStore
+TEST FileBasedSequentialLogStore
 ------------------------------------------------------------
 NPL.load("(gl)script/ide/UnitTest/luaunit.lua");
-NPL.load("(gl)script/Raft/test/TestSequentialLogStore.lua");
-LuaUnit:run('TestSequentialLogStore') 
+NPL.load("(gl)script/Raft/test/TestFileBasedSequentialLogStore.lua");
+LuaUnit:run('TestFileBasedSequentialLogStore') 
 ------------------------------------------------------------
 ]]--
 
 NPL.load("(gl)script/ide/Files.lua");
 NPL.load("(gl)script/Raft/LogEntry.lua");
 local LogEntry = commonlib.gettable("Raft.LogEntry");
-NPL.load("(gl)script/Raft/SequentialLogStore.lua");
-local SequentialLogStore = commonlib.gettable("Raft.SequentialLogStore");
+NPL.load("(gl)script/Raft/FileBasedSequentialLogStore.lua");
+local FileBasedSequentialLogStore = commonlib.gettable("Raft.FileBasedSequentialLogStore");
 NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 local util = commonlib.gettable("System.Compiler.lib.util")
 
@@ -30,14 +30,14 @@ local removeTestFiles, randomLogEntry, logEntriesEquals;
 
 local assertTrue = assert
 
-TestSequentialLogStore = {}
+TestFileBasedSequentialLogStore = {}
 
-function TestSequentialLogStore:testBuffer()
+function TestFileBasedSequentialLogStore:testBuffer()
     local container = "temp/snapshot/";
     -- commonlib.Files.TouchFolder(container); -- this not works
     removeTestFiles(container);
     ParaIO.CreateDirectory(container);
-    local store = SequentialLogStore:new(container);
+    local store = FileBasedSequentialLogStore:new(container);
     local logsCount = math.random(1000) + 1500;
     local entries = {};
     for i = 1, logsCount do
@@ -59,15 +59,15 @@ function TestSequentialLogStore:testBuffer()
     removeTestFiles(container);
 end
 
-function TestSequentialLogStore:testPackAndUnpack()
+function TestFileBasedSequentialLogStore:testPackAndUnpack()
     local container = "temp/snapshot/";
     removeTestFiles(container);
     ParaIO.CreateDirectory(container);
     local container1 = "temp/snapshot1/";
     removeTestFiles(container1);
     ParaIO.CreateDirectory(container1);
-    local store = SequentialLogStore:new(container);
-    local store1 = SequentialLogStore:new(container1);
+    local store = FileBasedSequentialLogStore:new(container);
+    local store1 = FileBasedSequentialLogStore:new(container1);
 
     -- write some logs
     local logsCount = math.random(1000) + 1000;
@@ -98,11 +98,11 @@ function TestSequentialLogStore:testPackAndUnpack()
 end
 
 
-function TestSequentialLogStore:testStore()
+function TestFileBasedSequentialLogStore:testStore()
     local container = "temp/snapshot/";
     removeTestFiles(container);
     ParaIO.CreateDirectory(container);
-    local store = SequentialLogStore:new(container);
+    local store = FileBasedSequentialLogStore:new(container);
     assertTrue(store:getLastLogEntry().term == 0);
     assertTrue(store:getLastLogEntry().value == nil);
     assertEquals(1, store:getFirstAvailableIndex());
@@ -135,7 +135,7 @@ function TestSequentialLogStore:testStore()
 
 
     store:close();
-    store = SequentialLogStore:new(container);
+    store = FileBasedSequentialLogStore:new(container);
 
     assertEquals(#entries, store:getFirstAvailableIndex() - 1);
     assertTrue(logEntriesEquals(entries[#entries], store:getLastLogEntry()));
@@ -174,12 +174,12 @@ function TestSequentialLogStore:testStore()
     removeTestFiles(container);
 end
 
-function TestSequentialLogStore:testCompactRandom()
+function TestFileBasedSequentialLogStore:testCompactRandom()
     local container = "temp/snapshot/";
     -- commonlib.Files.TouchFolder(container); -- this not works
     removeTestFiles(container);
     ParaIO.CreateDirectory(container);
-    local store = SequentialLogStore:new(container);
+    local store = FileBasedSequentialLogStore:new(container);
     local logsCount = 300;
     local entries = {};
     for i = 1, logsCount do
@@ -231,11 +231,11 @@ function TestSequentialLogStore:testCompactRandom()
 
 end
 
-function TestSequentialLogStore:testCompactAll()
+function TestFileBasedSequentialLogStore:testCompactAll()
     local container = "temp/snapshot/";
     removeTestFiles(container);
     ParaIO.CreateDirectory(container);
-    local store = SequentialLogStore:new(container);
+    local store = FileBasedSequentialLogStore:new(container);
 
     -- write some logs
     local entries = {};
