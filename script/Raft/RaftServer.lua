@@ -34,6 +34,8 @@ NPL.load("(gl)script/Raft/Snapshot.lua");
 local Snapshot = commonlib.gettable("Raft.Snapshot");
 NPL.load("(gl)script/Raft/SnapshotSyncRequest.lua");
 local SnapshotSyncRequest = commonlib.gettable("Raft.SnapshotSyncRequest");
+NPL.load("(gl)script/Raft/SnapshotSyncContext.lua");
+local SnapshotSyncContext = commonlib.gettable("Raft.SnapshotSyncContext");
 NPL.load("(gl)script/Raft/Rutils.lua");
 local Rutils = commonlib.gettable("Raft.Rutils");
 
@@ -1329,7 +1331,7 @@ function RaftServer:syncLogsToNewComingServer(startIndex)
 
     local request = nil;
     if(startIndex > 0 and startIndex < self.logStore:getStartIndex()) then
-        request = self.createSyncSnapshotRequest(self.serverToJoin, startIndex, self.state.term, self.quickCommitIndex);
+        request = self:createSyncSnapshotRequest(self.serverToJoin, startIndex, self.state.term, self.quickCommitIndex);
 
     else
         local sizeToSync = math.min(gap, self.context.raftParameters.logSyncBatchSize);
@@ -1494,7 +1496,7 @@ function RaftServer:createSyncSnapshotRequest(peer, lastLogIndex, term, commitIn
         end
 
         self.logger.info("trying to sync snapshot with last index %d to peer %d", snapshot.lastLogIndex, peer:getId());
-        peer.snapshotSyncContext = snapshot;
+        peer.snapshotSyncContext = SnapshotSyncContext:new(snapshot);
     end
 
     local offset = peer.snapshotSyncContext.offset;
