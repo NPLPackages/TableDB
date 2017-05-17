@@ -544,14 +544,22 @@ function RaftServer:handleInstallSnapshotResponse(response)
             self.logger.info("no snapshot sync context for this peer, drop the response");
             needToCatchup = false;
         else
-            if(response.nextIndex >= context.snapshot.size) then
+            local currentSyncCollectionName = context.snapshot.collectionsNameSize[context.currentCollectionIndex].name;
+            if(context.currentCollectionIndex >= #context.snapshot.collectionsNameSize and 
+                response.nextIndex >= context.snapshot.size) then
                 self.logger.debug("snapshot sync is done");
                 peer.nextLogIndex = context.snapshot.lastLogIndex + 1;
                 peer.matchedIndex = context.snapshot.lastLogIndex;
                 peer.snapshotSyncContext = nil;
                 needToCatchup = peer:clearPendingCommit() or response.nextIndex < self.logStore:getFirstAvailableIndex();
+            elseif (response.nextIndex >= context.snapshot.size) then
+                self.logger.debug("continue to sync snapshot for %s at offset %d", currentCollectionName, response.nextIndex);
+                context.currentCollectionIndex = context.currentCollectionIndex + 1;
+                local currentSyncCollectionSize = context.snapshot.collectionsNameSize[context.currentCollectionIndex].size;
+                context.snapshot.size = currentSyncCollectionSize;
+                context.offset = 0;
             else
-                self.logger.debug("continue to sync snapshot at offset %d", response.nextIndex);
+                self.logger.debug("continue to sync snapshot for %s at offset %d", currentCollectionName, response.nextIndex);
                 context.offset = response.nextIndex;
             end
         end
@@ -992,7 +1000,7 @@ end
 
 function RaftServer:handleSnapshotSyncRequest(snapshotSyncRequest)
     -- try{
-    self.stateMachine:saveSnapshotData(snapshotSyncRequest.snapshot, snapshotSyncRequest.offset, snapshotSyncRequest.data);
+    self.stateMachine:saveSnapshotData(snapshotSyncRequest.snapshot, snapshotSyncRequest.currentCollectionName, snapshotSyncRequest.offset, snapshotSyncRequest.data);
     if(snapshotSyncRequest.done) then
         -- Only follower will run this piece of code, but let's check it again
         if(self.role ~= ServerRole.Follower) then
@@ -1092,15 +1100,23 @@ function RaftServer:handleExtendedResponse(response, error)
             return;
         end
 
-        if(response.nextIndex >= context.snapshot.size) then
+        local currentSyncCollectionName = context.snapshot.collectionsNameSize[context.currentCollectionIndex].name;
+        if(context.currentCollectionIndex >= #context.snapshot.collectionsNameSize and 
+            response.nextIndex >= context.snapshot.size) then
             -- snapshot is done
             self.logger.debug("snapshot has been copied and applied to new server, continue to sync logs after snapshot");
             self.serverToJoin.snapshotSyncContext = nil;
             self.serverToJoin.nextLogIndex = context.snapshot.lastLogIndex + 1;
             self.serverToJoin.matchedIndex = context.snapshot.lastLogIndex;
+        elseif (response.nextIndex >= context.snapshot.size) then
+            self.logger.debug("continue to sync snapshot for %s at offset %d", currentSyncCollectionName, response.nextIndex);
+            context.currentCollectionIndex = context.currentCollectionIndex + 1;
+            local currentSyncCollectionSize = context.snapshot.collectionsNameSize[context.currentCollectionIndex].size;
+            context.snapshot.size = currentSyncCollectionSize;
+            context.offset = 0;
         else
-            context.offset = response.nextIndex; 
-            self.logger.debug("continue to send snapshot to new server at offset %d", response.nextIndex);
+            self.logger.debug("continue to sync snapshot for %s at offset %d", currentSyncCollectionName, response.nextIndex);
+            context.offset = response.nextIndex;
         end
 
         self:syncLogsToNewComingServer(self.serverToJoin.nextLogIndex);
@@ -1499,13 +1515,14 @@ function RaftServer:createSyncSnapshotRequest(peer, lastLogIndex, term, commitIn
         peer.snapshotSyncContext = SnapshotSyncContext:new(snapshot);
     end
 
+    local currentCollectionName = snapshot.collectionsNameSize[peer.snapshotSyncContext.currentCollectionIndex].name
     local offset = peer.snapshotSyncContext.offset;
     local sizeLeft = snapshot.size - offset;
     local blockSize = self:getSnapshotSyncBlockSize();
     local expectedSize = (sizeLeft > blockSize and blockSize) or sizeLeft;
     local data = {}
     -- try{
-    local sizeRead, error = self.stateMachine:readSnapshotData(snapshot, offset, data, expectedSize);
+    local sizeRead, error = self.stateMachine:readSnapshotData(snapshot, currentCollectionName, offset, data, expectedSize);
     if error then
         -- if there is i/o error, no reason to continue
         self.logger.error("failed to read snapshot data due to io error %s", error.toString());
@@ -1518,7 +1535,8 @@ function RaftServer:createSyncSnapshotRequest(peer, lastLogIndex, term, commitIn
         return nil;
     end
 
-    local syncRequest = SnapshotSyncRequest:new(snapshot, offset, data, (offset + expectedSize) >= snapshot.size);
+    local done = peer.snapshotSyncContext.currentCollectionIndex >= #snapshot.collectionsNameSize and (offset + expectedSize) >= snapshot.size;
+    local syncRequest = SnapshotSyncRequest:new(snapshot, offset, data, done, currentCollectionName);
     local requestMessage = {
         messageType = RaftMessageType.InstallSnapshotRequest,
         source = self.id,

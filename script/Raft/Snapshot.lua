@@ -14,12 +14,15 @@ local Snapshot = commonlib.gettable("Raft.Snapshot");
 
 local Snapshot = commonlib.gettable("Raft.Snapshot");
 
-function Snapshot:new(lastLogIndex, lastLogTerm, lastConfig, size) 
+function Snapshot:new(lastLogIndex, lastLogTerm, lastConfig, size, collectionsNameSize) 
     local o = {
         lastLogIndex = lastLogIndex,
         lastLogTerm = lastLogTerm,
         lastConfig = lastConfig,
         size = size or 0,
+
+        -- extended for TableDB collections
+        collectionsNameSize = collectionsNameSize
     };
     setmetatable(o, self);
     return o;
