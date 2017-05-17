@@ -14,10 +14,13 @@ local SnapshotSyncContext = commonlib.gettable("Raft.SnapshotSyncContext");
 
 local SnapshotSyncContext = commonlib.gettable("Raft.SnapshotSyncContext");
 
-function SnapshotSyncContext:new(snapshot) 
+function SnapshotSyncContext:new(snapshot, currentCollectionIndex) 
     local o = {
         snapshot = snapshot,
         offset = 0,
+
+        -- extended for TableDB collections
+        currentCollectionIndex = currentCollectionIndex or 1;
     };
     setmetatable(o, self);
     return o;

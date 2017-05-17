@@ -22,6 +22,10 @@ local Rpc = commonlib.gettable("Raft.Rpc");
 NPL.load("(gl)script/TableDB/RaftLogEntryValue.lua");
 local RaftLogEntryValue = commonlib.gettable("TableDB.RaftLogEntryValue");
 
+
+NPL.load("(gl)script/sqlite/libluasqlite3-loader.lua");
+local api, ERR, TYPE, AUTH = load_libluasqlite3()
+
 NPL.load("(gl)script/sqlite/sqlite3.lua");
 
 local LoggerFactory = NPL.load("(gl)script/Raft/LoggerFactory.lua");
@@ -119,8 +123,10 @@ function RaftTableDBStateMachine:commit(logIndex, data)
 
     --add to collections
     if raftLogEntryValue.collection and raftLogEntryValue.collection.name and not self.collections[raftLogEntryValue.collection.name] then
-        -- self.collections[raftLogEntryValue.collection.name] = raftLogEntryValue.collection.db .. raftLogEntryValue.collection.name
-        self.collections[raftLogEntryValue.collection.name] = collection
+        local collectionPath = raftLogEntryValue.collection.db .. raftLogEntryValue.collection.name;
+        self.logger.trace("add collection %s->%s", raftLogEntryValue.collection.name, collectionPath)
+        self.collections[raftLogEntryValue.collection.name] = collectionPath;
+        -- self.collections[raftLogEntryValue.collection.name] = collection
     end
 
     NPL.load("(gl)script/ide/System/Database/IORequest.lua");
@@ -178,12 +184,12 @@ end
  * @param offset offset of the data in the whole snapshot
  * @param data part of snapshot data
  ]]--
-function RaftTableDBStateMachine:saveSnapshotData(snapshot, offset, data)
-    local filePath = self.snapshotStore..string.format("%d-%d_User_s.db", snapshot.lastLogIndex, snapshot.lastLogTerm);
+function RaftTableDBStateMachine:saveSnapshotData(snapshot, currentCollectionName, offset, data)
+    local filePath = self.snapshotStore..string.format("%d-%d_%s_s.db", snapshot.lastLogIndex, snapshot.lastLogTerm, currentCollectionName);
+    local snapshotConfPath = self.snapshotStore..string.format("%d.cnf", snapshot.lastLogIndex);
 
-    if(not ParaIO.DoesFileExist(filePath)) then
-        local snapshotConf = self.snapshotStore..string.format("%d.cnf", snapshot.lastLogIndex);
-        local sConf = ParaIO.open(snapshotConf, "rw");
+    if(not ParaIO.DoesFileExist(snapshotConfPath)) then
+        local sConf = ParaIO.open(snapshotConfPath, "rw");
         local bytes = snapshot.lastConfig:toBytes();
         sConf:write(bytes, #bytes);
     end
@@ -204,16 +210,14 @@ end
  how to handle multi collection snapshot data
  ]]--
 function RaftTableDBStateMachine:applySnapshot(snapshot)
-    local filePath = self.snapshotStore..string.format("%d-%d_User_s.db", snapshot.lastLogIndex, snapshot.lastLogTerm);
-    if(not ParaIO.DoesFileExist(filePath)) then
-        return false;
+    for name,_ in pairs(self.collections) do
+        local filePath = self.snapshotStore..string.format("%d-%d_%s_s.db", snapshot.lastLogIndex, snapshot.lastLogTerm, name);
+        if(not ParaIO.DoesFileExist(filePath)) then
+            return false;
+        end
     end
 
-    local snapshotFile = ParaIO.open(filePath, "r");
-
     self.commitIndex = snapshot.lastLogIndex;
-    snapshotFile:close()
-
     return true;
 end
 
@@ -227,8 +231,9 @@ end
 
  how to handle multi collection snapshot data
  ]]--
-function RaftTableDBStateMachine:readSnapshotData(snapshot, offset, buffer, expectedSize)
-    local filePath = self.snapshotStore..string.format("%d-%d_User_s.db", snapshot.lastLogIndex, snapshot.lastLogTerm);
+function RaftTableDBStateMachine:readSnapshotData(snapshot, currentCollectionName, offset, buffer, expectedSize)
+    local filePath = self.snapshotStore..string.format("%d-%d_%s_s.db", snapshot.lastLogIndex, snapshot.lastLogTerm, currentCollectionName);
+    self.logger.trace("readSnapshotData %s", filePath);
     if(not ParaIO.DoesFileExist(filePath)) then
         return -1;
     end
@@ -251,36 +256,84 @@ function RaftTableDBStateMachine:getLastSnapshot()
   local search_result = ParaIO.SearchFiles(self.snapshotStore, "*_s.db", "", 15, 10000, 0);
   local nCount = search_result:GetNumOfResult();
   
-  local latestSnapshotFilename;
+  local collections = {};
+  local collectionsSet = {};
   local maxLastLogIndex = 0;
   local maxTerm = 0
   local i;
   
   -- start from 0, inconsistent with lua
   for i = 0, nCount-1 do 
-    local filename = search_result:GetItem(i);
-        local lastLogIndex, term = string.match(filename,"(%d+)%-(%d+)_(%a+)_s%.db");
-        lastLogIndex = tonumber(lastLogIndex)
-        term = tonumber(term)
-        self.logger.trace("get file %s>lastLogIndex:%d, term:%d", filename, lastLogIndex, term)
-        if lastLogIndex > maxLastLogIndex then
-            maxLastLogIndex = lastLogIndex;
-            maxTerm = term;
-            latestSnapshotFilename = filename;
-        end
+      local filename = search_result:GetItem(i);
+      local lastLogIndex, term, collection_name = string.match(filename,"(%d+)%-(%d+)_([%a+%d+]+)_s%.db");
+      if not collectionsSet[collection_name] then
+          collectionsSet[collection_name] = true;
+          collections[#collections + 1] = collection_name
+      end
+      lastLogIndex = tonumber(lastLogIndex)
+      term = tonumber(term)
+      self.logger.trace("get file %s>lastLogIndex:%d, term:%d, collection:%s", filename, lastLogIndex, term, collection_name)
+      if lastLogIndex > maxLastLogIndex then
+          maxLastLogIndex = lastLogIndex;
+          maxTerm = term;
+          -- latestSnapshotFilename = filename;
+      end
   end
   search_result:Release();
 
-  if latestSnapshotFilename then
-      local snapshotConf = self.snapshotStore..string.format("%d.cnf", maxLastLogIndex);
-      local sConf = ParaIO.open(snapshotConf, "r");
-      local config = ClusterConfiguration:fromBytes(sConf:GetText(0, -1))
-      local latestSnapshotFileSize = ParaIO.open(self.snapshotStore..latestSnapshotFilename, "r"):GetFileSize();
-      return Snapshot:new(maxLastLogIndex, maxTerm, config, latestSnapshotFileSize)
-  end
+  local snapshotConf = self.snapshotStore..string.format("%d.cnf", maxLastLogIndex);
+  local sConf = ParaIO.open(snapshotConf, "r");
+  local config = ClusterConfiguration:fromBytes(sConf:GetText(0, -1));
 
+  if maxLastLogIndex > 0 then
+    -- get all collections snapshot total size
+    local collectionsNameSize = {};
+    for _,name in ipairs(collections) do
+        local latestSnapshotFilename = format("%s%d-%d_%s_s.db", self.snapshotStore, maxLastLogIndex, maxTerm, name);
+        self.logger.trace("latestSnapshot %s", latestSnapshotFilename)
+        local latestSnapshot = ParaIO.open(latestSnapshotFilename, "r");
+        if not latestSnapshot:IsValid() then
+            self.logger.error("getLastSnapshot open %s err", latestSnapshotFilename)
+            self:exit(-1);
+        end
+        local fileSize = latestSnapshot:GetFileSize();
+        assert(fileSize>0, format("%s read error", latestSnapshotFilename));
+        latestSnapshot:close();
+        collectionsNameSize[#collectionsNameSize+1] = {name= name, size= fileSize};
+    end
+    if #collectionsNameSize > 0 then
+        return Snapshot:new(maxLastLogIndex, maxTerm, config, collectionsNameSize[1].size, collectionsNameSize)
+    else
+        -- Raft help us to create a collection based on the snapshot
+        return Snapshot:new(maxLastLogIndex, maxTerm, config)
+    end
+  end
 end
 
+
+local function getLatestSnapshotName(collection_name)
+  -- list all files in the initial directory.
+  local search_result = ParaIO.SearchFiles(self.snapshotStore, format("*%s_s.db", collection_name), "", 15, 10000, 0);
+  local nCount = search_result:GetNumOfResult();
+
+  local maxLastLogIndex = 0;
+  local maxTerm = 0;
+
+  for i = 0, nCount-1 do
+      local filename = search_result:GetItem(i);
+      local lastLogIndex, term, _ = string.match(filename,"(%d+)%-(%d+)_([%a+%d+]+)_s%.db");
+      lastLogIndex = tonumber(lastLogIndex)
+      term = tonumber(term)
+      self.logger.trace("get file %s>lastLogIndex:%d, term:%d, collection:%s", filename, lastLogIndex, term, collection_name)
+      if lastLogIndex > maxLastLogIndex then
+          maxLastLogIndex = lastLogIndex;
+          maxTerm = term;
+      end
+  end
+  search_result:Release();
+
+  return format("%s%d-%d_%s_s.db", self.snapshotStore, maxLastLogIndex, maxTerm, collection_name);
+end
 --[[
  * Create a snapshot data based on the snapshot information asynchronously
  * set the future to true if snapshot is successfully created, otherwise, 
@@ -299,8 +352,6 @@ function RaftTableDBStateMachine:createSnapshot(snapshot)
     end
 
     self.snapshotInprogress = true;
-    local copyOfMessages = self.messages
-
 
     -- make async ??
 
@@ -315,21 +366,54 @@ function RaftTableDBStateMachine:createSnapshot(snapshot)
     -- do backup here
     for name,collection in pairs(self.collections) do
         local filePath = self.snapshotStore..string.format("%d-%d_%s_s.db", snapshot.lastLogIndex, snapshot.lastLogTerm, name);
-        -- local srcDBPath = collection_name..".db";
+        local srcDBPath = collection..".db";
         self.logger.info("backing up %s to %s", name, filePath);
         
         -- local t = ParaIO.open(filePath, "rw");
         -- t:close();
         local backupDB = sqlite3.open(filePath)
-        -- local srcDB = sqlite3.open(srcDBPath)
-        local srcDB = collection.storageProvider._db
+        local srcDB = sqlite3.open(srcDBPath)
+        -- local srcDB = collection.storageProvider._db
+        -- backup can get error
         local bu = sqlite3.backup_init(backupDB, 'main', srcDB, 'main')
-        bu:step(-1);
-        bu:finish();
+
+        local deleteBackupDB = false;
+        if bu then
+            local stepResult = bu:step(-1);
+            if stepResult ~= ERR.DONE then
+                self.logger.error("back up failed")
+                -- an error occured
+                if stepResult == ERR.BUSY or stepResult == ERR.LOCKED then
+                    -- we don't retry, just delete the backupDB and leave for the next snapshot
+                    deleteBackupDB = true;
+                    -- move the previous snapshot to current logIndex?
+                    local prevSnapshortName = getLatestSnapshotName(name);
+                    self.logger.info("copy %s to %s", prevSnapshortName, filePath)
+                    if not (ParaIO.CopyFile(prevSnapshortName, filePath, true)) then
+                        self.logger.error("copy %s to %s failed", prevSnapshortName, filePath);
+                        self:exit(-1);
+                    end
+                else
+                    self.logger.error("must be a BUG!!!")
+                    bu:finish();
+                    self:exit(-1)
+                end
+            end
+            bu:finish();
+        else
+            -- A call to sqlite3_backup_init() will fail, returning NULL, 
+            -- if there is already a read or read-write transaction open on the destination database
+            self.logger.error("backup_init failed")
+            deleteBackupDB = true;
+        end
+
         bu = nil;
 
         backupDB:close()
-        -- srcDB:close()
+        srcDB:close()
+        if deleteBackupDB then
+            ParaIO.DeleteFile(filePath);
+        end
     end
 
     self.snapshotInprogress = false;
@@ -343,7 +427,11 @@ end
  * @param code 0 indicates the system is gracefully shutdown, -1 indicates there are some errors which cannot be recovered
  ]]--
 function RaftTableDBStateMachine:exit(code)
+    -- frustrating
+    -- C/C++ API call is counted as one instruction, so Exit does not block
     ParaGlobal.Exit(code)
+    -- we don't want to go more
+    ParaEngine.Sleep(1);
 end
 
 

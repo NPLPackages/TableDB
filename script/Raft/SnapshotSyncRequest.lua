@@ -20,12 +20,15 @@ local Snapshot = commonlib.gettable("Raft.Snapshot");
 
 local SnapshotSyncRequest = commonlib.gettable("Raft.SnapshotSyncRequest");
 
-function SnapshotSyncRequest:new(snapshot, offset, data, done) 
+function SnapshotSyncRequest:new(snapshot, offset, data, done, currentCollectionName) 
     local o = {
         snapshot = snapshot,
         offset = offset,
         data = data,
         done = done,
+
+        -- extended for TableDB collections
+        currentCollectionName = currentCollectionName,
     };
     setmetatable(o, self);
     return o;
@@ -61,6 +64,9 @@ function SnapshotSyncRequest:toBytes()
         -- end
         file:WriteBytes(1, {(self.done and 1) or 0})
 
+        file:WriteInt(#self.currentCollectionName);
+        file:WriteString(self.currentCollectionName);
+
         bytes = file:GetText(0, -1)
 
         file:close()
@@ -95,7 +101,10 @@ function SnapshotSyncRequest:fromBytes(bytes)
         file:ReadBytes(1, doneByte)
         local done = doneByte[1] == 1
 
-        snapshotSyncRequest = SnapshotSyncRequest:new(Snapshot:new(lastLogIndex, lastLogTerm, config), offset, data, done);
+        local currentCollectionNameLen = file:ReadInt();
+        local currentCollectionName = file:ReadString(currentCollectionNameLen);
+
+        snapshotSyncRequest = SnapshotSyncRequest:new(Snapshot:new(lastLogIndex, lastLogTerm, config), offset, data, done, currentCollectionName);
 
         file:close()
     end
