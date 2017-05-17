@@ -311,7 +311,7 @@ function RaftTableDBStateMachine:getLastSnapshot()
 end
 
 
-local function getLatestSnapshotName(collection_name)
+function RaftTableDBStateMachine:getLatestSnapshotName(collection_name)
   -- list all files in the initial directory.
   local search_result = ParaIO.SearchFiles(self.snapshotStore, format("*%s_s.db", collection_name), "", 15, 10000, 0);
   local nCount = search_result:GetNumOfResult();
@@ -378,28 +378,38 @@ function RaftTableDBStateMachine:createSnapshot(snapshot)
         local bu = sqlite3.backup_init(backupDB, 'main', srcDB, 'main')
 
         local deleteBackupDB = false;
+        local backupDBClosed = false;
         if bu then
             local stepResult = bu:step(-1);
             if stepResult ~= ERR.DONE then
                 self.logger.error("back up failed")
                 -- an error occured
                 if stepResult == ERR.BUSY or stepResult == ERR.LOCKED then
-                    -- we don't retry, just delete the backupDB and leave for the next snapshot
-                    deleteBackupDB = true;
+                    -- we don't retry
+                    bu:finish(); -- must free resource
+                    backupDB:close()
+                    backupDBClosed = true;
+                    ParaIO.DeleteFile(filePath);
                     -- move the previous snapshot to current logIndex?
-                    local prevSnapshortName = getLatestSnapshotName(name);
-                    self.logger.info("copy %s to %s", prevSnapshortName, filePath)
-                    if not (ParaIO.CopyFile(prevSnapshortName, filePath, true)) then
-                        self.logger.error("copy %s to %s failed", prevSnapshortName, filePath);
-                        self:exit(-1);
+                    local prevSnapshortName = self:getLatestSnapshotName(name);
+                    if prevSnapshortName == format("%s0-0_%s_s.db", self.snapshotStore, name) then
+                        -- leave it
+                        self.logger.error("backing up the 1st snapshot %s err", filePath)
+                    else
+                        self.logger.info("copy %s to %s", prevSnapshortName, filePath)
+                        if not (ParaIO.CopyFile(prevSnapshortName, filePath, true)) then
+                            self.logger.error("copy %s to %s failed", prevSnapshortName, filePath);
+                            self:exit(-1);
+                        end
                     end
                 else
                     self.logger.error("must be a BUG!!!")
                     bu:finish();
                     self:exit(-1)
                 end
+            else
+                bu:finish();
             end
-            bu:finish();
         else
             -- A call to sqlite3_backup_init() will fail, returning NULL, 
             -- if there is already a read or read-write transaction open on the destination database
@@ -409,7 +419,9 @@ function RaftTableDBStateMachine:createSnapshot(snapshot)
 
         bu = nil;
 
-        backupDB:close()
+        if not backupDBClosed then
+            backupDB:close()
+        end
         srcDB:close()
         if deleteBackupDB then
             ParaIO.DeleteFile(filePath);

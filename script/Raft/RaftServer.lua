@@ -727,6 +727,8 @@ end
 function RaftServer:snapshotAndCompact(indexCommitted)
     local snapshotInAction = false;
     -- see if we need to do snapshots
+    self.logger.trace("snapshotAndCompact>snapshotDistance:%d, indexCommitted:%d, logStore:getStartIndex:%d, snapshotInProgress:%d",
+                       self.context.raftParameters.snapshotDistance, indexCommitted, self.logStore:getStartIndex(), self.snapshotInProgress)
     if(self.context.raftParameters.snapshotDistance > 0
         and ((indexCommitted - self.logStore:getStartIndex()) > self.context.raftParameters.snapshotDistance)
         and self.snapshotInProgress == 0) then
@@ -743,7 +745,12 @@ function RaftServer:snapshotAndCompact(indexCommitted)
             -- get the latest configuration info
             local config = self.config;
             while(config.logIndex > indexCommitted and config.lastLogIndex >= self.logStore:getStartIndex()) do
-                config = ClusterConfiguration:fromBytes(self.logStore:getLogEntryAt(config.lastLogIndex).value);
+                local configLog = self.logStore:getLogEntryAt(config.lastLogIndex)
+                if not configLog then
+                    self.logger.error("cannot find config at %d", config.lastLogIndex);
+                    self.stateMachine:exit(-1);
+                end
+                config = ClusterConfiguration:fromBytes(configLog.value);
             end
 
             if(config.logIndex > indexCommitted and config.lastLogIndex > 0 and config.lastLogIndex < self.logStore:getStartIndex()) then
