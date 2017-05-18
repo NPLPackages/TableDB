@@ -192,6 +192,7 @@ function RaftTableDBStateMachine:saveSnapshotData(snapshot, currentCollectionNam
         local sConf = ParaIO.open(snapshotConfPath, "rw");
         local bytes = snapshot.lastConfig:toBytes();
         sConf:write(bytes, #bytes);
+        sConf:close();
     end
 
     local snapshotFile = ParaIO.open(filePath, "rw");
@@ -241,6 +242,7 @@ function RaftTableDBStateMachine:readSnapshotData(snapshot, currentCollectionNam
     local snapshotFile = ParaIO.open(filePath, "r");
     snapshotFile:seek(offset);
     snapshotFile:ReadBytes(expectedSize, buffer);
+    snapshotFile:close();
     return expectedSize;
 end
 
@@ -281,11 +283,15 @@ function RaftTableDBStateMachine:getLastSnapshot()
   end
   search_result:Release();
 
-  local snapshotConf = self.snapshotStore..string.format("%d.cnf", maxLastLogIndex);
-  local sConf = ParaIO.open(snapshotConf, "r");
-  local config = ClusterConfiguration:fromBytes(sConf:GetText(0, -1));
-
   if maxLastLogIndex > 0 then
+    local snapshotConf = self.snapshotStore..string.format("%d.cnf", maxLastLogIndex);
+    local sConf = ParaIO.open(snapshotConf, "r");
+    if not sConf:IsValid() then
+        self.logger.error("getLastSnapshot open %s err", snapshotConf)
+        self:exit(-1);
+    end
+    local config = ClusterConfiguration:fromBytes(sConf:GetText(0, -1));
+    sConf:close();
     -- get all collections snapshot total size
     local collectionsNameSize = {};
     for _,name in ipairs(collections) do
@@ -361,6 +367,7 @@ function RaftTableDBStateMachine:createSnapshot(snapshot)
         local sConf = ParaIO.open(snapshotConf, "rw");
         local bytes = snapshot.lastConfig:toBytes();
         sConf:WriteBytes(#bytes, {bytes:byte(1, -1)})
+        sConf:close();
     end
 
     -- do backup here
