@@ -553,13 +553,13 @@ function RaftServer:handleInstallSnapshotResponse(response)
                 peer.snapshotSyncContext = nil;
                 needToCatchup = peer:clearPendingCommit() or response.nextIndex < self.logStore:getFirstAvailableIndex();
             elseif (response.nextIndex >= context.snapshot.size) then
-                self.logger.debug("continue to sync snapshot for %s at offset %d", currentCollectionName, response.nextIndex);
+                self.logger.debug("continue to sync snapshot for %s at offset %d", currentSyncCollectionName, response.nextIndex);
                 context.currentCollectionIndex = context.currentCollectionIndex + 1;
                 local currentSyncCollectionSize = context.snapshot.collectionsNameSize[context.currentCollectionIndex].size;
                 context.snapshot.size = currentSyncCollectionSize;
                 context.offset = 0;
             else
-                self.logger.debug("continue to sync snapshot for %s at offset %d", currentCollectionName, response.nextIndex);
+                self.logger.debug("continue to sync snapshot for %s at offset %d", currentSyncCollectionName, response.nextIndex);
                 context.offset = response.nextIndex;
             end
         end
