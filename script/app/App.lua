@@ -98,7 +98,8 @@ local function executeAsClient(localAddress, RequestRPC, configuration, loggerFa
 
     if clientMode == "appendEntries" then
       NPL.load("(gl)script/TableDB/test/test_TableDatabase.lua");
-      TestSQLOperations(RaftSqliteStore);
+      -- TestSQLOperations(RaftSqliteStore);
+      TestInsertThroughputNoIndex(RaftSqliteStore)
 
       -- local values = {
       --   "test:1111",

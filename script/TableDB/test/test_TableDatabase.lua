@@ -157,13 +157,30 @@ end
 
 
 -- takes 23 seconds with 1 million record, on my HDD, CPU i7.
-function TestInsertThroughputNoIndex()
+function TestInsertThroughputNoIndex(RaftSqliteStore)
 	NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
 	local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
+		local raftSqliteStore = raftSqliteStore or RaftSqliteStore
+	-- use raft storage
+	StorageProvider:SetStorageClass(raftSqliteStore);
+	
+	TableDatabase.connect = function (self, rootFolder, callbackFunc)
+		self.rootFolder = rootFolder;
+		RaftSqliteStore:connect(self, {rootFolder = self.rootFolder}, function(...)
+			if(callbackFunc) then
+				callbackFunc(...);
+			end
+		end)
+		return self;
+	end
+
 
     -- this will start both db client and db server if not.
 	local db = TableDatabase:new():connect("temp/mydatabase/");
 	
+	-- db will be the server
+	db:SetWriterTheadName(__rts__:GetName());
+
 	db.insertNoIndex:makeEmpty({});
 	db.insertNoIndex:flush({});
 		
