@@ -1,8 +1,8 @@
 --[[
-Title: 
+Title:
 Author: liuluheng
 Date: 2017.03.25
-Desc: 
+Desc:
 
 
 ------------------------------------------------------------
@@ -44,13 +44,13 @@ local RaftServer = commonlib.gettable("Raft.RaftServer");
 local DEFAULT_SNAPSHOT_SYNC_BLOCK_SIZE = 4 * 1024;
 
 local indexComparator = function (arg0, arg1)
-    
+
     return arg0 > arg1;
 end
 
 local real_commit -- 'forward' declarations
 
-function RaftServer:new(ctx) 
+function RaftServer:new(ctx)
     local o = {
         context = ctx,
         id = ctx.serverStateManager.serverId,
@@ -66,7 +66,7 @@ function RaftServer:new(ctx)
         role = ServerRole.Follower,
         peers = {},
         logger = ctx.loggerFactory.getLogger("RaftServer"),
-        
+
         -- fields for extended messages
         serverToJoin = nil;
         configChanging = false;
@@ -82,14 +82,14 @@ function RaftServer:new(ctx)
      * I found this implementation is also a victim of bug https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
      * As the implementation is based on Diego's thesis
      * Fix:
-     * We should never load configurations that is not committed, 
+     * We should never load configurations that is not committed,
      *   this prevents an old server from replicating an obsoleted config to other servers
      * The prove is as below:
      * Assume S0 is the last committed server set for the old server A
      * |- EXITS Log l which has been committed but l !BELONGS TO A.logs =>  Vote(A) < Majority(S0)
      * In other words, we need to prove that A cannot be elected to leader if any logs/configs has been committed.
      * Case #1, There is no configuration change since S0, then it's obvious that Vote(A) < Majority(S0), see the core Algorithm
-     * Case #2, There are one or more configuration changes since S0, then at the time of first configuration change was committed, 
+     * Case #2, There are one or more configuration changes since S0, then at the time of first configuration change was committed,
      *      there are at least Majority(S0 - 1) servers committed the configuration change
      *      Majority(S0 - 1) + Majority(S0) > S0 => Vote(A) < Majority(S0)
      * -|
@@ -163,7 +163,7 @@ function RaftServer:processRequest(request)
             entriesLength,
             request.commitIndex or 0,
             request.term or -1);
-    
+
     local response;
     if(request.messageType.int == RaftMessageType.AppendEntriesRequest.int) then
         response = self:handleAppendEntriesRequest(request);
@@ -197,7 +197,7 @@ function RaftServer:handleAppendEntriesRequest(request)
     if(self.steppingDown > 0) then
         self.steppingDown = 2;
     end
-    
+
     if(request.term == self.state.term) then
         if(self.role == ServerRole.Candidate) then
             self:becomeFollower();
@@ -282,7 +282,7 @@ function RaftServer:handleVoteRequest(request)
     if(self.steppingDown > 0) then
         self.steppingDown = 2;
     end
-    
+
     local response = {
         messageType = RaftMessageType.RequestVoteResponse,
         source = self.id,
@@ -341,7 +341,7 @@ function RaftServer:handleElectionTimeout()
                 self.config.servers[server.id] = nil;
                 self.context.serverStateManager:saveClusterConfiguration(self.config);
             end
-            
+
             self.stateMachine:exit(0);
             return;
         end
@@ -545,7 +545,7 @@ function RaftServer:handleInstallSnapshotResponse(response)
             needToCatchup = false;
         else
             local currentSyncCollectionName = context.snapshot.collectionsNameSize[context.currentCollectionIndex].name;
-            if(context.currentCollectionIndex >= #context.snapshot.collectionsNameSize and 
+            if(context.currentCollectionIndex >= #context.snapshot.collectionsNameSize and
                 response.nextIndex >= context.snapshot.size) then
                 self.logger.debug("snapshot sync is done");
                 peer.nextLogIndex = context.snapshot.lastLogIndex + 1;
@@ -626,7 +626,7 @@ function RaftServer:restartElectionTimer()
     if self.electionTimer:IsEnabled() then
         self.electionTimer:Change()
     end
-    
+
     local raftParameters = self.context.raftParameters
     local delta = raftParameters.electionTimeoutUpperBound - raftParameters.electionTimeoutLowerBound
     local electionTimeout = raftParameters.electionTimeoutLowerBound + math.random(0, delta)
@@ -700,7 +700,7 @@ function RaftServer:updateTerm(term)
     end
 
     return false;
-end    
+end
 
 function RaftServer:commit(targetIndex)
     self.logger.trace("committing..targetIndex:%d, quickCommitIndex:%d", targetIndex, self.quickCommitIndex)
@@ -811,7 +811,7 @@ function RaftServer:createAppendEntriesRequest(peer)
     if(peer.nextLogIndex == 0) then
         peer.nextLogIndex = currentNextIndex;
     end
-    
+
     local lastLogIndex = peer.nextLogIndex - 1;
     -- }
     if(lastLogIndex >= currentNextIndex) then
@@ -910,7 +910,7 @@ function RaftServer:reconfigure(newConfig)
             self.stateMachine:exit(0);
             return;
         end
-        
+
         local peer = self.peers[id];
         if(peer == nil) then
             self.logger.info("peer %d cannot be found in current peer list", id);
@@ -955,7 +955,7 @@ function RaftServer:handleInstallSnapshotRequest(request)
     if(self.steppingDown > 0) then
         self.steppingDown = 2;
     end
-    
+
     if(request.term == self.state.term and not self.catchingUp) then
         if(self.role == ServerRole.Candidate) then
             self:becomeFollower();
@@ -1108,7 +1108,7 @@ function RaftServer:handleExtendedResponse(response, error)
         end
 
         local currentSyncCollectionName = context.snapshot.collectionsNameSize[context.currentCollectionIndex].name;
-        if(context.currentCollectionIndex >= #context.snapshot.collectionsNameSize and 
+        if(context.currentCollectionIndex >= #context.snapshot.collectionsNameSize and
             response.nextIndex >= context.snapshot.size) then
             -- snapshot is done
             self.logger.debug("snapshot has been copied and applied to new server, continue to sync logs after snapshot");
@@ -1148,15 +1148,15 @@ function RaftServer:handleExtendedResponseError(error)
                 if(server.currentHeartbeatInterval >= self.context.raftParameters:getMaxHeartbeatInterval()) then
                     if(request.messageType.int == RaftMessageType.LeaveClusterRequest.int) then
                         self.logger.info("rpc failed again for the removing server (%d), will remove this server directly", server:getId());
-                        
+
                         --[[
                          * In case of there are only two servers in the cluster, it safe to remove the server directly from peers
                          * as at most one config change could happen at a time
                          *  prove:
                          *      assume there could be two config changes at a time
-                         *      this means there must be a leader after previous leader offline, which is impossible 
+                         *      this means there must be a leader after previous leader offline, which is impossible
                          *      (no leader could be elected after one server goes offline in case of only two servers in a cluster)
-                         * so the bug https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E 
+                         * so the bug https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
                          * does not apply to cluster which only has two members
                          ]]--
                         if(Rutils.table_size(self.peers) == 1) then
@@ -1170,7 +1170,7 @@ function RaftServer:handleExtendedResponseError(error)
                                 self.logger.info("server %d is removed from cluster", server:getId());
                             end
                         end
-                        
+
                         self:removeServerFromCluster(server:getId());
                     else
                         self.logger.info("rpc failed again for the new coming server (%d), will stop retry for this server", server:getId());
@@ -1185,7 +1185,7 @@ function RaftServer:handleExtendedResponseError(error)
 
                     local timer = commonlib.Timer:new({callbackFunc = function(timer)
                             this.logger.debug("retrying the request %s", request.messageType.string);
-                            
+
                             server:SendRequest(request, function(furtherResponse, furtherError)
                                 this:handleExtendedResponse(furtherResponse, furtherError);
                             end);
@@ -1455,7 +1455,7 @@ function RaftServer:handleLeaveClusterRequest(request)
     else
         response.accepted = false;
     end
-    
+
     return response;
 end
 
@@ -1482,9 +1482,9 @@ function RaftServer:removeServerFromCluster(serverId)
     self.logger.info("removed a server from configuration and save the configuration to log store at %d", newConfig.logIndex);
     self.configChanging = true;
     local newConfigBytes = newConfig:toBytes();
-    
+
     -- self.logger.trace("RaftServer:removeServerFromCluster>newConfigBytes:%s", util.table_tostring(newConfigBytes))
-    
+
     self.logStore:append(LogEntry:new(self.state.term, newConfig:toBytes(), LogValueType.Configuration));
     self:requestAllAppendEntries();
 end
@@ -1497,7 +1497,7 @@ end
 function RaftServer:createSyncSnapshotRequest(peer, lastLogIndex, term, commitIndex)
     -- synchronized(peer){
     local context = peer.snapshotSyncContext;
-    local snapshot 
+    local snapshot
     if context then
         snapshot = context.snapshot;
     end
@@ -1601,7 +1601,7 @@ function real_commit(server)
             if(server.config.logIndex < newConfig.logIndex) then
                 server:reconfigure(newConfig);
             end
-            
+
             if(server.catchingUp and newConfig:getServer(server.id) ~= nil) then
                 server.logger.info("this server is committed as one of cluster members");
                 server.catchingUp = false;
