@@ -80,7 +80,7 @@ local function executeInServerMode(stateMachine)
     raftParameters.maximumAppendingSize = 200;
     raftParameters.logSyncBatchSize = 5;
     raftParameters.logSyncStopGap = 5;
-    raftParameters.snapshotDistance = 5;
+    raftParameters.snapshotDistance = 5000;
     raftParameters.snapshotBlockSize = 0;
 
     local context = RaftContext:new(stateManager,
