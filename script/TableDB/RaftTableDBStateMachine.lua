@@ -22,6 +22,8 @@ local Rpc = commonlib.gettable("Raft.Rpc");
 NPL.load("(gl)script/TableDB/RaftLogEntryValue.lua");
 local RaftLogEntryValue = commonlib.gettable("TableDB.RaftLogEntryValue");
 
+NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
+local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
 
 NPL.load("(gl)script/sqlite/libluasqlite3-loader.lua");
 local api, ERR, TYPE, AUTH = load_libluasqlite3()
@@ -117,29 +119,45 @@ function RaftTableDBStateMachine:commit(logIndex, data)
     -- data is logEntry.value
     local raftLogEntryValue = RaftLogEntryValue:fromBytes(data);
     print("commit value:"..util.table_tostring(raftLogEntryValue))
-    NPL.load("(gl)script/ide/System/Database/IOThread.lua");
-    local IOThread = commonlib.gettable("System.Database.IOThread");
-    local collection = IOThread:GetSingleton():GetServerCollection(raftLogEntryValue.collection)
+    -- NPL.load("(gl)script/ide/System/Database/IOThread.lua");
+    -- local IOThread = commonlib.gettable("System.Database.IOThread");
+    -- local collection = IOThread:GetSingleton():GetServerCollection(raftLogEntryValue.collection)
 
-    --add to collections
-    if raftLogEntryValue.collection and raftLogEntryValue.collection.name and not self.collections[raftLogEntryValue.collection.name] then
-        local collectionPath = raftLogEntryValue.collection.db .. raftLogEntryValue.collection.name;
-        self.logger.trace("add collection %s->%s", raftLogEntryValue.collection.name, collectionPath)
-        self.collections[raftLogEntryValue.collection.name] = collectionPath;
-        -- self.collections[raftLogEntryValue.collection.name] = collection
-    end
+    -- --add to collections
+    -- if raftLogEntryValue.collection and raftLogEntryValue.collection.name and not self.collections[raftLogEntryValue.collection.name] then
+    --     local collectionPath = raftLogEntryValue.collection.db .. raftLogEntryValue.collection.name;
+    --     self.logger.trace("add collection %s->%s", raftLogEntryValue.collection.name, collectionPath)
+    --     self.collections[raftLogEntryValue.collection.name] = collectionPath;
+    --     -- self.collections[raftLogEntryValue.collection.name] = collection
+    -- end
 
-    NPL.load("(gl)script/ide/System/Database/IORequest.lua");
-    local IORequest = commonlib.gettable("System.Database.IORequest");
-    -- a dedicated IOThread
-    if raftLogEntryValue.query_type == "connect" then
-        collection = {
-            ToData = function (...)  end,
-            GetWriterThreadName = function (...) return "main" end,
-        }
-    end
-    IORequest:Send(raftLogEntryValue.query_type, collection, raftLogEntryValue.query,
-        function (err, data)
+    -- NPL.load("(gl)script/ide/System/Database/IORequest.lua");
+    -- local IORequest = commonlib.gettable("System.Database.IORequest");
+    -- -- a dedicated IOThread
+    -- if raftLogEntryValue.query_type == "connect" then
+    --     collection = {
+    --         ToData = function (...)  end,
+    --         GetWriterThreadName = function (...) return "main" end,
+    --     }
+    -- end
+    -- IORequest:Send(raftLogEntryValue.query_type, collection, raftLogEntryValue.query,
+    --     function (err, data)
+    --         local msg = {
+    --             err = err,
+    --             data = data,
+    --             cb_index = raftLogEntryValue.cb_index,
+    --         }
+
+    --         -- send Response
+    --         -- we need handle active failure here
+    --         RTDBRequestRPC(nil, raftLogEntryValue.serverId, msg)
+
+    --     end);
+
+
+    ---
+
+    local cbFunc = function (err, data)
             local msg = {
                 err = err,
                 data = data,
@@ -149,8 +167,21 @@ function RaftTableDBStateMachine:commit(logIndex, data)
             -- send Response
             -- we need handle active failure here
             RTDBRequestRPC(nil, raftLogEntryValue.serverId, msg)
+        end;
 
-        end);
+    -- a dedicated IOThread
+    if raftLogEntryValue.query_type == "connect" and not self.db then
+        self.db = TableDatabase:new():connect(raftLogEntryValue.query.rootFolder, cbFunc);
+    else
+        local collection = self.db[raftLogEntryValue.collection.name];
+        if raftLogEntryValue.query.query then
+            collection[raftLogEntryValue.query_type](collection, raftLogEntryValue.query.query,
+                                                     raftLogEntryValue.query.update or raftLogEntryValue.query.replacement,
+                                                     cbFunc);
+        else
+            collection[raftLogEntryValue.query_type](collection, raftLogEntryValue.query, cbFunc);
+        end
+    end
 
     self.commitIndex = logIndex;
 end
