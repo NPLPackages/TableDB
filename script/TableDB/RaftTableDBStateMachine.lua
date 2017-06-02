@@ -176,6 +176,15 @@ function RaftTableDBStateMachine:commit(logIndex, data)
         end
     else
         local collection = self.db[raftLogEntryValue.collection.name];
+
+        --add to collections
+        if not self.collections[raftLogEntryValue.collection.name] then
+            local collectionPath = raftLogEntryValue.collection.db .. raftLogEntryValue.collection.name;
+            self.logger.trace("add collection %s->%s", raftLogEntryValue.collection.name, collectionPath)
+            self.collections[raftLogEntryValue.collection.name] = collectionPath;
+            -- self.collections[raftLogEntryValue.collection.name] = collection
+        end
+
         -- NOTE: this may not work when the query field named "update" or "replacement"
         if raftLogEntryValue.query.update or raftLogEntryValue.query.replacement then
             collection[raftLogEntryValue.query_type](collection, raftLogEntryValue.query.query,
