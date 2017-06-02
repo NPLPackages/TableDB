@@ -170,11 +170,14 @@ function RaftTableDBStateMachine:commit(logIndex, data)
         end;
 
     -- a dedicated IOThread
-    if raftLogEntryValue.query_type == "connect" and not self.db then
-        self.db = TableDatabase:new():connect(raftLogEntryValue.query.rootFolder, cbFunc);
+    if raftLogEntryValue.query_type == "connect"  then
+        if not self.db then
+            self.db = TableDatabase:new():connect(raftLogEntryValue.query.rootFolder, cbFunc);
+        end
     else
         local collection = self.db[raftLogEntryValue.collection.name];
-        if raftLogEntryValue.query.query then
+        -- NOTE: this may not work when the query field named "update" or "replacement"
+        if raftLogEntryValue.query.update or raftLogEntryValue.query.replacement then
             collection[raftLogEntryValue.query_type](collection, raftLogEntryValue.query.query,
                                                      raftLogEntryValue.query.update or raftLogEntryValue.query.replacement,
                                                      cbFunc);
