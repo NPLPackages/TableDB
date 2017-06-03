@@ -239,7 +239,7 @@ function RaftServer:handleAppendEntriesRequest(request)
             index = index + 1;
         end
         self.logger.trace("checked overlap->entry len:%d, index:%d, logIndex:%d", #logEntries, index, logIndex)
-        
+
         -- dealing with overwrites
         while(index < self.logStore:getFirstAvailableIndex() and logIndex < #logEntries + 1) do
             local oldEntry = self.logStore:getLogEntryAt(index);
@@ -271,7 +271,7 @@ function RaftServer:handleAppendEntriesRequest(request)
             if(logEntry.valueType == LogValueType.Configuration) then
                 self.logger.info("received a configuration change at index %d from leader", indexForEntry);
                 self.configChanging = true;
-            else
+            elseif(logEntry.valueType == LogValueType.Application) then
                 self.stateMachine:preCommit(indexForEntry, logEntry.value);
             end
         end
