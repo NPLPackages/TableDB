@@ -87,6 +87,11 @@ function RaftTableDBStateMachine:start(raftMessageSender)
     -- NPL.StartNetServer(self.ip, tostring(self.port));
     RTDBRequestRPC:MakePublic();
 
+
+    self.snapshotThread = "Snapshot";
+    NPL.CreateRuntimeState(self.snapshotThread, 0):Start();
+
+
 end
 
 

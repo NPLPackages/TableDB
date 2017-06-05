@@ -1015,7 +1015,6 @@ function RaftServer:handleInstallSnapshotRequest(request)
 end
 
 function RaftServer:handleSnapshotSyncRequest(snapshotSyncRequest)
-    -- try{
     self.stateMachine:saveSnapshotData(snapshotSyncRequest.snapshot, snapshotSyncRequest.currentCollectionName, snapshotSyncRequest.offset, snapshotSyncRequest.data);
     if(snapshotSyncRequest.done) then
         -- Only follower will run this piece of code, but let's check it again
@@ -1048,11 +1047,6 @@ function RaftServer:handleSnapshotSyncRequest(snapshotSyncRequest)
             return false;
         end
     end
-    -- }catch(Throwable error){
-    --     self.logger.error("I/O error %s while saving the snapshot or applying the snapshot, no reason to continue", error.getMessage());
-    --     self.stateMachine:exit(-1);
-    --     return false;
-    -- }
 
     return true;
 end
