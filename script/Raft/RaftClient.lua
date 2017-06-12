@@ -41,6 +41,8 @@ function RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory)
 	-- att:SetField("KeepAlive", false);
 	att:SetField("IdleTimeout", true);
 	att:SetField("IdleTimeoutPeriod", 1200000);
+    __rts__:SetMsgQueueSize(50000);
+
     NPL.StartNetServer(localAddress.host, localAddress.port);
     
     for _, server in ipairs(configuration.servers) do
