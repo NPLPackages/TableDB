@@ -110,8 +110,8 @@ local function executeAsClient(localAddress, RequestRPC, configuration, loggerFa
       -- TestTable(raftSqliteStore)
       -- TestTableDatabase(raftSqliteStore);
       -- TestRangedQuery(raftSqliteStore);
-      TestPagination(raftSqliteStore)
-      -- TestCompoundIndex(raftSqliteStore) -- FIXME
+      -- TestPagination(raftSqliteStore)
+      TestCompoundIndex(raftSqliteStore)
       -- TestCountAPI(raftSqliteStore)
       -- TestDelete(raftSqliteStore)
     
