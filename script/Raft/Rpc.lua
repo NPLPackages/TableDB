@@ -127,7 +127,7 @@ function Rpc:OnActivated(msg)
           NPL.accept(msg.tid, remoteAddress.id or "default_user");
           msg.nid = remoteAddress.id or "default_user"
         else
-          -- this must be Raft internal message exclue the above 3
+          -- this must be Raft internal message exclude the above 3
           if msg.msg.source then
             remoteAddress = "server"..msg.msg.source..":"
           end      
@@ -136,8 +136,13 @@ function Rpc:OnActivated(msg)
           msg.nid = remoteAddress or "default_user"
         end
      else
-       self.logger.trace("who r u? msg:%s", util.table_tostring(msg))
-       NPL.reject(msg.tid);
+       if msg.name then
+          -- for client rsp in state machine
+          NPL.accept(msg.tid, msg.name);
+       else
+          self.logger.info("who r u? msg:%s", util.table_tostring(msg))
+          NPL.reject(msg.tid);
+       end
      end
   end
   
@@ -234,6 +239,7 @@ end
 -- @param timeout:  time out in milliseconds. if nil, there is no timeout
 -- if timed out callbackFunc("timeout", nil) is invoked on timeout
 function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
+  -- local address = remoteAddress
   -- if(type(address) == "string") then
   --   local thread_name = address:match("^%((.+)%)$");
   --   if (thread_name) then
