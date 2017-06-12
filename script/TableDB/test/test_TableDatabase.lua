@@ -703,7 +703,7 @@ function TestPagination(raftSqliteStore)
     db:SetWriterTheadName(__rts__:GetName());
 
     -- add some data
-    for i = 1, 10000 do
+    for i = 1, 100 do
         db.pagedUsers:insertOne({name = "name" .. i},
             {name = "name" .. i, company = "company" .. i, state = "state" .. i}, function() end)
     end
