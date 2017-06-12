@@ -102,7 +102,9 @@ local function executeAsClient(localAddress, RequestRPC, configuration, loggerFa
       -- TestInsertThroughputNoIndex(RaftSqliteStore)
       -- TestPerformance(RaftSqliteStore)
       -- TestBulkOperations(RaftSqliteStore)
-      TestTimeout(RaftSqliteStore)
+      -- TestTimeout(RaftSqliteStore)
+      -- TestBlockingAPI(RaftSqliteStore)
+      TestBlockingAPILatency(RaftSqliteStore)
 
     
     elseif clientMode == "addServer" then

@@ -148,7 +148,7 @@ function RaftTableDBStateMachine:commit(logIndex, data)
             cb_index = raftLogEntryValue.cb_index,
         }
         
-        self.logger.trace("%s", util.table_tostring(msg))
+        self.logger.debug("%s", util.table_tostring(msg))
         -- send Response
         -- we need handle activate failure here
         RTDBRequestRPC(nil, raftLogEntryValue.serverId, msg)
@@ -158,6 +158,9 @@ function RaftTableDBStateMachine:commit(logIndex, data)
     if raftLogEntryValue.query_type == "connect" then
         self.db:connect(raftLogEntryValue.query.rootFolder, cbFunc);
     else
+        if raftLogEntryValue.enableSyncMode then
+            self.db:EnableSyncMode(true);
+        end
         local collection = self.db[raftLogEntryValue.collection.name];
         
         --add to collections
@@ -170,11 +173,20 @@ function RaftTableDBStateMachine:commit(logIndex, data)
         
         -- NOTE: this may not work when the query field named "update" or "replacement"
         if raftLogEntryValue.query.update or raftLogEntryValue.query.replacement then
-            collection[raftLogEntryValue.query_type](collection, raftLogEntryValue.query.query,
-                raftLogEntryValue.query.update or raftLogEntryValue.query.replacement,
-                cbFunc);
+            if raftLogEntryValue.enableSyncMode then
+                cbFunc(collection[raftLogEntryValue.query_type](collection, raftLogEntryValue.query.query,
+                        raftLogEntryValue.query.update or raftLogEntryValue.query.replacement));
+            else
+                collection[raftLogEntryValue.query_type](collection, raftLogEntryValue.query.query,
+                        raftLogEntryValue.query.update or raftLogEntryValue.query.replacement,
+                        cbFunc);
+            end
         else
-            collection[raftLogEntryValue.query_type](collection, raftLogEntryValue.query, cbFunc);
+            if raftLogEntryValue.enableSyncMode then
+                cbFunc(collection[raftLogEntryValue.query_type](collection, raftLogEntryValue.query));
+            else
+                collection[raftLogEntryValue.query_type](collection, raftLogEntryValue.query, cbFunc);
+            end
         end
     end
     
