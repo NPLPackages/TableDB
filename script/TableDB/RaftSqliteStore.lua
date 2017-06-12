@@ -274,7 +274,10 @@ function RaftSqliteStore:Send(query_type, query, callbackFunc)
 
     self.raftClient:appendEntries(bytes, function (response, err)
         local result = (err == nil and response.accepted and "accepted") or "denied"
-        logger.info("the %s request has been %s", query_type, result)
+        if not (err == nil and response.accepted) then
+          logger.error("the %s request has been %s", query_type, result)
+        end
+        logger.debug("the %s request has been %s", query_type, result)
         -- if callbackFunc then
         -- 	callbackFunc(err);
         -- end

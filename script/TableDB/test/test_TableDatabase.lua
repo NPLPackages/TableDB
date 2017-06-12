@@ -160,7 +160,7 @@ end
 function TestInsertThroughputNoIndex(RaftSqliteStore)
   NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
   local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
-    local raftSqliteStore = raftSqliteStore or RaftSqliteStore
+  local raftSqliteStore = raftSqliteStore or RaftSqliteStore
   -- use raft storage
   StorageProvider:SetStorageClass(raftSqliteStore);
 
@@ -339,7 +339,20 @@ end
 function TestBulkOperations()
   NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
   local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
+  local raftSqliteStore = raftSqliteStore or RaftSqliteStore
+  -- use raft storage
+  StorageProvider:SetStorageClass(raftSqliteStore);
+
+  TableDatabase.connect = function (self, rootFolder)
+    self.rootFolder = rootFolder;
+    RaftSqliteStore:connect(self, {rootFolder = self.rootFolder})
+    return self;
+  end
+
   local db = TableDatabase:new():connect("temp/mydatabase/");
+    -- db will be the server
+  db:SetWriterTheadName(__rts__:GetName());
+  
   db.TestBulkOps:makeEmpty({}, function()  end);
 
   local total_records = 100000;
