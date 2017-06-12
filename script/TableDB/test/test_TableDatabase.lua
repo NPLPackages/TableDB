@@ -389,11 +389,22 @@ function TestBulkOperations(RaftSqliteStore)
     DoNextChunk();
 end
 
-function TestTimeout()
+function TestTimeout(RaftSqliteStore)
     NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
     local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
-    -- this will start both db client and db server if not.
+    local raftSqliteStore = raftSqliteStore or RaftSqliteStore
+    -- use raft storage
+    StorageProvider:SetStorageClass(raftSqliteStore);
+    
+    TableDatabase.connect = function(self, rootFolder)
+        self.rootFolder = rootFolder;
+        RaftSqliteStore:connect(self, {rootFolder = self.rootFolder})
+        return self;
+    end
+    
     local db = TableDatabase:new():connect("temp/mydatabase/");
+    -- db will be the server
+    db:SetWriterTheadName(__rts__:GetName());
     
     db.User:silient({name = "will always timeout"}, function(err, data)echo(err, data) end);
     db.User:silient({name = "will always timeout"}, function(err, data)echo(err, data) end);
