@@ -213,7 +213,7 @@ function TestPerformance(raftSqliteStore)
     
     NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
     local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
-
+    
     local raftSqliteStore = raftSqliteStore or RaftSqliteStore
     -- use raft storage
     StorageProvider:SetStorageClass(raftSqliteStore);
@@ -233,7 +233,7 @@ function TestPerformance(raftSqliteStore)
     local db = TableDatabase:new():connect("temp/mydatabase/");
     -- db will be the server
     db:SetWriterTheadName(__rts__:GetName());
-
+    
     -- this not necessary now, but put here as an example.
     db.User:exec({QueueSize = 10001}, function(err, data) end);
     
@@ -425,14 +425,14 @@ function TestBlockingAPI(raftSqliteStore)
     end
     
     local db = TableDatabase:new():connect("temp/mydatabase/");
-     -- db will be the server
+    -- db will be the server
     db:SetWriterTheadName(__rts__:GetName());
-
+    
     TableDatabase.EnableSyncMode = function(self, bEnabled)
-      raftSqliteStore.EnableSyncMode = bEnabled;
-      LOG.std(nil, "system", "TableDatabase", "sync mode api is %s in thread %s", bEnabled and "enabled" or "disabled", __rts__:GetName());
+        raftSqliteStore.EnableSyncMode = bEnabled;
+        LOG.std(nil, "system", "TableDatabase", "sync mode api is %s in thread %s", bEnabled and "enabled" or "disabled", __rts__:GetName());
     end
-
+    
     -- enable sync mode once and for all in current thread.
     db:EnableSyncMode(true);
     
@@ -466,12 +466,12 @@ function TestBlockingAPILatency(raftSqliteStore)
     
     -- this will start both db client and db server if not.
     local db = TableDatabase:new():connect("temp/mydatabase/");
-         -- db will be the server
+    -- db will be the server
     db:SetWriterTheadName(__rts__:GetName());
-
+    
     TableDatabase.EnableSyncMode = function(self, bEnabled)
-      raftSqliteStore.EnableSyncMode = bEnabled;
-      LOG.std(nil, "system", "TableDatabase", "sync mode api is %s in thread %s", bEnabled and "enabled" or "disabled", __rts__:GetName());
+        raftSqliteStore.EnableSyncMode = bEnabled;
+        LOG.std(nil, "system", "TableDatabase", "sync mode api is %s in thread %s", bEnabled and "enabled" or "disabled", __rts__:GetName());
     end
     -- enable sync mode once and for all in current thread.
     db:EnableSyncMode(true);
@@ -511,29 +511,73 @@ function TestSqliteStore()
     store:Close();
 end
 
-function TestConnect()
+function TestConnect(raftSqliteStore)
     NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
     local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
+    local raftSqliteStore = raftSqliteStore or RaftSqliteStore
+    -- use raft storage
+    StorageProvider:SetStorageClass(raftSqliteStore);
+    
+    TableDatabase.connect = function(self, rootFolder, callbackFunc)
+        self.rootFolder = rootFolder;
+        RaftSqliteStore:connect(self, {rootFolder = self.rootFolder}, function(...)
+            if (callbackFunc) then
+                callbackFunc(...);
+            end
+        end)
+        return self;
+    end
+    
     local db1 = TableDatabase:new():connect("temp/mydatabase/", function()echo("connected1") end);
     local db2 = TableDatabase:new():connect("temp/mydatabase/", function()echo("connected2") end);
+    -- db will be the server
+    db1:SetWriterTheadName(__rts__:GetName());
+    db2:SetWriterTheadName(__rts__:GetName());
+    
     db1.User:findOne({name = "npl"}, function(err, data)echo(data) end);
     db2.User:findOne({name = "npl"}, function(err, data)echo(data) end);
     db1.User:findOne({name = "npl"}, function(err, data)echo(data) end);
 end
 
-function TestRemoveIndex()
+function TestRemoveIndex(raftSqliteStore)
     NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
     local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
+    local raftSqliteStore = raftSqliteStore or RaftSqliteStore
+    -- use raft storage
+    StorageProvider:SetStorageClass(raftSqliteStore);
+    
+    TableDatabase.connect = function(self, rootFolder)
+        self.rootFolder = rootFolder;
+        RaftSqliteStore:connect(self, {rootFolder = self.rootFolder})
+        return self;
+    end
     local db = TableDatabase:new():connect("temp/mydatabase/");
+    -- db will be the server
+    db:SetWriterTheadName(__rts__:GetName());
+
     db.testIndex:findOne({subkey1 = "", subkey2 = "", subkey3 = ""}, function() end)
     db.testIndex:removeIndex({"subkey1"}, function() end)
 end
 
-function TestTable()
+function TestTable(raftSqliteStore)
     NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
     local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
-    -- this will start both db client and db server if not.
+    local raftSqliteStore = raftSqliteStore or RaftSqliteStore
+    -- use raft storage
+    StorageProvider:SetStorageClass(raftSqliteStore);
+    
+    TableDatabase.connect = function(self, rootFolder, callbackFunc)
+        self.rootFolder = rootFolder;
+        RaftSqliteStore:connect(self, {rootFolder = self.rootFolder}, function(...)
+            if (callbackFunc) then
+                callbackFunc(...);
+            end
+        end)
+        return self;
+    end
     local db = TableDatabase:new():connect("temp/mydatabase/", function()echo("connected") end);
+    -- db will be the server
+    db:SetWriterTheadName(__rts__:GetName());
     local c1 = db("c1");
     local c2 = db.c2;
     assert(c2.name == "c2");
@@ -550,11 +594,25 @@ function TestTable()
     end)
 end
 
-function TestTableDatabase()
+function TestTableDatabase(raftSqliteStore)
     NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
     local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
-    -- this will start both db client and db server if not.
+    local raftSqliteStore = raftSqliteStore or RaftSqliteStore
+    -- use raft storage
+    StorageProvider:SetStorageClass(raftSqliteStore);
+    
+    TableDatabase.connect = function(self, rootFolder, callbackFunc)
+        self.rootFolder = rootFolder;
+        RaftSqliteStore:connect(self, {rootFolder = self.rootFolder}, function(...)
+            if (callbackFunc) then
+                callbackFunc(...);
+            end
+        end)
+        return self;
+    end
     local db = TableDatabase:new():connect("temp/mydatabase/");
+    -- db will be the server
+    db:SetWriterTheadName(__rts__:GetName());
     -- this will automatically create the `User` collection table if not.
     local User = db.User;
     -- another way to create/get User table.
@@ -579,13 +637,23 @@ function TestTableDatabase()
 end
 
 
-function TestRangedQuery()
+function TestRangedQuery(raftSqliteStore)
     NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
     local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
+    local raftSqliteStore = raftSqliteStore or RaftSqliteStore
+    -- use raft storage
+    StorageProvider:SetStorageClass(raftSqliteStore);
     
-    -- this will start both db client and db server if not.
+    TableDatabase.connect = function(self, rootFolder)
+        self.rootFolder = rootFolder;
+        RaftSqliteStore:connect(self, {rootFolder = self.rootFolder})
+        return self;
+    end
+
     local db = TableDatabase:new():connect("temp/mydatabase/");
-    
+     -- db will be the server
+    db:SetWriterTheadName(__rts__:GetName());
+
     -- add some data
     for i = 1, 100 do
         db.rangedTest:insertOne({i = i}, {i = i, data = "data" .. i}, function() end)
@@ -617,11 +685,23 @@ function TestRangedQuery()
 end
 
 
-function TestPagination()
+function TestPagination(raftSqliteStore)
     NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
     local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
-    local db = TableDatabase:new():connect("temp/mydatabase/");
+    local raftSqliteStore = raftSqliteStore or RaftSqliteStore
+    -- use raft storage
+    StorageProvider:SetStorageClass(raftSqliteStore);
     
+    TableDatabase.connect = function(self, rootFolder)
+        self.rootFolder = rootFolder;
+        RaftSqliteStore:connect(self, {rootFolder = self.rootFolder})
+        return self;
+    end
+
+    local db = TableDatabase:new():connect("temp/mydatabase/");
+     -- db will be the server
+    db:SetWriterTheadName(__rts__:GetName());
+
     -- add some data
     for i = 1, 10000 do
         db.pagedUsers:insertOne({name = "name" .. i},
@@ -659,11 +739,22 @@ function TestPagination()
     end);
 end
 
-function TestCompoundIndex()
+function TestCompoundIndex(raftSqliteStore)
     NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
     local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
-    local db = TableDatabase:new():connect("temp/mydatabase/");
+    local raftSqliteStore = raftSqliteStore or RaftSqliteStore
+    -- use raft storage
+    StorageProvider:SetStorageClass(raftSqliteStore);
     
+    TableDatabase.connect = function(self, rootFolder)
+        self.rootFolder = rootFolder;
+        RaftSqliteStore:connect(self, {rootFolder = self.rootFolder})
+        return self;
+    end
+    local db = TableDatabase:new():connect("temp/mydatabase/");
+    -- db will be the server
+    db:SetWriterTheadName(__rts__:GetName());
+
     db.compoundTest:removeIndex({}, function(err, bRemoved) end);
     
     -- compound keys
@@ -722,11 +813,22 @@ function TestCompoundIndex()
     end);
 end
 
-function TestCountAPI()
+function TestCountAPI(raftSqliteStore)
     NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
     local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
-    local db = TableDatabase:new():connect("temp/mydatabase/");
+    local raftSqliteStore = raftSqliteStore or RaftSqliteStore
+    -- use raft storage
+    StorageProvider:SetStorageClass(raftSqliteStore);
     
+    TableDatabase.connect = function(self, rootFolder)
+        self.rootFolder = rootFolder;
+        RaftSqliteStore:connect(self, {rootFolder = self.rootFolder})
+        return self;
+    end
+    local db = TableDatabase:new():connect("temp/mydatabase/");
+    -- db will be the server
+    db:SetWriterTheadName(__rts__:GetName());
+
     db.countTest:removeIndex({}, function(err, bRemoved) end);
     
     for i = 1, 100 do
@@ -750,11 +852,22 @@ function TestCountAPI()
     end);
 end
 
-function TestDelete()
+function TestDelete(raftSqliteStore)
     NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
     local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
-    local db = TableDatabase:new():connect("temp/mydatabase/");
+    local raftSqliteStore = raftSqliteStore or RaftSqliteStore
+    -- use raft storage
+    StorageProvider:SetStorageClass(raftSqliteStore);
     
+    TableDatabase.connect = function(self, rootFolder)
+        self.rootFolder = rootFolder;
+        RaftSqliteStore:connect(self, {rootFolder = self.rootFolder})
+        return self;
+    end
+    local db = TableDatabase:new():connect("temp/mydatabase/");
+    -- db will be the server
+    db:SetWriterTheadName(__rts__:GetName());
+
     db.deleteTest:makeEmpty({}, function(err, count)echo("deleted" .. (count or 0)) end);
     
     for i = 1, 100 do
