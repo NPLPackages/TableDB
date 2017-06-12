@@ -81,7 +81,7 @@ end
 -- how many seconds to wait on busy database, before we send "queue_full" error. This parameter only takes effect when self.WaitOnBusyDB is true.
 RaftSqliteStore.MaxWaitSeconds = 5;
 -- default time out for a given request. default to 5 seconds
-RaftSqliteStore.DefaultTimeout = 500000;
+RaftSqliteStore.DefaultTimeout = 5000;
 -- internal timer period
 RaftSqliteStore.monitorPeriod = 5000;
 -- true to log everything.
@@ -287,7 +287,7 @@ function RaftSqliteStore:Send(query_type, query, callbackFunc)
 end
 
 
--- virtual: 
+ 
 -- please note, index will be automatically created for query field if not exist.
 --@param query: key, value pair table, such as {name="abc"}
 --@param callbackFunc: function(err, row) end, where row._id is the internal row id.
@@ -295,7 +295,7 @@ function RaftSqliteStore:findOne(query, callbackFunc)
   self:Send("findOne", query, callbackFunc)
 end
 
--- virtual: 
+ 
 -- find will not automatically create index on query fields. 
 -- Use findOne for fast index-based search. This function simply does a raw search, if no index is found on query string.
 -- @param query: key, value pair table, such as {name="abc"}. if nil or {}, it will return all the rows
@@ -304,21 +304,21 @@ function RaftSqliteStore:find(query, callbackFunc)
     self:Send("find", query, callbackFunc)
 end
 
--- virtual: 
+ 
 -- @param query: key, value pair table, such as {name="abc"}. 
 -- @param callbackFunc: function(err, count) end
 function RaftSqliteStore:deleteOne(query, callbackFunc)
     self:Send("deleteOne", query, callbackFunc)
 end
 
--- virtual: delete multiple records
+-- delete multiple records
 -- @param query: key, value pair table, such as {name="abc"}. 
 -- @param callbackFunc: function(err, count) end
 function RaftSqliteStore:delete(query, callbackFunc)
     self:Send("delete", query, callbackFunc)
 end
 
--- virtual: 
+ 
 -- this function will assume query contains at least one valid index key. 
 -- it will not auto create index if key does not exist.
 -- @param query: key, value pair table, such as {name="abc"}. 
@@ -327,7 +327,7 @@ function RaftSqliteStore:updateOne(query, update, callbackFunc)
     self:Send("updateOne", {query = query, update = update}, callbackFunc)
 end
 
--- virtual: 
+ 
 -- Replaces a single document within the collection based on the query filter.
 -- it will not auto create index if key does not exist.
 -- @param query: key, value pair table, such as {name="abc"}. 
@@ -337,12 +337,12 @@ function RaftSqliteStore:replaceOne(query, replacement, callbackFunc)
 end
 
 
--- virtual: update multiple records, see also updateOne()
+-- update multiple records, see also updateOne()
 function RaftSqliteStore:update(query, update, callbackFunc)
     self:Send("update", {query = query, update = update}, callbackFunc)
 end
 
--- virtual: 
+ 
 -- if there is already one ore more records with query, this function falls back to updateOne().
 -- otherwise it will insert and return full data with internal row _id.
 -- @param query: nil or query fields. if it contains query fields, it will first do a findOne(), 
@@ -351,7 +351,7 @@ function RaftSqliteStore:insertOne(query, update, callbackFunc)
     self:Send("insertOne", {query = query, update = update}, callbackFunc)
 end
 
--- virtual: 
+ 
 -- counting the number of rows in a query. this will always do a table scan using an index. 
 -- avoiding calling this function for big table. 
 -- @param callbackFunc: function(err, count) end
@@ -359,7 +359,7 @@ function RaftSqliteStore:count(query, callbackFunc)
     self:Send("count", query, callbackFunc)
 end
 
--- virtual: 
+ 
 -- normally one does not need to call this function.
 -- the store should flush at fixed interval.
 -- @param callbackFunc: function(err, fFlushed) end
@@ -367,7 +367,7 @@ function RaftSqliteStore:flush(query, callbackFunc)
     self:Send("flush", query, callbackFunc)
 end
 
--- virtual:
+
 -- @param query: {"indexName"}
 -- @param callbackFunc: function(err, bRemoved) end
 function RaftSqliteStore:removeIndex(query, callbackFunc)
@@ -375,7 +375,7 @@ function RaftSqliteStore:removeIndex(query, callbackFunc)
 end
 
 
--- virtual:
+
 -- after issuing an really important group of commands, and you want to ensure that 
 -- these commands are actually successful like a transaction, the client can issue a waitflush 
 -- command to check if the previous commands are successful. Please note that waitflush command 
@@ -385,7 +385,7 @@ function RaftSqliteStore:waitflush(query, callbackFunc, timeout)
     self:Send("waitflush", query, callbackFunc)
 end
 
--- virtual:
+
 -- this is usually used for changing database settings, such as cache size and sync mode. 
 -- this function is specific to store implementation. 
 -- @param query: string or {sql=string, CacheSize=number, IgnoreOSCrash=bool, IgnoreAppCrash=bool} 
@@ -408,13 +408,13 @@ function RaftSqliteStore:exec(query, callbackFunc)
     self:Send("exec", query, callbackFunc)
 end
 
--- virtual:
+
 -- this function never reply. the client will always timeout
-function RaftSqliteStore:silient(query)
+function RaftSqliteStore:silient(query, callbackFunc)
     self:Send("silient", query, callbackFunc)
 end
 
--- virtual: 
+ 
 function RaftSqliteStore:makeEmpty(query, callbackFunc)
     self:Send("makeEmpty", query, callbackFunc)
 end

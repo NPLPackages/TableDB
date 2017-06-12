@@ -100,21 +100,10 @@ local function executeAsClient(localAddress, RequestRPC, configuration, loggerFa
       NPL.load("(gl)script/TableDB/test/test_TableDatabase.lua");
       -- TestSQLOperations(RaftSqliteStore);
       -- TestInsertThroughputNoIndex(RaftSqliteStore)
+      -- TestPerformance(RaftSqliteStore)
       -- TestBulkOperations(RaftSqliteStore)
-      TestPerformance(RaftSqliteStore)
+      TestTimeout(RaftSqliteStore)
 
-      -- local values = {
-      --   "test:1111",
-      --   "test:1112",
-      --   "test:1113",
-      --   "test:1114",
-      --   "test:1115",
-      -- }
-
-      -- raftClient:appendEntries(values, function (response, err)
-      --   local result = (err == nil and response.accepted and "accepted") or "denied"
-      --   logger.info("the appendEntries request has been %s", result)
-      -- end)
     
     elseif clientMode == "addServer" then
       local serverToJoin = {
