@@ -100,6 +100,7 @@ local function executeAsClient(localAddress, RequestRPC, configuration, loggerFa
       NPL.load("(gl)script/TableDB/test/test_TableDatabase.lua");
       -- TestSQLOperations(RaftSqliteStore);
       TestInsertThroughputNoIndex(RaftSqliteStore)
+      -- TestBulkOperations(RaftSqliteStore)
 
       -- local values = {
       --   "test:1111",

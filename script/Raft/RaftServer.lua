@@ -42,7 +42,6 @@ local Rutils = commonlib.gettable("Raft.Rutils");
 local RaftServer = commonlib.gettable("Raft.RaftServer");
 
 
-__rts__:SetMsgQueueSize(50000);
 local DEFAULT_SNAPSHOT_SYNC_BLOCK_SIZE = 4 * 1024;
 
 local indexComparator = function(arg0, arg1)

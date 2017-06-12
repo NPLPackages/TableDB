@@ -36,6 +36,11 @@ function RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory)
     }
     setmetatable(o, self);
     
+    -- set NPL attributes before starting the server. 
+	local att = NPL.GetAttributeObject();
+	-- att:SetField("KeepAlive", false);
+	att:SetField("IdleTimeout", true);
+	att:SetField("IdleTimeoutPeriod", 1200000);
     NPL.StartNetServer(localAddress.host, localAddress.port);
     
     for _, server in ipairs(configuration.servers) do
@@ -112,7 +117,7 @@ end
 
 
 function RaftClient:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry)
-    self.logger.info("trying request to %d as current leader from %s, trying %dth", self.leaderId, self.localAddress.id, retry);
+    self.logger.debug("trying request to %d as current leader from %s, trying %dth", self.leaderId, self.localAddress.id, retry);
     
     local this = self
     
@@ -120,7 +125,7 @@ function RaftClient:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry)
         if this.randomLeader then
             -- try a random server as leader
             this.leaderId = this.configuration.servers[math.random(#this.configuration.servers)].id;
-            this.logger.info("next should try server: %d", this.leaderId)
+            this.logger.debug("next should try server: %d", this.leaderId)
             this.randomLeader = true;
         end
         

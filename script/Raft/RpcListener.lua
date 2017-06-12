@@ -66,6 +66,13 @@ function RpcListener:startListening(messageHandler)
         return msg;
     end)
 
+	-- set NPL attributes before starting the server. 
+	local att = NPL.GetAttributeObject();
+    att:SetField("TCPKeepAlive", true);
+	-- att:SetField("KeepAlive", false);
+	att:SetField("IdleTimeout", true);
+	att:SetField("IdleTimeoutPeriod", 1200000);
+    __rts__:SetMsgQueueSize(50000);
     -- port is need to be string here??
     NPL.StartNetServer(self.ip, tostring(self.port));
     

@@ -119,8 +119,9 @@ end
 --
 function RaftTableDBStateMachine:start2(RaftSqliteStore)
     -- use Rpc for incoming Response message
+    local this = self
     Rpc:new():init("RTDBRequestRPC", function(self, msg)
-        print(format("Response:%s", util.table_tostring(msg)))
+        this.logger.trace(format("Response:%s", util.table_tostring(msg)))
         RaftSqliteStore:handleResponse(msg)
     end)
     
@@ -147,7 +148,7 @@ function RaftTableDBStateMachine:commit(logIndex, data)
             cb_index = raftLogEntryValue.cb_index,
         }
         
-        self.logger.info("%s", util.table_tostring(msg))
+        self.logger.trace("%s", util.table_tostring(msg))
         -- send Response
         -- we need handle activate failure here
         RTDBRequestRPC(nil, raftLogEntryValue.serverId, msg)
