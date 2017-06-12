@@ -156,7 +156,7 @@ end
 
 
 -- takes 23 seconds with 1 million record, on my HDD, CPU i7.
-function TestInsertThroughputNoIndex(RaftSqliteStore)
+function TestInsertThroughputNoIndex(raftSqliteStore)
     NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
     local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
     local raftSqliteStore = raftSqliteStore or RaftSqliteStore
@@ -206,7 +206,7 @@ function TestInsertThroughputNoIndex(RaftSqliteStore)
     end);
 end
 
-function TestPerformance(RaftSqliteStore)
+function TestPerformance(raftSqliteStore)
     NPL.load("(gl)script/ide/Debugger/NPLProfiler.lua");
     local npl_profiler = commonlib.gettable("commonlib.npl_profiler");
     npl_profiler.perf_reset();
@@ -345,7 +345,7 @@ end
 -- This is example of bulk operation.
 -- Please use 'System.Concurrent.Parallel' in real world test case
 -- See above `TestInsertThroughputNoIndex()` code.
-function TestBulkOperations(RaftSqliteStore)
+function TestBulkOperations(raftSqliteStore)
     NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
     local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
     local raftSqliteStore = raftSqliteStore or RaftSqliteStore
@@ -389,7 +389,7 @@ function TestBulkOperations(RaftSqliteStore)
     DoNextChunk();
 end
 
-function TestTimeout(RaftSqliteStore)
+function TestTimeout(raftSqliteStore)
     NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
     local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
     local raftSqliteStore = raftSqliteStore or RaftSqliteStore
@@ -411,13 +411,28 @@ function TestTimeout(RaftSqliteStore)
 end
 
 
-function TestBlockingAPI()
+function TestBlockingAPI(raftSqliteStore)
     NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
     local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
+    local raftSqliteStore = raftSqliteStore or RaftSqliteStore
+    -- use raft storage
+    StorageProvider:SetStorageClass(raftSqliteStore);
     
-    -- this will start both db client and db server if not.
+    TableDatabase.connect = function(self, rootFolder)
+        self.rootFolder = rootFolder;
+        RaftSqliteStore:connect(self, {rootFolder = self.rootFolder})
+        return self;
+    end
+    
     local db = TableDatabase:new():connect("temp/mydatabase/");
-    
+     -- db will be the server
+    db:SetWriterTheadName(__rts__:GetName());
+
+    TableDatabase.EnableSyncMode = function(self, bEnabled)
+      raftSqliteStore.EnableSyncMode = bEnabled;
+      LOG.std(nil, "system", "TableDatabase", "sync mode api is %s in thread %s", bEnabled and "enabled" or "disabled", __rts__:GetName());
+    end
+
     -- enable sync mode once and for all in current thread.
     db:EnableSyncMode(true);
     
@@ -436,12 +451,28 @@ function TestBlockingAPI()
 end
 
 -- it can do about 12000/s with sync API.
-function TestBlockingAPILatency()
+function TestBlockingAPILatency(raftSqliteStore)
     NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
     local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
+    local raftSqliteStore = raftSqliteStore or RaftSqliteStore
+    -- use raft storage
+    StorageProvider:SetStorageClass(raftSqliteStore);
+    
+    TableDatabase.connect = function(self, rootFolder)
+        self.rootFolder = rootFolder;
+        RaftSqliteStore:connect(self, {rootFolder = self.rootFolder})
+        return self;
+    end
     
     -- this will start both db client and db server if not.
     local db = TableDatabase:new():connect("temp/mydatabase/");
+         -- db will be the server
+    db:SetWriterTheadName(__rts__:GetName());
+
+    TableDatabase.EnableSyncMode = function(self, bEnabled)
+      raftSqliteStore.EnableSyncMode = bEnabled;
+      LOG.std(nil, "system", "TableDatabase", "sync mode api is %s in thread %s", bEnabled and "enabled" or "disabled", __rts__:GetName());
+    end
     -- enable sync mode once and for all in current thread.
     db:EnableSyncMode(true);
     

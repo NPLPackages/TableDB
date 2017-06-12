@@ -127,9 +127,9 @@ end
 -- get next callback pool index. may return nil if max queue size is reached. 
 -- @return index or nil
 function RaftSqliteStore:PushCallback(callbackFunc, timeout)
-  if(not callbackFunc) then
-    return -1;
-  end
+  -- if(not callbackFunc) then
+  --   return -1;
+  -- end
   local index = getNextId();
   callbackQueue[index] = {callbackFunc = callbackFunc, startTime = ParaGlobal.timeGetTime(), timeout=timeout};
   return index;
@@ -146,7 +146,7 @@ function RaftSqliteStore:PopCallback(index)
 end
 
 -- return err, data.
-function RaftSqliteStore:WaitForSyncModeReply(timeout)
+function RaftSqliteStore:WaitForSyncModeReply(timeout, cb_index)
   timeout = timeout or self.DefaultTimeout;
   local thread = __rts__;
   local reply_msg;
@@ -160,10 +160,13 @@ function RaftSqliteStore:WaitForSyncModeReply(timeout)
         local out_msg = msg.msg;
         logger.debug("recv msg:%s", util.table_tostring(out_msg));
         -- we use this only in connect and we should ensure connect's cb_index should be -1
-        self.raftClient.HandleResponse(nil, out_msg.msg);
-        if(out_msg.cb_index == -1 or (out_msg.msg and out_msg.msg.destination ~= -1)) then
-          logger.info("connect success!!")
-          reply_msg = out_msg;
+        if not RaftSqliteStore.EnableSyncMode then
+          self.raftClient.HandleResponse(nil, out_msg.msg);
+        else
+          RaftSqliteStore:handleResponse(out_msg.msg);
+        end
+        if(cb_index and out_msg.msg and out_msg.msg.cb_index == cb_index) or (cb_index == nil and out_msg.msg and out_msg.msg.destination and out_msg.msg.destination ~= -1) then
+          reply_msg = out_msg.msg;
           break;
         end
       end
@@ -269,7 +272,8 @@ function RaftSqliteStore:Send(query_type, query, callbackFunc)
   local index = self:PushCallback(callbackFunc);
   if(index) then
     local raftLogEntryValue = RaftLogEntryValue:new(query_type, self.collection, query,
-                                                    index, self.raftClient.localAddress.id);
+                                                    index, self.raftClient.localAddress.id,
+                                                    RaftSqliteStore.EnableSyncMode);
     local bytes = raftLogEntryValue:toBytes();
 
     self.raftClient:appendEntries(bytes, function (response, err)
@@ -284,6 +288,10 @@ function RaftSqliteStore:Send(query_type, query, callbackFunc)
       end)
   end
 
+  if(not callbackFunc and RaftSqliteStore.EnableSyncMode) then
+		return self:WaitForSyncModeReply(nil, index);
+	end
+
 end
 
 
@@ -292,7 +300,7 @@ end
 --@param query: key, value pair table, such as {name="abc"}
 --@param callbackFunc: function(err, row) end, where row._id is the internal row id.
 function RaftSqliteStore:findOne(query, callbackFunc)
-  self:Send("findOne", query, callbackFunc)
+  return self:Send("findOne", query, callbackFunc)
 end
 
  
@@ -301,21 +309,21 @@ end
 -- @param query: key, value pair table, such as {name="abc"}. if nil or {}, it will return all the rows
 -- @param callbackFunc: function(err, rows) end, where rows is array of rows found
 function RaftSqliteStore:find(query, callbackFunc)
-    self:Send("find", query, callbackFunc)
+    return self:Send("find", query, callbackFunc)
 end
 
  
 -- @param query: key, value pair table, such as {name="abc"}. 
 -- @param callbackFunc: function(err, count) end
 function RaftSqliteStore:deleteOne(query, callbackFunc)
-    self:Send("deleteOne", query, callbackFunc)
+    return self:Send("deleteOne", query, callbackFunc)
 end
 
 -- delete multiple records
 -- @param query: key, value pair table, such as {name="abc"}. 
 -- @param callbackFunc: function(err, count) end
 function RaftSqliteStore:delete(query, callbackFunc)
-    self:Send("delete", query, callbackFunc)
+    return self:Send("delete", query, callbackFunc)
 end
 
  
@@ -324,7 +332,7 @@ end
 -- @param query: key, value pair table, such as {name="abc"}. 
 -- @param update: additional fields to be merged with existing data; this can also be callbackFunc
 function RaftSqliteStore:updateOne(query, update, callbackFunc)
-    self:Send("updateOne", {query = query, update = update}, callbackFunc)
+    return self:Send("updateOne", {query = query, update = update}, callbackFunc)
 end
 
  
@@ -333,13 +341,13 @@ end
 -- @param query: key, value pair table, such as {name="abc"}. 
 -- @param replacement: wholistic fields to be replace any existing doc. 
 function RaftSqliteStore:replaceOne(query, replacement, callbackFunc)
-    self:Send("replaceOne", {query = query, replacement = replacement}, callbackFunc)
+    return self:Send("replaceOne", {query = query, replacement = replacement}, callbackFunc)
 end
 
 
 -- update multiple records, see also updateOne()
 function RaftSqliteStore:update(query, update, callbackFunc)
-    self:Send("update", {query = query, update = update}, callbackFunc)
+    return self:Send("update", {query = query, update = update}, callbackFunc)
 end
 
  
@@ -348,7 +356,7 @@ end
 -- @param query: nil or query fields. if it contains query fields, it will first do a findOne(), 
 -- if there is record, this function actually falls back to updateOne. 
 function RaftSqliteStore:insertOne(query, update, callbackFunc)
-    self:Send("insertOne", {query = query, update = update}, callbackFunc)
+    return self:Send("insertOne", {query = query, update = update}, callbackFunc)
 end
 
  
@@ -356,7 +364,7 @@ end
 -- avoiding calling this function for big table. 
 -- @param callbackFunc: function(err, count) end
 function RaftSqliteStore:count(query, callbackFunc)
-    self:Send("count", query, callbackFunc)
+    return self:Send("count", query, callbackFunc)
 end
 
  
@@ -364,14 +372,14 @@ end
 -- the store should flush at fixed interval.
 -- @param callbackFunc: function(err, fFlushed) end
 function RaftSqliteStore:flush(query, callbackFunc)
-    self:Send("flush", query, callbackFunc)
+    return self:Send("flush", query, callbackFunc)
 end
 
 
 -- @param query: {"indexName"}
 -- @param callbackFunc: function(err, bRemoved) end
 function RaftSqliteStore:removeIndex(query, callbackFunc)
-    self:Send("removeIndex", query, callbackFunc)
+    return self:Send("removeIndex", query, callbackFunc)
 end
 
 
@@ -382,7 +390,7 @@ end
 -- may take up to 3 seconds or RaftSqliteStore.AutoFlushInterval to return. 
 -- @param callbackFunc: function(err, fFlushed) end
 function RaftSqliteStore:waitflush(query, callbackFunc, timeout)
-    self:Send("waitflush", query, callbackFunc)
+    return self:Send("waitflush", query, callbackFunc)
 end
 
 
@@ -405,16 +413,16 @@ function RaftSqliteStore:exec(query, callbackFunc)
       end
     end
 
-    self:Send("exec", query, callbackFunc)
+    return self:Send("exec", query, callbackFunc)
 end
 
 
 -- this function never reply. the client will always timeout
 function RaftSqliteStore:silient(query, callbackFunc)
-    self:Send("silient", query, callbackFunc)
+    return self:Send("silient", query, callbackFunc)
 end
 
  
 function RaftSqliteStore:makeEmpty(query, callbackFunc)
-    self:Send("makeEmpty", query, callbackFunc)
+    return self:Send("makeEmpty", query, callbackFunc)
 end
