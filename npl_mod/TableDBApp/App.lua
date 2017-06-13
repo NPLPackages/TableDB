@@ -156,12 +156,4 @@ end
 
 
 
-local function activate()
-   if(msg) then
-      --- C/C++ API call is counted as one instruction, so if you call ParaEngine.Sleep(10), 
-      --it will block all concurrent jobs on that NPL thread for 10 seconds
-      -- ParaEngine.Sleep(0.5);
-   end
-end
-
 NPL.this(function() end);

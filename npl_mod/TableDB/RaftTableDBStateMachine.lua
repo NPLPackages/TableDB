@@ -32,6 +32,9 @@ NPL.load("(gl)script/sqlite/sqlite3.lua");
 local LoggerFactory = NPL.load("(gl)npl_mod/Raft/LoggerFactory.lua");
 local RaftTableDBStateMachine = commonlib.gettable("TableDB.RaftTableDBStateMachine");
 
+-- for function not in class
+local logger = LoggerFactory.getLogger("RaftTableDBStateMachine");
+
 function RaftTableDBStateMachine:new(baseDir, ip, listeningPort, clientId)
     local o = {
         ip = ip,
@@ -41,7 +44,7 @@ function RaftTableDBStateMachine:new(baseDir, ip, listeningPort, clientId)
         snapshotStore = baseDir .. "snapshot/",
         commitIndex = 0,
         messageSender = nil,
-        snapshotInprogress = false,
+        MaxWaitSeconds = 5,
         
         -- many collections??
         collections = {},
@@ -93,9 +96,9 @@ function RaftTableDBStateMachine:start(raftMessageSender)
     NPL.load("(gl)script/ide/System/Database/IORequest.lua");
     local IORequest = commonlib.gettable("System.Database.IORequest");
     IORequest:Send("init_tdb", self.db);
-
---     self.snapshotThread = "Snapshot";
---     NPL.CreateRuntimeState(self.snapshotThread, 0):Start();
+    
+    self.snapshotThread = "Snapshot";
+    NPL.CreateRuntimeState(self.snapshotThread, 0):Start();
 --     local this = self
 --     Rpc:new():init("SnapshotRPC", function(self, msg)
 --             this.logger.info(util.table_tostring(msg))
@@ -175,11 +178,11 @@ function RaftTableDBStateMachine:commit(logIndex, data)
         if raftLogEntryValue.query.update or raftLogEntryValue.query.replacement then
             if raftLogEntryValue.enableSyncMode then
                 cbFunc(collection[raftLogEntryValue.query_type](collection, raftLogEntryValue.query.query,
-                        raftLogEntryValue.query.update or raftLogEntryValue.query.replacement));
+                    raftLogEntryValue.query.update or raftLogEntryValue.query.replacement));
             else
                 collection[raftLogEntryValue.query_type](collection, raftLogEntryValue.query.query,
-                        raftLogEntryValue.query.update or raftLogEntryValue.query.replacement,
-                        cbFunc);
+                    raftLogEntryValue.query.update or raftLogEntryValue.query.replacement,
+                    cbFunc);
             end
         else
             if raftLogEntryValue.enableSyncMode then
@@ -344,7 +347,9 @@ function RaftTableDBStateMachine:getLastSnapshot()
             local latestSnapshot = ParaIO.open(latestSnapshotFilename, "r");
             if not latestSnapshot:IsValid() then
                 self.logger.error("getLastSnapshot open %s err", latestSnapshotFilename)
-                self:exit(-1);
+                -- this may be caused by the snapshot db is backing up
+                return;
+            -- self:exit(-1);
             end
             local fileSize = latestSnapshot:GetFileSize();
             assert(fileSize > 0, format("%s read error", latestSnapshotFilename));
@@ -361,29 +366,7 @@ function RaftTableDBStateMachine:getLastSnapshot()
 end
 
 
-function RaftTableDBStateMachine:getLatestSnapshotName(collection_name)
-    -- list all files in the initial directory.
-    local search_result = ParaIO.SearchFiles(self.snapshotStore, format("*%s_s.db", collection_name), "", 15, 10000, 0);
-    local nCount = search_result:GetNumOfResult();
-    
-    local maxLastLogIndex = 0;
-    local maxTerm = 0;
-    
-    for i = 0, nCount - 1 do
-        local filename = search_result:GetItem(i);
-        local lastLogIndex, term, _ = string.match(filename, "(%d+)%-(%d+)_([%a+%d+]+)_s%.db");
-        lastLogIndex = tonumber(lastLogIndex)
-        term = tonumber(term)
-        self.logger.trace("get file %s>lastLogIndex:%d, term:%d, collection:%s", filename, lastLogIndex, term, collection_name)
-        if lastLogIndex > maxLastLogIndex then
-            maxLastLogIndex = lastLogIndex;
-            maxTerm = term;
-        end
-    end
-    search_result:Release();
-    
-    return format("%s%d-%d_%s_s.db", self.snapshotStore, maxLastLogIndex, maxTerm, collection_name);
-end
+local do_backup;
 --[[
 * Create a snapshot data based on the snapshot information asynchronously
 * set the future to true if snapshot is successfully created, otherwise,
@@ -398,13 +381,6 @@ function RaftTableDBStateMachine:createSnapshot(snapshot)
         return false;
     end
     
-    if self.snapshotInprogress then
-        return false;
-    end
-    
-    self.snapshotInprogress = true;
-    
-    -- make async ??
     local snapshotConf = self.snapshotStore .. string.format("%d.cnf", snapshot.lastLogIndex);
     if (not ParaIO.DoesFileExist(snapshotConf)) then
         self.logger.trace("creating snapshot config:%s", snapshotConf);
@@ -414,72 +390,20 @@ function RaftTableDBStateMachine:createSnapshot(snapshot)
         sConf:close();
     end
     
-    -- do backup here
-    for name, collection in pairs(self.collections) do
-        local filePath = self.snapshotStore .. string.format("%d-%d_%s_s.db", snapshot.lastLogIndex, snapshot.lastLogTerm, name);
-        local srcDBPath = collection .. ".db";
-        self.logger.info("backing up %s to %s", name, filePath);
-        
-        -- local t = ParaIO.open(filePath, "rw");
-        -- t:close();
-        local backupDB = sqlite3.open(filePath)
-        local srcDB = sqlite3.open(srcDBPath)
-        -- local srcDB = collection.storageProvider._db
-        -- backup can get error
-        local bu = sqlite3.backup_init(backupDB, 'main', srcDB, 'main')
-        
-        local deleteBackupDB = false;
-        local backupDBClosed = false;
-        if bu then
-            local stepResult = bu:step(-1);
-            if stepResult ~= ERR.DONE then
-                self.logger.error("back up failed")
-                -- an error occured
-                if stepResult == ERR.BUSY or stepResult == ERR.LOCKED then
-                    -- we don't retry
-                    bu:finish(); -- must free resource
-                    backupDB:close()
-                    backupDBClosed = true;
-                    ParaIO.DeleteFile(filePath);
-                    -- move the previous snapshot to current logIndex?
-                    local prevSnapshortName = self:getLatestSnapshotName(name);
-                    if prevSnapshortName == format("%s0-0_%s_s.db", self.snapshotStore, name) then
-                        -- leave it
-                        self.logger.error("backing up the 1st snapshot %s err", filePath)
-                    else
-                        self.logger.info("copy %s to %s", prevSnapshortName, filePath)
-                        if not (ParaIO.CopyFile(prevSnapshortName, filePath, true)) then
-                            self.logger.error("copy %s to %s failed", prevSnapshortName, filePath);
-                            self:exit(-1);
-                        end
-                    end
-                else
-                    self.logger.error("must be a BUG!!!")
-                    bu:finish();
-                    self:exit(-1)
-                end
-            else
-                bu:finish();
-            end
-        else
-            -- A call to sqlite3_backup_init() will fail, returning NULL,
-            -- if there is already a read or read-write transaction open on the destination database
-            self.logger.error("backup_init failed")
-            deleteBackupDB = true;
-        end
-        
-        bu = nil;
-        
-        if not backupDBClosed then
-            backupDB:close()
-        end
-        srcDB:close()
-        if deleteBackupDB then
-            ParaIO.DeleteFile(filePath);
-        end
-    end
+    local msg = {
+        snapshot = {lastLogIndex = snapshot.lastLogIndex, lastLogTerm = snapshot.lastLogTerm},
+        collections = self.collections,
+        snapshotStore = self.snapshotStore,
+    }
     
-    self.snapshotInprogress = false;
+    local address = format("(%s)npl_mod/TableDB/RaftTableDBStateMachine.lua", self.snapshotThread);
+    if (NPL.activate(address, msg) ~= 0) then
+        -- in case of error
+        if (NPL.activate_with_timeout(self.MaxWaitSeconds, address, msg) ~= 0) then
+            self.logger.error("what's wrong with the snapshot thread?? we do backup in main")
+            do_backup(msg);
+        end
+    end;
     
     return true;
 end
@@ -516,3 +440,118 @@ function RaftTableDBStateMachine:addMessage(message)
     self.pendingMessages[key] = nil;
 
 end
+
+
+local function exit(code)
+    -- C/C++ API call is counted as one instruction, so Exit does not block
+    ParaGlobal.Exit(code)
+    -- we don't want to go more
+    ParaEngine.Sleep(1);
+end
+
+
+function getLatestSnapshotName(snapshotStore, collection_name)
+    -- list all files in the initial directory.
+    local search_result = ParaIO.SearchFiles(snapshotStore, format("*%s_s.db", collection_name), "", 15, 10000, 0);
+    local nCount = search_result:GetNumOfResult();
+    
+    local maxLastLogIndex = 0;
+    local maxTerm = 0;
+    
+    for i = 0, nCount - 1 do
+        local filename = search_result:GetItem(i);
+        local lastLogIndex, term, _ = string.match(filename, "(%d+)%-(%d+)_([%a+%d+]+)_s%.db");
+        lastLogIndex = tonumber(lastLogIndex)
+        term = tonumber(term)
+        logger.trace("get file %s>lastLogIndex:%d, term:%d, collection:%s", filename, lastLogIndex, term, collection_name)
+        if lastLogIndex > maxLastLogIndex then
+            maxLastLogIndex = lastLogIndex;
+            maxTerm = term;
+        end
+    end
+    search_result:Release();
+    
+    return format("%s%d-%d_%s_s.db", snapshotStore, maxLastLogIndex, maxTerm, collection_name);
+end
+
+
+function do_backup(msg)
+    local snapshot = msg.snapshot
+    local collections = msg.collections
+    local snapshotStore = msg.snapshotStore
+    for name, collection in pairs(collections) do
+        local filePath = snapshotStore .. string.format("%d-%d_%s_s.db", snapshot.lastLogIndex, snapshot.lastLogTerm, name);
+        local srcDBPath = collection .. ".db";
+        logger.info("backing up %s to %s", name, filePath);
+        
+        -- local t = ParaIO.open(filePath, "rw");
+        -- t:close();
+        local backupDB = sqlite3.open(filePath)
+        local srcDB = sqlite3.open(srcDBPath)
+        -- local srcDB = collection.storageProvider._db
+        -- backup can get error
+        local bu = sqlite3.backup_init(backupDB, 'main', srcDB, 'main')
+        
+        local deleteBackupDB = false;
+        local backupDBClosed = false;
+        if bu then
+            local stepResult = bu:step(-1);
+            if stepResult ~= ERR.DONE then
+                logger.error("back up failed")
+                -- an error occured
+                if stepResult == ERR.BUSY or stepResult == ERR.LOCKED then
+                    -- we don't retry
+                    bu:finish(); -- must free resource
+                    backupDB:close()
+                    backupDBClosed = true;
+                    ParaIO.DeleteFile(filePath);
+                    -- move the previous snapshot to current logIndex?
+                    local prevSnapshortName = getLatestSnapshotName(snapshotStore, name);
+                    if prevSnapshortName == format("%s0-0_%s_s.db", snapshotStore, name) then
+                        -- leave it
+                        logger.error("backing up the 1st snapshot %s err", filePath)
+                    else
+                        logger.info("copy %s to %s", prevSnapshortName, filePath)
+                        if not (ParaIO.CopyFile(prevSnapshortName, filePath, true)) then
+                            logger.error("copy %s to %s failed", prevSnapshortName, filePath);
+                            exit(-1);
+                        end
+                    end
+                else
+                    logger.error("must be a BUG!!!")
+                    bu:finish();
+                    backupDB:close()
+                    backupDBClosed = true;
+                    ParaIO.DeleteFile(filePath);
+                    exit(-1)
+                end
+            else
+                bu:finish();
+            end
+        else
+            -- A call to sqlite3_backup_init() will fail, returning NULL,
+            -- if there is already a read or read-write transaction open on the destination database
+            logger.error("backup_init failed")
+            deleteBackupDB = true;
+        end
+        
+        bu = nil;
+        
+        if not backupDBClosed then
+            backupDB:close()
+        end
+        srcDB:close()
+        if deleteBackupDB then
+            ParaIO.DeleteFile(filePath);
+        end
+    end
+end
+
+local function activate()
+    if (msg) then
+        -- do backup here
+        do_backup(msg)
+    end
+end
+
+NPL.this(activate);

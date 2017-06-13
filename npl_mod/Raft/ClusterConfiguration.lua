@@ -12,6 +12,7 @@ local ClusterConfiguration = commonlib.gettable("Raft.ClusterConfiguration");
 ------------------------------------------------------------
 ]]--
 
+NPL.load("(gl)script/ide/commonlib.lua");
 NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 local util = commonlib.gettable("System.Compiler.lib.util")
 NPL.load("(gl)npl_mod/Raft/ClusterServer.lua");
