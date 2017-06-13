@@ -15,9 +15,9 @@ The implementation is basically a port from [jraft](https://github.com/datatechn
 - [x] Configuration Change Support, add or remove servers one by one without limitation
 - [x] Client Request Support
 - [x] **Urgent commit**, see below
-- [x] log compaction 
+- [x] log compaction
 
-> Urgent Commit, is a new feature introduced by this implementation, which enables the leader asks all other servers to commit one or more logs if commit index is advanced. With Urgent Commit, the system's performance is highly improved and the heartbeat interval could be increased to seconds,depends on how long your application can abide when a leader goes down, usually, one or two seconds is fine. 
+> Urgent Commit, is a new feature introduced by this implementation, which enables the leader asks all other servers to commit one or more logs if commit index is advanced. With Urgent Commit, the system's performance is highly improved and the heartbeat interval could be increased to seconds,depends on how long your application can abide when a leader goes down, usually, one or two seconds is fine.
 
 ### About this implementation
 > it's always safer to implement such kind of algorithm based on Math description other than natural languge description.
@@ -25,7 +25,7 @@ The implementation is basically a port from [jraft](https://github.com/datatechn
 
 #### Threading model
   Now the implementation is Single thread. To improve performance, we can put the I/O operation into one thread(eg. the commit）
-  
+
 #### Logic
   The Core Raft algorithm logic is in RaftServer, whoes implementation is straight forward
 
@@ -35,9 +35,9 @@ The implementation is basically a port from [jraft](https://github.com/datatechn
 
 On the basis of NPL Raft implementation, TableDB Raft implementation will be much easier. But the implementation can differ much, with the compare between actordb and rqlite.
 
-* rqlite is easy, it simply use SQL statement as Raft Log Entry. 
+* rqlite is easy, it simply use SQL statement as Raft Log Entry.
 * actordb goes more complicate:
-  > Actors are replicated using the Raft distributed consensus protocol. Raft requires a write log to operate. Because our two engines are connected through the SQLite WAL module, Raft replication is a natural fit. Every write to the database is an append to WAL. For every append we send that data to the entire cluster to be replicated. Pages are simply inserted to WAL on all nodes. This means the leader executes the SQL, but the followers just append to WAL. 
+  > Actors are replicated using the Raft distributed consensus protocol. Raft requires a write log to operate. Because our two engines are connected through the SQLite WAL module, Raft replication is a natural fit. Every write to the database is an append to WAL. For every append we send that data to the entire cluster to be replicated. Pages are simply inserted to WAL on all nodes. This means the leader executes the SQL, but the followers just append to WAL.
 
 becaue we don't have sqlite wal hook in the NPLRuntime and we also want to keep the features in TableDB, actordb and  rqlite 's implementation will not be feasible. But we can borrow the consistency levels from rqlite.
 
@@ -49,11 +49,11 @@ it is still not hard.
 #### Log Entry
 like the msg in `IORequest:Send`, the log entry looks like below:
 ```lua
-function RaftLogEntryValue:new(query_type, collection, query) 
+function RaftLogEntryValue:new(query_type, collection, query)
     local o = {
-      query_type = query_type, 
+      query_type = query_type,
       collection = collection:ToData(),
-      query = query, 
+      query = query,
       cb_index = index,
       serverId = serverId,
     };
@@ -68,27 +68,23 @@ and commint in state machine looks like below:
 --[[
  * Commit the log data at the {@code logIndex}
  * @param logIndex the log index in the logStore
- * @param data 
+ * @param data
  ]]--
 function RaftTableDB:commit(logIndex, data)
     -- data is logEntry.value
     local raftLogEntryValue = RaftLogEntryValue:fromBytes(data);
-    NPL.load("(gl)script/ide/System/Database/IOThread.lua");
-    local IOThread = commonlib.gettable("System.Database.IOThread");
-    local collection = IOThread:GetSingleton():GetServerCollection(raftLogEntryValue.collection)
-    NPL.load("(gl)script/ide/System/Database/IORequest.lua");
-    local IORequest = commonlib.gettable("System.Database.IORequest");
-    -- a dedicated IOThread
-    IORequest:Send(raftLogEntryValue.query_type, collection, raftLogEntryValue.query,
-        function (err, data)
-            local msg = {
-                err = err,
-                data = data,
-                cb_index = raftLogEntryValue.cb_index,
-            }
-            RTDBRequestRPC(nil, raftLogEntryValue.serverId, msg)
-
-        end);
+    local cbFunc = function(err, data)
+        local msg = {
+            err = err,
+            data = data,
+            cb_index = raftLogEntryValue.cb_index,
+        }
+        -- send Response
+        RTDBRequestRPC(nil, raftLogEntryValue.serverId, msg)
+    end;
+    collection[raftLogEntryValue.query_type](collection, raftLogEntryValue.query.query,
+            raftLogEntryValue.query.update or raftLogEntryValue.query.replacement,
+            cbFunc);
     self.commitIndex = logIndex;
 end
 ```
@@ -114,7 +110,7 @@ Like rqlite, we use sqlite's [Online Backup API](https://www.sqlite.org/backup.h
 
 ### Send Commands to the Cluster
 `setup.bat client appendEntries` will start 1 client node, and the client node will send commands to the cluster and automaticlly retry in a backoff way if the command not succeed. All 3 Raft nodes will recv the same commands, either succeed or not the client's callback will be called. One already known issue is the command may commit twice in the cluster due to the retry. A not so good way to fix this is disable the retry.
- 
+
 ### Add a server to the Cluster
 `addsrv 5` will start a node whose id is 5. To add the node to the cluster, execute `setup.bat client addServer 5`. This command may need to be executed twice because of the initial connect caused by `NPL.activate()`. The cluster will automatically sync the logs previously commited to this new added server. Now if you start a client to send commands to the cluster, the new server will also recv these commands.
 
@@ -129,16 +125,16 @@ The Raft cluster is *fault tolerate* and *highly available*. You can stop the cl
 
 ```lua
 NPL.load("(gl)script/ide/UnitTest/luaunit.lua");
-NPL.load("(gl)script/Raft/test/TestClusterConfiguration.lua");
-NPL.load("(gl)script/Raft/test/TestSnapshotSyncRequest.lua");
-NPL.load("(gl)script/Raft/test/TestFileBasedSequentialLogStore.lua");
-NPL.load("(gl)script/Raft/test/TestServerStateManager.lua");
-NPL.load("(gl)script/TableDB/test/TestRaftLogEntryValue.lua");
-LuaUnit:run('TestRaftLogEntryValue') 
-LuaUnit:run('TestFileBasedSequentialLogStore') 
-LuaUnit:run('TestClusterConfiguration')
-LuaUnit:run('TestSnapshotSyncRequest')
-LuaUnit:run('TestServerStateManager')
+NPL.load("(gl)npl_mod/Raft/test/TestClusterConfiguration.lua");
+NPL.load("(gl)npl_mod/Raft/test/TestSnapshotSyncRequest.lua");
+NPL.load("(gl)npl_mod/Raft/test/TestFileBasedSequentialLogStore.lua");
+NPL.load("(gl)npl_mod/Raft/test/TestServerStateManager.lua");
+NPL.load("(gl)npl_mod/TableDB/test/TestRaftLogEntryValue.lua");
+LuaUnit:run('TestRaftLogEntryValue');
+LuaUnit:run('TestFileBasedSequentialLogStore');
+LuaUnit:run('TestClusterConfiguration');
+LuaUnit:run('TestSnapshotSyncRequest');
+LuaUnit:run('TestServerStateManager');
 ParaGlobal.Exit(0)
 ```
 
