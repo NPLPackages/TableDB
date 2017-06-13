@@ -9,7 +9,7 @@ for %%i in (1 2 3) do (
     copy /Y init-cluster.json "%curdir%\server%%i\cluster.json"
     echo server.id=%%i> "%curdir%\server%%i\config.properties"
     echo start server%%i
-    start "server%%i" /D "%curdir%\server%%i" npl -d bootstrapper="script/app/App.lua" servermode="true" dev="../../" raftMode="server" baseDir="" mpPort="800%%i"
+    start "server%%i" /D "%curdir%\server%%i" npl -d bootstrapper="npl_mod/TableDBApp/App.lua" servermode="true" dev="../../" raftMode="server" baseDir="" mpPort="800%%i"
 )
 
 goto done
@@ -18,16 +18,16 @@ echo start a client
 mkdir client
 copy /Y init-cluster.json "%curdir%\client\cluster.json"
 copy /Y "%curdir%\server1\config.properties" "%curdir%\client\config.properties"
-start "client" /D "%curdir%\client" npl -d bootstrapper="script/app/App.lua" servermode="true" dev="../../" raftMode="client" baseDir="" clientMode="%2" serverId="%3"
+start "client" /D "%curdir%\client" npl -d bootstrapper="npl_mod/TableDBApp/App.lua" servermode="true" dev="../../" raftMode="client" baseDir="" clientMode="%2" serverId="%3"
 
 
 goto done
 :setupDummy
 mkdir "%curdir%\dummys"
 echo start dummy server
-start "Dummy Server" /D "%curdir%\dummys" npl -d bootstrapper="script/app/App.lua" servermode="true" dev="../../" raftMode="dummy" dummyMode="server" baseDir=""
+start "Dummy Server" /D "%curdir%\dummys" npl -d bootstrapper="npl_mod/TableDBApp/App.lua" servermode="true" dev="../../" raftMode="dummy" dummyMode="server" baseDir=""
 mkdir "%curdir%\dummyc"
 echo start dummy client
-start "Dummy Client" /D "%curdir%\dummyc" npl -d bootstrapper="script/app/App.lua" servermode="true" dev="../../" raftMode="dummy" dummyMode="client" baseDir=""
+start "Dummy Client" /D "%curdir%\dummyc" npl -d bootstrapper="npl_mod/TableDBApp/App.lua" servermode="true" dev="../../" raftMode="dummy" dummyMode="client" baseDir=""
 :done
 @echo on
