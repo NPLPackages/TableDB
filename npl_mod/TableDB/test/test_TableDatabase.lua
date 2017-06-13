@@ -196,7 +196,7 @@ function TestInsertThroughputNoIndex(raftSqliteStore)
     p:RunManyTimes(function(count)
         db.insertNoIndex:insertOne(nil, {count = count, data = math.random()}, function(err, data)
             if (err) then
-                echo({err, data});
+                -- echo({err, data});
             end
             p:Next();
         end)
