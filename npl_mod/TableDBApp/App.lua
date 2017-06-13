@@ -98,22 +98,22 @@ local function executeAsClient(localAddress, RequestRPC, configuration, loggerFa
 
     if clientMode == "appendEntries" then
       NPL.load("(gl)npl_mod/TableDB/test/test_TableDatabase.lua");
-      TestSQLOperations(RaftSqliteStore);
-      -- TestInsertThroughputNoIndex(RaftSqliteStore)
+      -- TestSQLOperations(RaftSqliteStore);
+      TestInsertThroughputNoIndex(RaftSqliteStore)
       -- TestPerformance(RaftSqliteStore)
       -- TestBulkOperations(RaftSqliteStore)
-      TestTimeout(RaftSqliteStore)
+      -- TestTimeout(RaftSqliteStore)
       -- TestBlockingAPI(RaftSqliteStore)
       -- TestBlockingAPILatency(RaftSqliteStore)
-      TestConnect(RaftSqliteStore)
-      TestRemoveIndex(RaftSqliteStore)
-      TestTable(RaftSqliteStore)
-      TestTableDatabase(RaftSqliteStore);
-      TestRangedQuery(RaftSqliteStore);
-      TestPagination(RaftSqliteStore)
-      TestCompoundIndex(RaftSqliteStore)
-      TestCountAPI(RaftSqliteStore)
-      TestDelete(RaftSqliteStore)
+      -- TestConnect(RaftSqliteStore)
+      -- TestRemoveIndex(RaftSqliteStore)
+      -- TestTable(RaftSqliteStore)
+      -- TestTableDatabase(RaftSqliteStore);
+      -- TestRangedQuery(RaftSqliteStore);
+      -- TestPagination(RaftSqliteStore)
+      -- TestCompoundIndex(RaftSqliteStore)
+      -- TestCountAPI(RaftSqliteStore)
+      -- TestDelete(RaftSqliteStore)
     
     elseif clientMode == "addServer" then
       local serverToJoin = {
