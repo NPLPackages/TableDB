@@ -51,7 +51,7 @@ function RaftLogEntryValue:fromBytes(bytes)
         -- print(str)
         local o = commonlib.LoadTableFromString(str)
         if not o then
-            str = string.gsub( str, "(%+[%a+%+%-]+)", "[\"%1\"]")
+            str = string.gsub( str, "([%+%-][%a+%+%-]+)", "[\"%1\"]")
             o = commonlib.LoadTableFromString(str)
         end
         setmetatable(o, self);

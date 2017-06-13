@@ -106,14 +106,14 @@ local function executeAsClient(localAddress, RequestRPC, configuration, loggerFa
       -- TestBlockingAPI(RaftSqliteStore)
       -- TestBlockingAPILatency(RaftSqliteStore)
       -- TestConnect(RaftSqliteStore)
-      -- TestRemoveIndex(raftSqliteStore)
-      -- TestTable(raftSqliteStore)
-      -- TestTableDatabase(raftSqliteStore);
-      -- TestRangedQuery(raftSqliteStore);
-      -- TestPagination(raftSqliteStore)
-      TestCompoundIndex(raftSqliteStore)
-      -- TestCountAPI(raftSqliteStore)
-      -- TestDelete(raftSqliteStore)
+      -- TestRemoveIndex(RaftSqliteStore)
+      TestTable(RaftSqliteStore)
+      -- TestTableDatabase(RaftSqliteStore);
+      -- TestRangedQuery(RaftSqliteStore);
+      -- TestPagination(RaftSqliteStore)
+      -- TestCompoundIndex(RaftSqliteStore)
+      -- TestCountAPI(RaftSqliteStore)
+      -- TestDelete(RaftSqliteStore)
     
     elseif clientMode == "addServer" then
       local serverToJoin = {

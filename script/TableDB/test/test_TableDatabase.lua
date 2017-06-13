@@ -1,7 +1,7 @@
 --[[
-Title: Test Table database
-Author(s): LiXizhi,
-Date: 2016/5/11
+Title: Test Raft Table database
+Author(s): LiXizhi, LiuLuheng
+Date: 2016/5/11, 2017/6/13
 Desc:
 ]]
 NPL.load("(gl)script/TableDB/RaftSqliteStore.lua");
@@ -155,7 +155,7 @@ function TestSQLOperations(raftSqliteStore)
 end
 
 
--- takes 23 seconds with 1 million record, on my HDD, CPU i7.
+-- takes >> several minutes with 1 million record, on my HDD, CPU i5.
 function TestInsertThroughputNoIndex(raftSqliteStore)
     NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
     local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
@@ -450,7 +450,7 @@ function TestBlockingAPI(raftSqliteStore)
     echo(data);
 end
 
--- it can do about 12000/s with sync API.
+-- it can do about 10/s with sync API.
 function TestBlockingAPILatency(raftSqliteStore)
     NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
     local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
