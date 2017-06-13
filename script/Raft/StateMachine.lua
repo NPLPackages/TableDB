@@ -85,9 +85,10 @@ end
    @param snapshot the snapshot info
    @param offset the offset of the snapshot data
    @param buffer the buffer to be filled
+   @param expectedSize the expectedSize to be filled
    @return bytes read
  ]]--
-function StateMachine:readSnapshotData(snapshot, offset, buffer)
+function StateMachine:readSnapshotData(snapshot, offset, buffer, expectedSize)
 end
 
 --[[

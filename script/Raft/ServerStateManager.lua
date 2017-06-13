@@ -15,9 +15,9 @@ NPL.load("(gl)script/ide/Files.lua");
 NPL.load("(gl)script/ide/Json.lua");
 NPL.load("(gl)script/Raft/ClusterConfiguration.lua");
 NPL.load("(gl)script/Raft/ServerState.lua");
-NPL.load("(gl)script/Raft/SequentialLogStore.lua");
+NPL.load("(gl)script/Raft/FileBasedSequentialLogStore.lua");
 local LoggerFactory = NPL.load("(gl)script/Raft/LoggerFactory.lua");
-local SequentialLogStore = commonlib.gettable("Raft.SequentialLogStore");
+local FileBasedSequentialLogStore = commonlib.gettable("Raft.FileBasedSequentialLogStore");
 local ServerState = commonlib.gettable("Raft.ServerState");
 local ClusterConfiguration = commonlib.gettable("Raft.ClusterConfiguration");
 local ServerStateManager = commonlib.gettable("Raft.ServerStateManager");
@@ -30,7 +30,7 @@ local CLUSTER_CONFIG_FILE = "cluster.json";
 function ServerStateManager:new(dataDirectory)
     local o = {
         container = dataDirectory,
-        logStore = SequentialLogStore:new(dataDirectory),
+        logStore = FileBasedSequentialLogStore:new(dataDirectory),
         logger = LoggerFactory.getLogger("ServerStateManager")
     };
     setmetatable(o, self);
@@ -41,15 +41,9 @@ function ServerStateManager:new(dataDirectory)
         local index = string.find(line, "=")
         o.serverId = tonumber(string.sub(line, index+1))
     end
-
-    -- stateFile 
-    if not ParaIO.DoesFileExist(o.container..STATE_FILE) then
-        local result = ParaIO.CreateNewFile(o.container..STATE_FILE)
-        assert(result, "create serverStateFile failed")
-    end
-
-    o.serverStateFile = ParaIO.open(dataDirectory..STATE_FILE, "rw");
-
+    
+    o.serverStateFileName = o.container..STATE_FILE;
+    o.serverStateFile = ParaIO.open(o.serverStateFileName, "rw");
     assert(o.serverStateFile:IsValid(), "serverStateFile not Valid")
     o.serverStateFile:seek(0)
 
@@ -85,6 +79,7 @@ function ServerStateManager:saveClusterConfiguration(configuration)
     local configFile = ParaIO.open(filename, "w");
     if configFile:IsValid() then
         configFile:WriteString(config);
+        configFile:close()
     else
         self.logger.error("%s path error", filename)
     end
@@ -92,22 +87,39 @@ end
 
 
 function ServerStateManager:persistState(serverState)
-    self.logger.trace("ServerStateManager:persistState>term:%d,commitIndex:%d,votedFor:%d", 
+    self.logger.trace("ServerStateManager:persistState>term:%f,commitIndex:%f,votedFor:%f", 
                         serverState.term, serverState.commitIndex, serverState.votedFor)
-    self.serverStateFile:WriteUInt(serverState.term)
-    self.serverStateFile:WriteUInt(serverState.commitIndex)
+    self.serverStateFile:WriteDouble(serverState.term)
+    self.serverStateFile:WriteDouble(serverState.commitIndex)
     self.serverStateFile:WriteInt(serverState.votedFor)
+    self.serverStateFile:SetEndOfFile()
     self.serverStateFile:seek(0)
 end
 
 function ServerStateManager:readState()
-    if(self.serverStateFile:GetFileSize() == 0) then
+    self.serverStateFile:close();
+
+    local serverStateFile = ParaIO.open(self.serverStateFileName, "r");
+    if(serverStateFile:GetFileSize() == 0) then
+        self.serverStateFile = ParaIO.open(self.serverStateFileName, "rw");
+        assert(self.serverStateFile:IsValid(), "serverStateFile not Valid")
+        self.serverStateFile:seek(0)
         return;
     end
 
-    local term = self.serverStateFile:ReadUint()
-    local commitIndex = self.serverStateFile:ReadUint()
-    local votedFor = self.serverStateFile:Readint()
+    local term = serverStateFile:ReadDouble()
+    local commitIndex = serverStateFile:ReadDouble()
+    local votedFor = serverStateFile:ReadInt()
 
+    serverStateFile:close();
+    
+    self.serverStateFile = ParaIO.open(self.serverStateFileName, "rw");
+    assert(self.serverStateFile:IsValid(), "serverStateFile not Valid")
+    self.serverStateFile:seek(0)
     return ServerState:new(term, commitIndex, votedFor);
+end
+
+function ServerStateManager:close()
+    self.serverStateFile:close();
+    self.logStore:close();
 end
