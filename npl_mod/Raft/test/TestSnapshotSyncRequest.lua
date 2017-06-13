@@ -43,10 +43,10 @@ function TestSnapshotSyncRequest:testSerialization()
     end
 
     local snapshot = Snapshot:new(math.random(MAX_LONG), math.random(MAX_LONG), config);
-    local snapshotData = string.random(math.random(200), "%l%d");
+    local snapshotData = {string.random(math.random(200), "%l%d"):byte(1,-1)};
     local randomBoolean = (math.random(2) % 2 == 0 and true) or false;
 
-    local request = SnapshotSyncRequest:new(snapshot, math.random(MAX_LONG), snapshotData, randomBoolean);
+    local request = SnapshotSyncRequest:new(snapshot, math.random(MAX_LONG), snapshotData, randomBoolean, "dummy");
     local data = request:toBytes();
     local request1 = SnapshotSyncRequest:fromBytes(data);
     assertEquals(request.offset, request1.offset);
@@ -91,7 +91,7 @@ function TestSnapshotSyncRequest:testSerializationWithZeroData()
     local snapshotData = {}
     local randomBoolean = (math.random(2) % 2 == 0 and true) or false;
 
-    local request = SnapshotSyncRequest:new(snapshot, math.random(MAX_LONG), snapshotData, randomBoolean);
+    local request = SnapshotSyncRequest:new(snapshot, math.random(MAX_LONG), snapshotData, randomBoolean, "dummy");
     local data = request:toBytes();
     local request1 = SnapshotSyncRequest:fromBytes(data);
     assertEquals(request.offset, request1.offset);
