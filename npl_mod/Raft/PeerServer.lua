@@ -101,7 +101,8 @@ function PeerServer:SendRequest(request, callbackFunc)
     -- RaftRequestRPC is init in the RpcListener, suppose we could directly use here
     local o = self
 
-    local source = "server"..request.source..":";
+    -- local source = "server"..request.source..":";
+    local source = request.source;
     local destination = "server"..request.destination..":";
 
     local function error_handler(msg, err, activate_result)

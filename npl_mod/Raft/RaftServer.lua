@@ -1526,7 +1526,7 @@ function RaftServer:createSyncSnapshotRequest(peer, lastLogIndex, term, commitIn
     local blockSize = self:getSnapshotSyncBlockSize();
     local expectedSize = (sizeLeft > blockSize and blockSize) or sizeLeft;
     local data = {}
-    -- try{
+
     local sizeRead, error = self.stateMachine:readSnapshotData(snapshot, currentCollectionName, offset, data, expectedSize);
     if error then
         -- if there is i/o error, no reason to continue

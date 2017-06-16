@@ -54,6 +54,9 @@ end
 -- @param handle_request_func: Rpc handler function of function(self, msg)  end
 -- @param publicFileName: the activation file, if nil, it defaults to current file
 function Rpc:init(funcName, handle_request_func, publicFileName)
+  if rpc_instances[funcName] then
+    return;
+  end
   self:SetFuncName(funcName);
   self.handle_request = handle_request_func or echo;
   self:SetPublicFile(publicFileName);
@@ -120,6 +123,7 @@ function Rpc:OnActivated(msg)
             added_runtime[remoteAddress.id] = true
             -- can not contain ':'
             local nid = string.sub(remoteAddress.id, 1, #remoteAddress.id-1);
+            -- local nid = "server" .. remoteAddress.id;
             self.logger.info("accepted nid is %s", nid)
             NPL.AddNPLRuntimeAddress({host = remoteAddress.host, port = remoteAddress.port, nid = nid})
             RaftRequestRPCInit(nil, remoteAddress.id, {});
@@ -138,7 +142,7 @@ function Rpc:OnActivated(msg)
      else
        if msg.name then
           -- for client rsp in state machine
-          NPL.accept(msg.tid, msg.name);
+          NPL.accept(msg.tid, msg.tid);
        else
           self.logger.info("who r u? msg:%s", util.table_tostring(msg))
           NPL.reject(msg.tid);
@@ -175,9 +179,9 @@ function Rpc:OnActivated(msg)
         remoteAddress = self.localAddress, -- on the server side the local address is nil
         callbackId = msg.callbackId
       }
-      if type(self.localAddress) == "table" then
+      -- if type(self.localAddress) == "table" then
         self.logger.debug("activate on %s, msg:%s", vFileId, util.table_tostring(response))
-      end
+      -- end
       local activate_result = NPL.activate(vFileId, response)
 
       -- handle memory leak
@@ -255,6 +259,10 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
 
   self.localAddress = localAddress
   self.remoteAddress = remoteAddress
+  -- if type(self.localAddress) == "table" then
+  --   self.localAddress.id = format("server%s:", self.localAddress.id);
+  -- end
+
 
   local callbackId = self.next_run_id + 1;
   self.next_run_id = callbackId

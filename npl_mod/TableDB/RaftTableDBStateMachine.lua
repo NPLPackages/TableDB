@@ -35,11 +35,10 @@ local RaftTableDBStateMachine = commonlib.gettable("TableDB.RaftTableDBStateMach
 -- for function not in class
 local logger = LoggerFactory.getLogger("RaftTableDBStateMachine");
 
-function RaftTableDBStateMachine:new(baseDir, ip, listeningPort, clientId)
+function RaftTableDBStateMachine:new(baseDir, ip, listeningPort)
     local o = {
         ip = ip,
         port = listeningPort,
-        clientId = clientId,
         logger = LoggerFactory.getLogger("RaftTableDBStateMachine"),
         snapshotStore = baseDir .. "snapshot/",
         commitIndex = 0,
@@ -124,7 +123,7 @@ function RaftTableDBStateMachine:start2(RaftSqliteStore)
     -- use Rpc for incoming Response message
     local this = self
     Rpc:new():init("RTDBRequestRPC", function(self, msg)
-        this.logger.trace(format("Response:%s", util.table_tostring(msg)))
+        this.logger.debug(format("Response:%s", util.table_tostring(msg)))
         RaftSqliteStore:handleResponse(msg)
     end)
     
@@ -152,18 +151,22 @@ function RaftTableDBStateMachine:commit(logIndex, data)
         }
         
         self.logger.debug("%s", util.table_tostring(msg))
+        -- for tdb thread
+        Rpc:new():init("RTDBRequestRPC");
         -- send Response
         -- we need handle activate failure here
-        RTDBRequestRPC(nil, raftLogEntryValue.serverId, msg)
+        local remoteAddress = format("%s%s", raftLogEntryValue.callbackThread, raftLogEntryValue.serverId)
+        RTDBRequestRPC(nil, remoteAddress, msg)
     end;
     
     -- a dedicated IOThread
     if raftLogEntryValue.query_type == "connect" then
-        self.db:connect(raftLogEntryValue.query.rootFolder, cbFunc);
+        -- self.db:connect(raftLogEntryValue.query.rootFolder, cbFunc);
     else
         if raftLogEntryValue.enableSyncMode then
             self.db:EnableSyncMode(true);
         end
+        self.db:connect(raftLogEntryValue.collection.db);
         local collection = self.db[raftLogEntryValue.collection.name];
         
         --add to collections

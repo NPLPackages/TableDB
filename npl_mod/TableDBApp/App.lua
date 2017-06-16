@@ -62,7 +62,6 @@ end
 local localEndpoint = thisServer.endpoint
 local parsed_url = url.parse(localEndpoint)
 logger.info("local state info"..util.table_tostring(parsed_url))
-local rpcListener = RpcListener:new(parsed_url.host, parsed_url.port, thisServer.id, config.servers)
 
 -- message printer
 -- local mp = MessagePrinter:new(baseDir, parsed_url.host, mpPort)
@@ -83,6 +82,7 @@ local function executeInServerMode(stateMachine)
     raftParameters.snapshotDistance = 5000;
     raftParameters.snapshotBlockSize = 0;
 
+    local rpcListener = RpcListener:new(parsed_url.host, parsed_url.port, thisServer.id, config.servers)
     local context = RaftContext:new(stateManager,
                                     stateMachine,
                                     raftParameters,
@@ -93,13 +93,13 @@ end
 
 
 local function executeAsClient(localAddress, RequestRPC, configuration, loggerFactory)
-    local raftClient = RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory)
-    RaftSqliteStore:setRaftClient(raftClient)
+    -- local raftClient = RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory)
+    -- RaftSqliteStore:setRaftClient(raftClient)
 
     if clientMode == "appendEntries" then
       NPL.load("(gl)npl_mod/TableDB/test/test_TableDatabase.lua");
-      -- TestSQLOperations(RaftSqliteStore);
-      TestInsertThroughputNoIndex(RaftSqliteStore)
+      TestSQLOperations();
+      -- TestInsertThroughputNoIndex(RaftSqliteStore)
       -- TestPerformance(RaftSqliteStore)
       -- TestBulkOperations(RaftSqliteStore)
       -- TestTimeout(RaftSqliteStore)
@@ -142,15 +142,15 @@ if raftMode:lower() == "server" then
   -- executeInServerMode(mp)
   executeInServerMode(rtdb)
 elseif raftMode:lower() == "client" then
-  local localAddress = {
-    host = "localhost",
-    port = "9004",
-    id = "server4:",
-  }
-  NPL.StartNetServer(localAddress.host, localAddress.port);
+  -- local localAddress = {
+  --   host = "localhost",
+  --   port = "9004",
+  --   id = "server4:",
+  -- }
+  -- NPL.StartNetServer(localAddress.host, localAddress.port);
   -- mp:start()
   -- executeAsClient(localAddress, MPRequestRPC, config, LoggerFactory)
-  rtdb:start2(RaftSqliteStore)
+  -- rtdb:start2(RaftSqliteStore)
   executeAsClient(localAddress, RTDBRequestRPC, config, LoggerFactory)
 end
 
