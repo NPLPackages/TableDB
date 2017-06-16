@@ -10,7 +10,7 @@ function TestSQLOperations()
 	NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
 	local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
 	-- this will start both db client and db server if not.
-	local db = TableDatabase:new():connect("temp/mydatabase/", function() end);
+	local db = TableDatabase:new():connect("temp/test_raft_database/", function() end);
 	
 	-- Note: `db.User` will automatically create the `User` collection table if not.
 	-- clear all data
@@ -78,7 +78,7 @@ function TestInsertThroughputNoIndex()
 	local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
 
     -- this will start both db client and db server if not.
-	local db = TableDatabase:new():connect("temp/mydatabase/");
+	local db = TableDatabase:new():connect("temp/test_raft_database/");
 	
 	db.insertNoIndex:makeEmpty({});
 	db.insertNoIndex:flush({});
@@ -120,7 +120,7 @@ function TestPerformance()
 	local insertFlush, testRoundTrip, randomCRUD, findMany;
 	
 	-- this will start both db client and db server if not.
-	local db = TableDatabase:new():connect("temp/mydatabase/");
+	local db = TableDatabase:new():connect("temp/test_raft_database/");
 
 	-- this not necessary now, but put here as an example.
 	db.User:exec({QueueSize=10001}, function(err, data) end);
@@ -238,7 +238,7 @@ end
 function TestBulkOperations()
 	NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
 	local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
-	local db = TableDatabase:new():connect("temp/mydatabase/");
+	local db = TableDatabase:new():connect("temp/test_raft_database/");
 	db.TestBulkOps:makeEmpty({}, function()  end);
 
 	local total_records = 100000;
@@ -270,7 +270,7 @@ function TestTimeout()
 	NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
 	local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
 	-- this will start both db client and db server if not.
-	local db = TableDatabase:new():connect("temp/mydatabase/");
+	local db = TableDatabase:new():connect("temp/test_raft_database/");
 	
 	db.User:silient({name="will always timeout"}, function(err, data) echo(err, data) end);
 	db.User:silient({name="will always timeout"}, function(err, data) echo(err, data) end);
@@ -282,7 +282,7 @@ function TestBlockingAPI()
 	local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
 
 	-- this will start both db client and db server if not.
-	local db = TableDatabase:new():connect("temp/mydatabase/");
+	local db = TableDatabase:new():connect("temp/test_raft_database/");
 	
 	-- enable sync mode once and for all in current thread.
     db:EnableSyncMode(true);
@@ -307,7 +307,7 @@ function TestBlockingAPILatency()
 	local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
 
     -- this will start both db client and db server if not.
-	local db = TableDatabase:new():connect("temp/mydatabase/");
+	local db = TableDatabase:new():connect("temp/test_raft_database/");
 	-- enable sync mode once and for all in current thread.
     db:EnableSyncMode(true);
 
@@ -334,7 +334,7 @@ function TestSqliteStore()
 	NPL.load("(gl)script/ide/System/Database/SqliteStore.lua");
 	local SqliteStore = commonlib.gettable("System.Database.SqliteStore");
 	local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
-	local db = TableDatabase:new():connect("temp/mydatabase/", function()  echo("connected1") end);
+	local db = TableDatabase:new():connect("temp/test_raft_database/", function()  echo("connected1") end);
 	local store = SqliteStore:new():init(db.User);
 
 	-- testing adding record
@@ -349,8 +349,8 @@ end
 function TestConnect()
 	NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
 	local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
-	local db1 = TableDatabase:new():connect("temp/mydatabase/", function()  echo("connected1") end);
-	local db2 = TableDatabase:new():connect("temp/mydatabase/", function()  echo("connected2") end);
+	local db1 = TableDatabase:new():connect("temp/test_raft_database/", function()  echo("connected1") end);
+	local db2 = TableDatabase:new():connect("temp/test_raft_database/", function()  echo("connected2") end);
 	db1.User:findOne({name="npl"}, function(err, data) echo(data) end);
 	db2.User:findOne({name="npl"}, function(err, data) echo(data) end);
 	db1.User:findOne({name="npl"}, function(err, data) echo(data) end);
@@ -359,7 +359,7 @@ end
 function TestRemoveIndex()
 	NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
 	local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
-	local db = TableDatabase:new():connect("temp/mydatabase/");	
+	local db = TableDatabase:new():connect("temp/test_raft_database/");	
 	db.testIndex:findOne({subkey1 = "", subkey2 = "", subkey3 = ""}, function() end)
 	db.testIndex:removeIndex({"subkey1"}, function() end)
 end
@@ -368,7 +368,7 @@ function TestTable()
 	NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
 	local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
 	-- this will start both db client and db server if not.
-	local db = TableDatabase:new():connect("temp/mydatabase/", function()  echo("connected") end);
+	local db = TableDatabase:new():connect("temp/test_raft_database/", function()  echo("connected") end);
 	local c1 = db("c1");
 	local c2 = db.c2; 
 	assert(c2.name == "c2");
@@ -389,7 +389,7 @@ function TestTableDatabase()
 	NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
 	local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
 	-- this will start both db client and db server if not.
-	local db = TableDatabase:new():connect("temp/mydatabase/");
+	local db = TableDatabase:new():connect("temp/test_raft_database/");
 	-- this will automatically create the `User` collection table if not.
 	local User = db.User; 
 	-- another way to create/get User table.
@@ -419,7 +419,7 @@ function TestRangedQuery()
 	local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
 
     -- this will start both db client and db server if not.
-	local db = TableDatabase:new():connect("temp/mydatabase/");	
+	local db = TableDatabase:new():connect("temp/test_raft_database/");	
 
 	-- add some data
 	for i=1, 100 do
@@ -455,7 +455,7 @@ end
 function TestPagination()
 	NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
 	local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
-	local db = TableDatabase:new():connect("temp/mydatabase/");	
+	local db = TableDatabase:new():connect("temp/test_raft_database/");	
 
 	-- add some data
 	for i=1, 10000 do
@@ -498,7 +498,7 @@ end
 function TestCompoundIndex()
 	NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
 	local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
-	local db = TableDatabase:new():connect("temp/mydatabase/");	
+	local db = TableDatabase:new():connect("temp/test_raft_database/");	
 	
 	db.compoundTest:removeIndex({}, function(err, bRemoved) end);
 
@@ -561,7 +561,7 @@ end
 function TestCountAPI()
 	NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
 	local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
-	local db = TableDatabase:new():connect("temp/mydatabase/");	
+	local db = TableDatabase:new():connect("temp/test_raft_database/");	
 	
 	db.countTest:removeIndex({}, function(err, bRemoved) end);
 
@@ -589,7 +589,7 @@ end
 function TestDelete()
 	NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
 	local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
-	local db = TableDatabase:new():connect("temp/mydatabase/");	
+	local db = TableDatabase:new():connect("temp/test_raft_database/");	
 	
 	db.deleteTest:makeEmpty({}, function(err, count) echo("deleted"..(count or 0)) end);
 	
@@ -631,8 +631,8 @@ function TestMultipleDB()
 	NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
 	local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
 	-- this will start both db client and db server if not.
-	local db_cluster1 = TableDatabase:new():connect("temp/mydatabase/db_cluster1/", function() end);
-	local db_cluster2 = TableDatabase:new():connect("temp/mydatabase/db_cluster2/", function() end);
+	local db_cluster1 = TableDatabase:new():connect("temp/test_raft_database/db_cluster1/", function() end);
+	local db_cluster2 = TableDatabase:new():connect("temp/test_raft_database/db_cluster2/", function() end);
 	db_cluster1.User:makeEmpty({}, function(err, count) echo("deleted"..(count or 0)) end);
 	db_cluster2.User:makeEmpty({}, function(err, count) echo("deleted"..(count or 0)) end);
 	
@@ -663,7 +663,7 @@ function TestOpenDatabase()
 		}
 	}
 
-	local config_path = "temp/mydatabase/tabledb.config.xml";
+	local config_path = "temp/test_raft_database/tabledb.config.xml";
 	local str = commonlib.Lua2XmlString(config, true);
 	ParaIO.CreateDirectory(config_path);
 	local file = ParaIO.open(config_path, "w");
@@ -674,7 +674,7 @@ function TestOpenDatabase()
 
 	end
 
-	local db = TableDatabase:new():connect("temp/mydatabase/");	
+	local db = TableDatabase:new():connect("temp/test_raft_database/");	
 
 end
 
