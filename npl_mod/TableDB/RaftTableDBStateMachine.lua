@@ -45,11 +45,8 @@ function RaftTableDBStateMachine:new(baseDir, ip, listeningPort)
         messageSender = nil,
         MaxWaitSeconds = 5,
         
-        -- many collections??
         collections = {},
         
-        messages = {},
-        pendingMessages = {},
     };
     setmetatable(o, self);
     
@@ -83,7 +80,6 @@ function RaftTableDBStateMachine:start(raftMessageSender)
     RaftRequestRPCInit:MakePublic();
 
     local this = self;
-    -- use Rpc for incoming Request message
     Rpc:new():init("RTDBRequestRPC", function(self, msg)
         msg = this:processMessage(msg)
         return msg;
@@ -121,7 +117,6 @@ end
 ]]
 --
 function RaftTableDBStateMachine:start2(RaftSqliteStore)
-
     -- for init connect
     Rpc:new():init("RaftRequestRPCInit");
     RaftRequestRPCInit:MakePublic();
@@ -145,6 +140,10 @@ end
 function RaftTableDBStateMachine:commit(logIndex, data)
     -- data is logEntry.value
     local raftLogEntryValue = RaftLogEntryValue:fromBytes(data);
+    if raftLogEntryValue.cb_index <= self.latestCommand then
+        -- avoid re-exec
+        return;
+    end
     self.logger.info("commit:%s", util.table_tostring(raftLogEntryValue))
     local cbFunc = function(err, data)
         local msg = {
@@ -199,6 +198,7 @@ function RaftTableDBStateMachine:commit(logIndex, data)
         end
     end
     
+    self.latestCommand = raftLogEntryValue.cb_index;
     self.commitIndex = logIndex;
 end
 
