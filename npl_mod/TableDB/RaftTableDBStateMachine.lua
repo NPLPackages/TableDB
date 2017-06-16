@@ -89,10 +89,7 @@ function RaftTableDBStateMachine:start(raftMessageSender)
         return msg;
     end)
     
-    -- port is need to be string here??
-    -- NPL.StartNetServer(self.ip, tostring(self.port));
     RTDBRequestRPC:MakePublic();
-    
     
     self.db = TableDatabase:new();
     -- start tdb
@@ -124,7 +121,6 @@ end
 ]]
 --
 function RaftTableDBStateMachine:start2(RaftSqliteStore)
-    -- use Rpc for incoming Response message
 
     -- for init connect
     Rpc:new():init("RaftRequestRPCInit");
@@ -135,9 +131,7 @@ function RaftTableDBStateMachine:start2(RaftSqliteStore)
         this.logger.debug(format("Response:%s", util.table_tostring(msg)))
         RaftSqliteStore:handleResponse(msg)
     end)
-    
-    -- port is need to be string here??
-    -- NPL.StartNetServer(self.ip, tostring(self.port));
+
     RTDBRequestRPC:MakePublic();
 
 end

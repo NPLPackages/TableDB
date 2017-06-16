@@ -33,7 +33,6 @@ function RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory)
         configuration = configuration,
         leaderId = configuration.servers[math.random(#configuration.servers)].id,
         randomLeader = true,
-        -- connected = false,
         logger = loggerFactory.getLogger("RaftClient"),
     }
     setmetatable(o, self);
