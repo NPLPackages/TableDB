@@ -19,9 +19,7 @@ NPL.load("(gl)npl_mod/Raft/RaftConsensus.lua");
 NPL.load("(gl)npl_mod/Raft/RpcClient.lua");
 NPL.load("(gl)npl_mod/Raft/ClusterServer.lua");
 NPL.load("(gl)npl_mod/TableDB/RaftTableDBStateMachine.lua");
-NPL.load("(gl)npl_mod/TableDB/RaftSqliteStore.lua");
 
-local RaftSqliteStore = commonlib.gettable("TableDB.RaftSqliteStore");
 local RaftTableDBStateMachine = commonlib.gettable("TableDB.RaftTableDBStateMachine");
 local ClusterServer = commonlib.gettable("Raft.ClusterServer");
 local RaftClient = commonlib.gettable("Raft.RaftClient");
@@ -92,28 +90,26 @@ local function executeInServerMode(stateMachine)
 end
 
 
-local function executeAsClient(localAddress, RequestRPC, configuration, loggerFactory)
-    -- local raftClient = RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory)
-    -- RaftSqliteStore:setRaftClient(raftClient)
+local function executeAsClient()
 
     if clientMode == "appendEntries" then
       NPL.load("(gl)npl_mod/TableDB/test/test_TableDatabase.lua");
       TestSQLOperations();
-      -- TestInsertThroughputNoIndex(RaftSqliteStore)
-      -- TestPerformance(RaftSqliteStore)
-      -- TestBulkOperations(RaftSqliteStore)
-      -- TestTimeout(RaftSqliteStore)
-      -- TestBlockingAPI(RaftSqliteStore)
-      -- TestBlockingAPILatency(RaftSqliteStore)
-      -- TestConnect(RaftSqliteStore)
-      -- TestRemoveIndex(RaftSqliteStore)
-      -- TestTable(RaftSqliteStore)
-      -- TestTableDatabase(RaftSqliteStore);
-      -- TestRangedQuery(RaftSqliteStore);
-      -- TestPagination(RaftSqliteStore)
-      -- TestCompoundIndex(RaftSqliteStore)
-      -- TestCountAPI(RaftSqliteStore)
-      -- TestDelete(RaftSqliteStore)
+      -- TestInsertThroughputNoIndex()
+      -- TestPerformance()
+      -- TestBulkOperations()
+      -- TestTimeout()
+      -- TestBlockingAPI()
+      -- TestBlockingAPILatency()
+      -- TestConnect()
+      -- TestRemoveIndex()
+      -- TestTable()
+      -- TestTableDatabase();
+      -- TestRangedQuery();
+      -- TestPagination()
+      -- TestCompoundIndex()
+      -- TestCountAPI()
+      -- TestDelete()
     
     elseif clientMode == "addServer" then
       local serverToJoin = {
@@ -142,16 +138,8 @@ if raftMode:lower() == "server" then
   -- executeInServerMode(mp)
   executeInServerMode(rtdb)
 elseif raftMode:lower() == "client" then
-  -- local localAddress = {
-  --   host = "localhost",
-  --   port = "9004",
-  --   id = "server4:",
-  -- }
-  -- NPL.StartNetServer(localAddress.host, localAddress.port);
-  -- mp:start()
-  -- executeAsClient(localAddress, MPRequestRPC, config, LoggerFactory)
-  -- rtdb:start2(RaftSqliteStore)
-  executeAsClient(localAddress, RTDBRequestRPC, config, LoggerFactory)
+
+  executeAsClient()
 end
 
 

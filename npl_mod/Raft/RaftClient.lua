@@ -47,18 +47,10 @@ function RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory)
 
     NPL.StartNetServer(localAddress.host, localAddress.port);
     
-    -- for init connect
-    Rpc:new():init("RaftRequestRPCInit", function(self, msg) end);
-    RaftRequestRPCInit:MakePublic();
-
-    -- used also by client
     for _, server in ipairs(configuration.servers) do
         Rutils.addServerToNPLRuntime(localAddress.id, server)
         Rutils.initConnect(localAddress.id, server)
     end
-    -- for _, server in ipairs(configuration.servers) do
-    --     Rutils.initConnect(localAddress.id, server)
-    -- end
     
     return o;
 end
@@ -126,7 +118,6 @@ function RaftClient:removeServer(serverId, callbackFunc)
     
     self:tryCurrentLeader(request, callbackFunc, 500, 0);
 end
-
 
 
 function RaftClient:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry)

@@ -84,7 +84,7 @@ function Rpc:SetPublicFile(filename)
     self:OnActivated(msg);
   end, {filename = self.filename});
 
-  self.logger.debug("%s installed to file %s", self.fullname, self.filename);
+  self.logger.info("%s installed to file %s", self.fullname, self.filename);
 end
 
 function Rpc:__tostring()

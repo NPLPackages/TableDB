@@ -78,6 +78,10 @@ end
 function RaftTableDBStateMachine:start(raftMessageSender)
     self.messageSender = raftMessageSender;
     
+    -- for init connect
+    Rpc:new():init("RaftRequestRPCInit");
+    RaftRequestRPCInit:MakePublic();
+
     local this = self;
     -- use Rpc for incoming Request message
     Rpc:new():init("RTDBRequestRPC", function(self, msg)
@@ -121,6 +125,11 @@ end
 --
 function RaftTableDBStateMachine:start2(RaftSqliteStore)
     -- use Rpc for incoming Response message
+
+    -- for init connect
+    Rpc:new():init("RaftRequestRPCInit");
+    RaftRequestRPCInit:MakePublic();
+
     local this = self
     Rpc:new():init("RTDBRequestRPC", function(self, msg)
         this.logger.debug(format("Response:%s", util.table_tostring(msg)))
