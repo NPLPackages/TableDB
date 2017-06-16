@@ -44,6 +44,7 @@ function RaftTableDBStateMachine:new(baseDir, ip, listeningPort)
         commitIndex = 0,
         messageSender = nil,
         MaxWaitSeconds = 5,
+        latestCommand = -1,
         
         collections = {},
         
@@ -140,26 +141,34 @@ end
 function RaftTableDBStateMachine:commit(logIndex, data)
     -- data is logEntry.value
     local raftLogEntryValue = RaftLogEntryValue:fromBytes(data);
-    if raftLogEntryValue.cb_index <= self.latestCommand then
-        -- avoid re-exec
-        return;
-    end
+
     self.logger.info("commit:%s", util.table_tostring(raftLogEntryValue))
-    local cbFunc = function(err, data)
+
+    local this = self;
+    local cbFunc = function(err, data, re_exec)
         local msg = {
             err = err,
             data = data,
             cb_index = raftLogEntryValue.cb_index,
         }
+
+        if not re_exec then
+            this.latestError = err;
+            this.latestData = data;
+        end
         
         self.logger.debug("%s", util.table_tostring(msg))
         -- for tdb thread
         Rpc:new():init("RTDBRequestRPC");
-        -- send Response
-        -- we need handle activate failure here
+
         local remoteAddress = format("%s%s", raftLogEntryValue.callbackThread, raftLogEntryValue.serverId)
         RTDBRequestRPC(nil, remoteAddress, msg)
     end;
+
+    if raftLogEntryValue.cb_index <= self.latestCommand then
+        cbFunc(this.latestError, this.latestData, true);
+        return;
+    end
     
     -- a dedicated IOThread
     if raftLogEntryValue.query_type == "connect" then
