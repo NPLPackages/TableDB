@@ -46,6 +46,7 @@ function Rpc:new(o)
   o.run_callbacks = {};
   o.next_run_id = 0;
   o.thread_name = format("(%s)", __rts__:GetName());
+  o.MaxWaitSeconds = 3;
   setmetatable(o, Rpc);
   return o;
 end
@@ -190,7 +191,7 @@ function Rpc:OnActivated(msg)
         -- this will cause remote side memory leak, to handle this, we
         -- should give run_callbacks a TTL
         -- self.run_callbacks[callbackId] = nil
-        activate_result = NPL.activate_with_timeout(3, vFileId, response)
+        activate_result = NPL.activate_with_timeout(self.MaxWaitSeconds, vFileId, response)
         if activate_result ~= 0 then
           self.logger.error("activate on %s failed %d, msg type:%s", vFileId, activate_result, response.type)
           if result.callbackFunc then
@@ -294,8 +295,11 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
   local activate_result = NPL.activate(vFileId, msg);
   -- handle memory leak
   if activate_result ~= 0 then
-    self.run_callbacks[callbackId] = nil
-    self.logger.error("activate on %s failed %d, msg type:%s", vFileId, activate_result, msg.type)
+    activate_result = NPL.activate_with_timeout(self.MaxWaitSeconds, vFileId, msg)
+    if activate_result ~= 0 then
+      self.run_callbacks[callbackId] = nil
+      self.logger.error("activate on %s failed %d, msg type:%s", vFileId, activate_result, msg.type)
+    end
   else
     -- FIXME:
     -- to avoid memory leak, we 
