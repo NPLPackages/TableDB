@@ -11,6 +11,8 @@ local RaftClient = commonlib.gettable("Raft.RaftClient");
 ------------------------------------------------------------
 ]]
 --
+NPL.load("(gl)npl_mod/Raft/Rpc.lua");
+local Rpc = commonlib.gettable("Raft.Rpc");
 NPL.load("(gl)npl_mod/Raft/Rutils.lua");
 local Rutils = commonlib.gettable("Raft.Rutils");
 NPL.load("(gl)npl_mod/TableDB/RaftLogEntryValue.lua");
@@ -31,7 +33,6 @@ function RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory)
         configuration = configuration,
         leaderId = configuration.servers[math.random(#configuration.servers)].id,
         randomLeader = true,
-        -- connected = false,
         logger = loggerFactory.getLogger("RaftClient"),
     }
     setmetatable(o, self);
@@ -46,7 +47,8 @@ function RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory)
     NPL.StartNetServer(localAddress.host, localAddress.port);
     
     for _, server in ipairs(configuration.servers) do
-        Rutils.initConnect(4, server)
+        Rutils.addServerToNPLRuntime(localAddress.id, server)
+        Rutils.initConnect(localAddress.id, server)
     end
     
     return o;
@@ -115,7 +117,6 @@ function RaftClient:removeServer(serverId, callbackFunc)
     
     self:tryCurrentLeader(request, callbackFunc, 500, 0);
 end
-
 
 
 function RaftClient:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry)

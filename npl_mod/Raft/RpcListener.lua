@@ -32,11 +32,6 @@ function RpcListener:new(ip, port, serverId, servers)
         logger = LoggerFactory.getLogger("RpcListener"),
     };
 
-    -- for init connect
-    Rpc:new():init("RaftRequestRPCInit", function(self, msg) end);
-    RaftRequestRPCInit:MakePublic();
-
-    -- used also by client
     for _, server in ipairs(o.servers) do
         Rutils.addServerToNPLRuntime(o.thisServerId, server)
     end

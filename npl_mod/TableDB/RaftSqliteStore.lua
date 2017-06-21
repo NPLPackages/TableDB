@@ -18,6 +18,8 @@ local RaftSqliteStore = commonlib.gettable("TableDB.RaftSqliteStore");
 ------------------------------------------------------------
 ]]
 
+NPL.load("(gl)script/ide/System/Database/StorageProvider.lua");
+local StorageProvider = commonlib.gettable("System.Database.StorageProvider");
 NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 local util = commonlib.gettable("System.Compiler.lib.util")
 NPL.load("(gl)npl_mod/TableDB/RaftLogEntryValue.lua");
@@ -34,27 +36,40 @@ local logger = LoggerFactory.getLogger("RaftSqliteStore")
 local RaftSqliteStore = commonlib.inherit(commonlib.gettable("System.Database.Store"), commonlib.gettable("TableDB.RaftSqliteStore"));
 
 local callbackQueue = {};
+local raftClient;
 
+RaftSqliteStore.name = "raft";
+RaftSqliteStore.thread_name = format("(%s)", __rts__:GetName());
 
-function RaftSqliteStore:createRaftClient()
-  local baseDir = "./"
+function RaftSqliteStore:createRaftClient(baseDir, localAddress)
+  local baseDir = baseDir or "./"
   local stateManager = ServerStateManager:new(baseDir);
   local config = stateManager:loadClusterConfiguration();
 
-  local localAddress = {
+  local localAddress = localAddress or {
     host = "localhost",
     port = "9004",
     id = "server4:",
   }
 
-  rtdb = RaftTableDBStateMachine:new(baseDir, localAddress.host, localAddress.port, localAddress.id)
+  if #localAddress.id < 4 then
+    localAddress.id = format("server%s:", localAddress.id)
+  end
+
+  rtdb = RaftTableDBStateMachine:new(baseDir, localAddress.host, localAddress.port)
+  
+  NPL.StartNetServer(localAddress.host, localAddress.port);
+
   rtdb:start2(self)
-  self.raftClient = RaftClient:new(localAddress, RTDBRequestRPC, config, LoggerFactory)
+  raftClient = RaftClient:new(localAddress, RTDBRequestRPC, config, LoggerFactory)
+
+  self:connect(self, {rootFolder = "dummyDatabase/"});
+
 
 end
 
-function RaftSqliteStore:setRaftClient(raftClient)
-  self.raftClient = raftClient
+function RaftSqliteStore:setRaftClient(c)
+  raftClient = c
 end
 
 function RaftSqliteStore:ctor()
@@ -65,14 +80,16 @@ function RaftSqliteStore:ctor()
     delete = 0,
   };
 
-  if not self.raftClient then
-    self:createRaftClient()
-  end
+  -- StorageProvider:RegisterStorageClass(self.name, self)
 
 end
 
-function RaftSqliteStore:init(collection)
+function RaftSqliteStore:init(collection, init_args)
   self.collection = collection;
+  print(util.table_tostring(init_args))
+  if not raftClient then
+    self:createRaftClient(init_args.baseDir, init_args.localAddress)
+  end
   return self;
 end
 
@@ -161,11 +178,12 @@ function RaftSqliteStore:WaitForSyncModeReply(timeout, cb_index)
         logger.debug("recv msg:%s", util.table_tostring(out_msg));
         -- we use this only in connect and we should ensure connect's cb_index should be -1
         if not RaftSqliteStore.EnableSyncMode then
-          self.raftClient.HandleResponse(nil, out_msg.msg);
+          raftClient.HandleResponse(nil, out_msg.msg);
         else
           RaftSqliteStore:handleResponse(out_msg.msg);
         end
-        if(cb_index and out_msg.msg and out_msg.msg.cb_index == cb_index) or (cb_index == nil and out_msg.msg and out_msg.msg.destination and out_msg.msg.destination ~= -1) then
+        if(cb_index and out_msg.msg and out_msg.msg.cb_index == cb_index) or
+           (cb_index == nil and out_msg.msg and out_msg.msg.destination and out_msg.msg.destination ~= -1) then
           reply_msg = out_msg.msg;
           break;
         end
@@ -248,14 +266,17 @@ function RaftSqliteStore:connect(db, data, callbackFunc)
     rootFolder = data.rootFolder,
   }
 
-  local raftLogEntryValue = RaftLogEntryValue:new(query_type, collection, query, -1);
+  local raftLogEntryValue = RaftLogEntryValue:new(query_type, collection, query, -1,
+                                                  raftClient.localAddress.id,
+                                                  RaftSqliteStore.EnableSyncMode,
+                                                  RaftSqliteStore.thread_name);
   local bytes = raftLogEntryValue:toBytes();
 
-  if not self.raftClient then
-    self:createRaftClient()
-  end
+  -- if not raftClient then
+  --   self:createRaftClient()
+  -- end
 
-  self.raftClient:appendEntries(bytes, function (response, err)
+  raftClient:appendEntries(bytes, function (response, err)
       local result = (err == nil and response.accepted and "accepted") or "denied"
       logger.info("the %s request has been %s", query_type, result)
       if callbackFunc then
@@ -272,16 +293,17 @@ function RaftSqliteStore:Send(query_type, query, callbackFunc)
   local index = self:PushCallback(callbackFunc);
   if(index) then
     local raftLogEntryValue = RaftLogEntryValue:new(query_type, self.collection, query,
-                                                    index, self.raftClient.localAddress.id,
-                                                    RaftSqliteStore.EnableSyncMode);
+                                                    index, raftClient.localAddress.id,
+                                                    RaftSqliteStore.EnableSyncMode, RaftSqliteStore.thread_name);
     local bytes = raftLogEntryValue:toBytes();
 
-    self.raftClient:appendEntries(bytes, function (response, err)
+    raftClient:appendEntries(bytes, function (response, err)
         local result = (err == nil and response.accepted and "accepted") or "denied"
         if not (err == nil and response.accepted) then
           logger.error("the %s request has been %s", query_type, result)
+        else
+          logger.debug("the %s request has been %s", query_type, result)
         end
-        logger.debug("the %s request has been %s", query_type, result)
         -- if callbackFunc then
         -- 	callbackFunc(err);
         -- end

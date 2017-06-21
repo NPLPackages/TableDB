@@ -35,22 +35,19 @@ local RaftTableDBStateMachine = commonlib.gettable("TableDB.RaftTableDBStateMach
 -- for function not in class
 local logger = LoggerFactory.getLogger("RaftTableDBStateMachine");
 
-function RaftTableDBStateMachine:new(baseDir, ip, listeningPort, clientId)
+function RaftTableDBStateMachine:new(baseDir, ip, listeningPort)
     local o = {
         ip = ip,
         port = listeningPort,
-        clientId = clientId,
         logger = LoggerFactory.getLogger("RaftTableDBStateMachine"),
         snapshotStore = baseDir .. "snapshot/",
         commitIndex = 0,
         messageSender = nil,
         MaxWaitSeconds = 5,
+        latestCommand = -1,
         
-        -- many collections??
         collections = {},
         
-        messages = {},
-        pendingMessages = {},
     };
     setmetatable(o, self);
     
@@ -79,17 +76,17 @@ end
 function RaftTableDBStateMachine:start(raftMessageSender)
     self.messageSender = raftMessageSender;
     
+    -- for init connect
+    Rpc:new():init("RaftRequestRPCInit");
+    RaftRequestRPCInit:MakePublic();
+
     local this = self;
-    -- use Rpc for incoming Request message
     Rpc:new():init("RTDBRequestRPC", function(self, msg)
         msg = this:processMessage(msg)
         return msg;
     end)
     
-    -- port is need to be string here??
-    -- NPL.StartNetServer(self.ip, tostring(self.port));
     RTDBRequestRPC:MakePublic();
-    
     
     self.db = TableDatabase:new();
     -- start tdb
@@ -121,15 +118,16 @@ end
 ]]
 --
 function RaftTableDBStateMachine:start2(RaftSqliteStore)
-    -- use Rpc for incoming Response message
+    -- for init connect
+    Rpc:new():init("RaftRequestRPCInit");
+    RaftRequestRPCInit:MakePublic();
+
     local this = self
     Rpc:new():init("RTDBRequestRPC", function(self, msg)
-        this.logger.trace(format("Response:%s", util.table_tostring(msg)))
+        this.logger.debug(format("Response:%s", util.table_tostring(msg)))
         RaftSqliteStore:handleResponse(msg)
     end)
-    
-    -- port is need to be string here??
-    -- NPL.StartNetServer(self.ip, tostring(self.port));
+
     RTDBRequestRPC:MakePublic();
 
 end
@@ -143,27 +141,43 @@ end
 function RaftTableDBStateMachine:commit(logIndex, data)
     -- data is logEntry.value
     local raftLogEntryValue = RaftLogEntryValue:fromBytes(data);
+
     self.logger.info("commit:%s", util.table_tostring(raftLogEntryValue))
-    local cbFunc = function(err, data)
+
+    local this = self;
+    local cbFunc = function(err, data, re_exec)
         local msg = {
             err = err,
             data = data,
             cb_index = raftLogEntryValue.cb_index,
         }
+
+        if not re_exec then
+            this.latestError = err;
+            this.latestData = data;
+        end
         
         self.logger.debug("%s", util.table_tostring(msg))
-        -- send Response
-        -- we need handle activate failure here
-        RTDBRequestRPC(nil, raftLogEntryValue.serverId, msg)
+        -- for tdb thread
+        Rpc:new():init("RTDBRequestRPC");
+
+        local remoteAddress = format("%s%s", raftLogEntryValue.callbackThread, raftLogEntryValue.serverId)
+        RTDBRequestRPC(nil, remoteAddress, msg)
     end;
+
+    if raftLogEntryValue.cb_index <= self.latestCommand then
+        cbFunc(this.latestError, this.latestData, true);
+        return;
+    end
     
     -- a dedicated IOThread
     if raftLogEntryValue.query_type == "connect" then
-        self.db:connect(raftLogEntryValue.query.rootFolder, cbFunc);
+        -- self.db:connect(raftLogEntryValue.query.rootFolder, cbFunc);
     else
         if raftLogEntryValue.enableSyncMode then
             self.db:EnableSyncMode(true);
         end
+        self.db:connect(raftLogEntryValue.collection.db);
         local collection = self.db[raftLogEntryValue.collection.name];
         
         --add to collections
@@ -193,6 +207,7 @@ function RaftTableDBStateMachine:commit(logIndex, data)
         end
     end
     
+    self.latestCommand = raftLogEntryValue.cb_index;
     self.commitIndex = logIndex;
 end
 
