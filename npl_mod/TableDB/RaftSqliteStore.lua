@@ -72,6 +72,10 @@ function RaftSqliteStore:setRaftClient(c)
   raftClient = c
 end
 
+function RaftSqliteStore:getRaftClient()
+  return raftClient;
+end
+
 function RaftSqliteStore:ctor()
   self.stats = {
     select = 0,

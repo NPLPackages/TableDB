@@ -111,26 +111,32 @@ local function executeAsClient()
       -- TestCountAPI()
       -- TestDelete()
     
-    elseif clientMode == "addServer" then
-      local serverToJoin = {
-        id = serverId,
-        endpoint = "tcp://localhost:900"..serverId,
-      }
-
-      raftClient:addServer(ClusterServer:new(serverToJoin), function (response, err)
-        local result = (err == nil and response.accepted and "accepted") or "denied"
-        logger.info("the addServer request has been %s", result)
-      end)
-    
-    elseif clientMode == "removeServer" then
-      -- remove server
-      local serverIdToRemove = serverId;
-      raftClient:removeServer(serverIdToRemove, function (response, err)
-        local result = (err == nil and response.accepted and "accepted") or "denied"
-        logger.info("the removeServer request has been %s", result)
-      end)
     else
-      logger.error("unknown client command:%s", clientMode)
+      NPL.load("(gl)npl_mod/TableDB/RaftSqliteStore.lua");
+      local RaftSqliteStore = commonlib.gettable("TableDB.RaftSqliteStore");
+      RaftSqliteStore:createRaftClient()
+      local raftClient = RaftSqliteStore:getRaftClient();
+
+      if clientMode == "addServer" then
+        local serverToJoin = {
+          id = serverId,
+          endpoint = "tcp://localhost:900"..serverId,
+        }
+
+        raftClient:addServer(ClusterServer:new(serverToJoin), function (response, err)
+          local result = (err == nil and response.accepted and "accepted") or "denied"
+          logger.info("the addServer request has been %s", result)
+        end)
+      
+      elseif clientMode == "removeServer" then
+        local serverIdToRemove = serverId;
+        raftClient:removeServer(serverIdToRemove, function (response, err)
+          local result = (err == nil and response.accepted and "accepted") or "denied"
+          logger.info("the removeServer request has been %s", result)
+        end)
+      else
+        logger.error("unknown client command:%s", clientMode)
+      end
     end
 end
 

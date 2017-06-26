@@ -295,11 +295,11 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
   local activate_result = NPL.activate(vFileId, msg);
   -- handle memory leak
   if activate_result ~= 0 then
-    activate_result = NPL.activate_with_timeout(self.MaxWaitSeconds, vFileId, msg)
-    if activate_result ~= 0 then
+    -- activate_result = NPL.activate_with_timeout(self.MaxWaitSeconds, vFileId, msg)
+    -- if activate_result ~= 0 then
       self.run_callbacks[callbackId] = nil
       self.logger.error("activate on %s failed %d, msg type:%s", vFileId, activate_result, msg.type)
-    end
+    -- end
   else
     -- FIXME:
     -- to avoid memory leak, we 
