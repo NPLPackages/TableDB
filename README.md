@@ -74,13 +74,13 @@ We use sqlite's [Online Backup API](https://www.sqlite.org/backup.html) to make 
 ## Test TableDB/NPL Raft
 
 ### Start a 3 Raft Nodes cluster
- `cd setup && setup.bat` will start 3 Raft nodes. The 3 Node will automatically elect a leader. we can stop one node(whether it is leader or not) and the cluster can still function correctly. Raft can tolerate `N/2 + 1` nodes failue, where N is the total nodes in cluster.
+ `cd setup && setup.bat` will start 3 Raft nodes. The 3 nodes will automatically elect a leader. we can stop one node(whether it is leader or not) and the cluster can still function correctly. Raft can tolerate `N/2 + 1` nodes failue, where N is the total nodes in cluster.
 
 ### Send Commands to the Cluster
-Create `setup/client/temp/test_raft_database` directory, place the `tabledb.config.xml` above to the directory, and run `setup.bat client appendEntries`. This will start 1 client node whose tabledb `rootFolder` is `temp/test_raft_database` and default provider is `raft`.The client node will send commands to the cluster and automaticlly retry in a backoff way if the command not succeed. All 3 Raft nodes will recv the same commands. Either succeed or not the client's callback will be called. 
+Create `setup/client/temp/test_raft_database` directory, place the `tabledb.config.xml` above to the directory, and run `setup.bat client appendEntries`. This will start 1 client node whose tabledb `rootFolder` is `temp/test_raft_database` and default provider is `raft`.The client node will send commands to the cluster and automaticlly retry in a backoff way if the command not succeed. All 3 Raft nodes will recv the same commands. Whether succeed or not the client's callback will be called. 
 
 ### Add a server to the Cluster
-`addsrv 5` will start a node whose id is 5. To add the node to the cluster, execute `setup.bat client addServer 5`. This command may need to be executed twice because of the initial connect caused by `NPL.activate()`. The cluster will automatically sync the logs previously commited to this new added server. Now if you start a client to send commands to the cluster, the new server will also recv these commands.
+`addsrv 5` will start a node whose id is 5.(Note: you need to delete the `server5` folder). To add the node to the cluster, execute `setup.bat client addServer 5`. The cluster will automatically sync the logs previously commited to this new added server. Now if you start a client to send commands to the cluster, the new server will also recv these commands.
 
 > Note: every time you start a new client(whether Send Commands, Add server or Remove server), you should stop the previous client.
 
