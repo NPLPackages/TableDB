@@ -40,6 +40,8 @@ local Rpc = commonlib.gettable("Raft.Rpc");
 
 local rpc_instances = {};
 
+Rpc.DefaultTimeout = 5000;
+
 function Rpc:new(o)
   o = o or {};
   o.logger = logger;
@@ -47,9 +49,11 @@ function Rpc:new(o)
   o.next_run_id = 0;
   o.thread_name = format("(%s)", __rts__:GetName());
   o.MaxWaitSeconds = 3;
+  
   setmetatable(o, Rpc);
   return o;
 end
+
 
 -- @param funcName: global function name, such as "API.Auth"
 -- @param handle_request_func: Rpc handler function of function(self, msg)  end
@@ -181,16 +185,11 @@ function Rpc:OnActivated(msg)
         callbackId = msg.callbackId
       }
       -- if type(self.localAddress) == "table" then
-        self.logger.debug("activate on %s, msg:%s", vFileId, util.table_tostring(response))
+        self.logger.trace("activate on %s, msg:%s", vFileId, util.table_tostring(response))
       -- end
       local activate_result = NPL.activate(vFileId, response)
 
-      -- handle memory leak
       if activate_result ~= 0 then
-        -- FIXME:
-        -- this will cause remote side memory leak, to handle this, we
-        -- should give run_callbacks a TTL
-        -- self.run_callbacks[callbackId] = nil
         activate_result = NPL.activate_with_timeout(self.MaxWaitSeconds, vFileId, response)
         if activate_result ~= 0 then
           self.logger.error("activate on %s failed %d, msg type:%s", vFileId, activate_result, response.type)
@@ -264,6 +263,8 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
   --   self.localAddress.id = format("server%s:", self.localAddress.id);
   -- end
 
+  -- TTL Cache
+  local timeout = timeout or self.DefaultTimeout;
 
   local callbackId = self.next_run_id + 1;
   self.next_run_id = callbackId
@@ -290,7 +291,7 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
     remoteAddress = self.localAddress,
   }
   if type(self.localAddress) == "table" then
-    self.logger.debug("activate on %s, msg:%s", vFileId, util.table_tostring(msg))
+    self.logger.trace("activate on %s, msg:%s", vFileId, util.table_tostring(msg))
   end
   local activate_result = NPL.activate(vFileId, msg);
   -- handle memory leak
@@ -300,11 +301,6 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
       self.run_callbacks[callbackId] = nil
       self.logger.error("activate on %s failed %d, msg type:%s", vFileId, activate_result, msg.type)
     -- end
-  else
-    -- FIXME:
-    -- to avoid memory leak, we 
-    -- should give self.run_callbacks a TTL
-    -- self.run_callbacks[callbackId] = nil
   end
   return activate_result
 end
