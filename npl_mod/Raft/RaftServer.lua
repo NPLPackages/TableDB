@@ -187,7 +187,6 @@ function RaftServer:processRequest(request)
     return response;
 end
 
--- synchronized
 function RaftServer:handleAppendEntriesRequest(request)
     -- we allow the server to be continue after term updated to save a round message
     self:updateTerm(request.term);
@@ -281,7 +280,6 @@ function RaftServer:handleAppendEntriesRequest(request)
     return response;
 end
 
--- synchronized
 function RaftServer:handleVoteRequest(request)
     -- we allow the server to be continue after term updated to save a round message
     self:updateTerm(request.term);
@@ -449,7 +447,6 @@ function RaftServer:requestAppendEntries(peer)
     return false;
 end
 
---synchronized
 function RaftServer:handlePeerResponse(response, error)
     if (error ~= nil) then
         self.logger.info("peer response error: %s", error.string);
@@ -517,14 +514,12 @@ function RaftServer:handleAppendEntriesResponse(response)
         self:commit(matchedIndexes[majority]);
         needToCatchup = peer:clearPendingCommit() or response.nextIndex < self.logStore:getFirstAvailableIndex();
     else
-        -- synchronized(peer){
         -- Improvement: if peer's real log length is less than was assumed, reset to that length directly
         if (response.nextIndex > 0 and peer.nextLogIndex > response.nextIndex) then
             peer.nextLogIndex = response.nextIndex;
         else
             peer.nextLogIndex = peer.nextLogIndex - 1;
         end
-    -- }
     end
     
     -- This may not be a leader anymore, such as the response was sent out long time ago
@@ -545,7 +540,6 @@ function RaftServer:handleInstallSnapshotResponse(response)
     -- If there are pending logs to be synced or commit index need to be advanced, continue to send appendEntries to this peer
     local needToCatchup = true;
     if (response.accepted) then
-        -- synchronized(peer){
         local context = peer.snapshotSyncContext;
         if (context == nil) then
             self.logger.info("no snapshot sync context for this peer, drop the response");
@@ -570,9 +564,14 @@ function RaftServer:handleInstallSnapshotResponse(response)
                 context.offset = response.nextIndex;
             end
         end
-    -- }
     else
-        self.logger.info("peer declines to install the snapshot, will retry");
+        -- Improvement: if peer's real log length is bigger than was assumed, reset to that length directly
+        if (response.nextIndex > 0 and peer.nextLogIndex < response.nextIndex) then
+            peer.nextLogIndex = response.nextIndex;
+            peer.matchedIndex = response.nextIndex - 1;
+            peer.snapshotSyncContext = nil;
+        end
+        self.logger.info("peer declines to install the snapshot, may retry");
     end
     
     -- This may not be a leader anymore, such as the response was sent out long time ago
@@ -610,7 +609,6 @@ function RaftServer:handleHeartbeatTimeout(peer)
     self.logger.debug("Heartbeat timeout for %d", peer:getId());
     if (self.role == ServerRole.Leader) then
         self:requestAppendEntries(peer);
-        -- synchronized(peer){
         if (peer.heartbeatEnabled) then
             -- Schedule another heartbeat if heartbeat is still enabled
             peer.heartbeatTimer:Change(peer.currentHeartbeatInterval, nil);
@@ -725,7 +723,6 @@ function RaftServer:commit(targetIndex)
     end
     
     if (self.logStore:getFirstAvailableIndex() - 1 > self.state.commitIndex and self.quickCommitIndex > self.state.commitIndex) then
-        -- self.commitingThread.moreToCommit();
         real_commit(self);
     end
 end
@@ -788,7 +785,6 @@ function RaftServer:snapshotAndCompact(indexCommitted)
             end
             
             if not err and result then
-                -- synchronized(this){
                 o.logger.debug("snapshot created, compact the log store");
                 
                 o.logStore:compact(snapshot.lastLogIndex);
@@ -807,25 +803,23 @@ function RaftServer:snapshotAndCompact(indexCommitted)
 end
 
 function RaftServer:createAppendEntriesRequest(peer)
-    -- synchronized(this){
     local startingIndex = self.logStore:getStartIndex();
     local currentNextIndex = self.logStore:getFirstAvailableIndex();
     local commitIndex = self.quickCommitIndex;
     local term = self.state.term;
-    -- }
-    -- synchronized(peer){
+
     if (peer.nextLogIndex == 0) then
         peer.nextLogIndex = currentNextIndex;
     end
     
     local lastLogIndex = peer.nextLogIndex - 1;
-    -- }
     if (lastLogIndex >= currentNextIndex) then
         self.logger.error("Peer's lastLogIndex is too large %d v.s. %d, server exits", lastLogIndex, currentNextIndex);
         self.stateMachine:exit(-1);
     end
     -- for syncing the snapshots, if the lastLogIndex == lastSnapshot.getLastLogIndex, we could get the term from the snapshot
     if (lastLogIndex > 0 and lastLogIndex < startingIndex - 1) then
+        -- this may also happens when the peer's lastLogIndex is stale due to the response err
         return self:createSyncSnapshotRequest(peer, lastLogIndex, term, commitIndex);
     end
     local lastLogTerm = self:termForLastLog(lastLogIndex);
@@ -932,7 +926,6 @@ function RaftServer:reconfigure(newConfig)
 
 end
 
--- synchronized
 function RaftServer:handleExtendedMessages(request)
     if (request.messageType.int == RaftMessageType.AddServerRequest.int) then
         return self:handleAddServerRequest(request);
@@ -1000,8 +993,8 @@ function RaftServer:handleInstallSnapshotRequest(request)
     
     -- We don't want to apply a snapshot that is older than we have, this may not happen, but just in case
     if (snapshotSyncRequest.snapshot.lastLogIndex <= self.quickCommitIndex) then
-        self.logger.error("Received a snapshot which is older than this server (%d)", self.id);
-        response.nextIndex = 0;
+        self.logger.error("Received a snapshot (%d) which is older than this (%d) server (%d)", snapshotSyncRequest.snapshot.lastLogIndex, self.id, self.quickCommitIndex);
+        response.nextIndex = self.logStore:getFirstAvailableIndex();
         response.accepted = false;
         return response;
     end
@@ -1048,7 +1041,6 @@ function RaftServer:handleSnapshotSyncRequest(snapshotSyncRequest)
     return true;
 end
 
--- synchronized
 function RaftServer:handleExtendedResponse(response, error)
     if (error ~= nil) then
         self:handleExtendedResponseError(error);
@@ -1493,7 +1485,6 @@ function RaftServer:getSnapshotSyncBlockSize()
 end
 
 function RaftServer:createSyncSnapshotRequest(peer, lastLogIndex, term, commitIndex)
-    -- synchronized(peer){
     local context = peer.snapshotSyncContext;
     local snapshot
     if context then
@@ -1505,7 +1496,7 @@ function RaftServer:createSyncSnapshotRequest(peer, lastLogIndex, term, commitIn
         
         if (snapshot == nil or lastLogIndex > snapshot.lastLogIndex) then
             self.logger.error("system is running into fatal errors, failed to find a snapshot for peer %d(snapshot nil: %s, snapshot doesn't contains lastLogIndex: %s)",
-                peer:getId(), (snapshot == nil and "true") or "false", (lastLogIndex > snapshot.lastLogIndex and "true") or "false");
+                peer:getId(), (snapshot == nil and "true") or "false", (((snapshot == nil) or lastLogIndex > snapshot.lastLogIndex) and "true") or "false");
             self.stateMachine:exit(-1);
             return nil;
         end
@@ -1567,6 +1558,7 @@ function RaftServer:termForLastLog(logIndex)
     local lastSnapshot = self.stateMachine:getLastSnapshot();
     if (lastSnapshot == nil or logIndex ~= lastSnapshot.lastLogIndex) then
         self.logger.error("logIndex is beyond the range that no term could be retrieved");
+        return;
     end
     return lastSnapshot.lastLogTerm;
 end
@@ -1575,6 +1567,9 @@ end
 -- TODO: resemble IOThread in TableDB ? this may cause synchronize issue
 function real_commit(server)
     local currentCommitIndex = server.state.commitIndex;
+    if server.quickCommitIndex <= currentCommitIndex then
+        return ;
+    end
     while (currentCommitIndex < server.quickCommitIndex and currentCommitIndex < server.logStore:getFirstAvailableIndex() - 1) do
         currentCommitIndex = currentCommitIndex + 1;
         server.logger.trace("committing...currentCommitIndex:%d, quickCommitIndex:%d, logStore:FirstAvailableIndex:%d",

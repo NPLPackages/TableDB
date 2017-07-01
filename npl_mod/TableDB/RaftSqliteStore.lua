@@ -179,7 +179,7 @@ function RaftSqliteStore:WaitForSyncModeReply(timeout, cb_index)
       if(msg.filename == "Rpc/RTDBRequestRPC.lua") then
         local msg = thread:PopMessageAt(i, {filename=true, msg=true});
         local out_msg = msg.msg;
-        logger.debug("recv msg:%s", util.table_tostring(out_msg));
+        logger.trace("recv msg:%s", util.table_tostring(out_msg));
         -- we use this only in connect and we should ensure connect's cb_index should be -1
         if not RaftSqliteStore.EnableSyncMode then
           raftClient.HandleResponse(nil, out_msg.msg);

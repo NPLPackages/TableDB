@@ -88,15 +88,15 @@ function TestInsertThroughputNoIndex()
 	npl_profiler.perf_reset();
 
 	npl_profiler.perf_begin("tableDB_BlockingAPILatency", true)
-	local total_times = 1000000; -- a million non-indexed insert operation
-	local max_jobs = 1000; -- concurrent jobs count
+	local total_times = 10000; -- a million non-indexed insert operation
+	local max_jobs = 100; -- concurrent jobs count
 	NPL.load("(gl)script/ide/System/Concurrent/Parallel.lua");
 	local Parallel = commonlib.gettable("System.Concurrent.Parallel");
 	local p = Parallel:new():init()
 	p:RunManyTimes(function(count)
 		db.insertNoIndex:insertOne(nil, {count=count, data=math.random()}, function(err, data)
 			if(err) then
-				echo({err, data});
+				-- echo({err, data});
 			end
 			p:Next();
 		end)

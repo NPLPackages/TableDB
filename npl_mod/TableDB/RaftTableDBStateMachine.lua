@@ -132,6 +132,8 @@ function RaftTableDBStateMachine:start2(RaftSqliteStore)
 
 end
 
+
+local RTDBRequestRPCInitedInTDB = false;
 --[[
 * Commit the log data at the {@code logIndex}
 * @param logIndex the log index in the logStore
@@ -157,9 +159,12 @@ function RaftTableDBStateMachine:commit(logIndex, data)
             this.latestData = data;
         end
         
-        self.logger.debug("%s", util.table_tostring(msg))
+        self.logger.trace("%s", util.table_tostring(msg))
         -- for tdb thread
-        Rpc:new():init("RTDBRequestRPC");
+        if not RTDBRequestRPCInitedInTDB then
+            RTDBRequestRPCInitedInTDB = true;
+            Rpc:new():init("RTDBRequestRPC");
+        end
 
         local remoteAddress = format("%s%s", raftLogEntryValue.callbackThread, raftLogEntryValue.serverId)
         RTDBRequestRPC(nil, remoteAddress, msg)
@@ -411,16 +416,17 @@ function RaftTableDBStateMachine:createSnapshot(snapshot)
         snapshotStore = self.snapshotStore,
     }
     
-    local address = format("(%s)npl_mod/TableDB/RaftTableDBStateMachine.lua", self.snapshotThread);
-    if (NPL.activate(address, msg) ~= 0) then
+    local success = true;
+    -- local address = format("(%s)npl_mod/TableDB/RaftTableDBStateMachine.lua", self.snapshotThread);
+    -- if (NPL.activate(address, msg) ~= 0) then
         -- in case of error
-        if (NPL.activate_with_timeout(self.MaxWaitSeconds, address, msg) ~= 0) then
-            self.logger.error("what's wrong with the snapshot thread?? we do backup in main")
-            do_backup(msg);
-        end
-    end;
+        -- if (NPL.activate_with_timeout(self.MaxWaitSeconds, address, msg) ~= 0) then
+            -- self.logger.error("what's wrong with the snapshot thread?? we do backup in main")
+            success = do_backup(msg);
+        -- end
+    -- end;
     
-    return true;
+    return success;
 end
 
 --[[
@@ -439,7 +445,7 @@ end
 
 
 function RaftTableDBStateMachine:processMessage(message)
-    print("Got message " .. util.table_tostring(message));
+    logger.info("Got message " .. util.table_tostring(message));
     return self.messageSender:appendEntries(message);
 end
 
@@ -491,6 +497,7 @@ end
 
 
 function do_backup(msg)
+    local backup_success = true;
     local snapshot = msg.snapshot
     local collections = msg.collections
     local snapshotStore = msg.snapshotStore
@@ -498,68 +505,57 @@ function do_backup(msg)
         local filePath = snapshotStore .. string.format("%d-%d_%s_s.db", snapshot.lastLogIndex, snapshot.lastLogTerm, name);
         local srcDBPath = collection .. ".db";
         logger.info("backing up %s to %s", name, filePath);
-        
-        -- local t = ParaIO.open(filePath, "rw");
-        -- t:close();
+
         local backupDB = sqlite3.open(filePath)
         local srcDB = sqlite3.open(srcDBPath)
         -- local srcDB = collection.storageProvider._db
+
         -- backup can get error
         local bu = sqlite3.backup_init(backupDB, 'main', srcDB, 'main')
-        
-        local deleteBackupDB = false;
-        local backupDBClosed = false;
         if bu then
             local stepResult = bu:step(-1);
             if stepResult ~= ERR.DONE then
                 logger.error("back up failed")
+                backup_success = false;
+
                 -- an error occured
                 if stepResult == ERR.BUSY or stepResult == ERR.LOCKED then
                     -- we don't retry
-                    bu:finish(); -- must free resource
-                    backupDB:close()
-                    backupDBClosed = true;
-                    ParaIO.DeleteFile(filePath);
                     -- move the previous snapshot to current logIndex?
-                    local prevSnapshortName = getLatestSnapshotName(snapshotStore, name);
-                    if prevSnapshortName == format("%s0-0_%s_s.db", snapshotStore, name) then
-                        -- leave it
-                        logger.error("backing up the 1st snapshot %s err", filePath)
-                    else
-                        logger.info("copy %s to %s", prevSnapshortName, filePath)
-                        if not (ParaIO.CopyFile(prevSnapshortName, filePath, true)) then
-                            logger.error("copy %s to %s failed", prevSnapshortName, filePath);
-                            exit(-1);
-                        end
-                    end
+                    -- local prevSnapshortName = getLatestSnapshotName(snapshotStore, name);
+                    -- if prevSnapshortName == format("%s0-0_%s_s.db", snapshotStore, name) then
+                    --     -- leave it
+                    --     logger.error("backing up the 1st snapshot %s err", filePath)
+                    -- else
+                    --     logger.info("copy %s to %s", prevSnapshortName, filePath)
+                    --     if not (ParaIO.CopyFile(prevSnapshortName, filePath, true)) then
+                    --         logger.error("copy %s to %s failed", prevSnapshortName, filePath);
+                    --         exit(-1);
+                    --     end
+                    -- end
                 else
                     logger.error("must be a BUG!!!")
-                    bu:finish();
-                    backupDB:close()
-                    backupDBClosed = true;
-                    ParaIO.DeleteFile(filePath);
                     exit(-1)
                 end
-            else
-                bu:finish();
             end
+            bu:finish();
         else
             -- A call to sqlite3_backup_init() will fail, returning NULL,
             -- if there is already a read or read-write transaction open on the destination database
             logger.error("backup_init failed")
-            deleteBackupDB = true;
+            backup_success = false;
         end
         
         bu = nil;
-        
-        if not backupDBClosed then
-            backupDB:close()
-        end
+
         srcDB:close()
-        if deleteBackupDB then
+        backupDB:close()
+        if not backup_success then
             ParaIO.DeleteFile(filePath);
+            return backup_success;
         end
     end
+    return backup_success;
 end
 
 local function activate()
