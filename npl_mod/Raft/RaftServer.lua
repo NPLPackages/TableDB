@@ -568,6 +568,8 @@ function RaftServer:handleInstallSnapshotResponse(response)
         -- Improvement: if peer's real log length is bigger than was assumed, reset to that length directly
         if (response.nextIndex > 0 and peer.nextLogIndex < response.nextIndex) then
             peer.nextLogIndex = response.nextIndex;
+            peer.matchedIndex = response.nextIndex - 1;
+            peer.snapshotSyncContext = nil;
         end
         self.logger.info("peer declines to install the snapshot, may retry");
     end
