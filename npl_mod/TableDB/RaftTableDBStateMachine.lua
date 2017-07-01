@@ -416,16 +416,17 @@ function RaftTableDBStateMachine:createSnapshot(snapshot)
         snapshotStore = self.snapshotStore,
     }
     
-    local address = format("(%s)npl_mod/TableDB/RaftTableDBStateMachine.lua", self.snapshotThread);
-    if (NPL.activate(address, msg) ~= 0) then
+    local success = true;
+    -- local address = format("(%s)npl_mod/TableDB/RaftTableDBStateMachine.lua", self.snapshotThread);
+    -- if (NPL.activate(address, msg) ~= 0) then
         -- in case of error
-        if (NPL.activate_with_timeout(self.MaxWaitSeconds, address, msg) ~= 0) then
-            self.logger.error("what's wrong with the snapshot thread?? we do backup in main")
-            do_backup(msg);
-        end
-    end;
+        -- if (NPL.activate_with_timeout(self.MaxWaitSeconds, address, msg) ~= 0) then
+            -- self.logger.error("what's wrong with the snapshot thread?? we do backup in main")
+            success = do_backup(msg);
+        -- end
+    -- end;
     
-    return true;
+    return success;
 end
 
 --[[
@@ -496,6 +497,7 @@ end
 
 
 function do_backup(msg)
+    local backup_success = true;
     local snapshot = msg.snapshot
     local collections = msg.collections
     local snapshotStore = msg.snapshotStore
@@ -509,62 +511,51 @@ function do_backup(msg)
         local backupDB = sqlite3.open(filePath)
         local srcDB = sqlite3.open(srcDBPath)
         -- local srcDB = collection.storageProvider._db
+
         -- backup can get error
         local bu = sqlite3.backup_init(backupDB, 'main', srcDB, 'main')
         
-        local deleteBackupDB = false;
-        local backupDBClosed = false;
         if bu then
             local stepResult = bu:step(-1);
             if stepResult ~= ERR.DONE then
                 logger.error("back up failed")
+                backup_success = false;
+
                 -- an error occured
                 if stepResult == ERR.BUSY or stepResult == ERR.LOCKED then
                     -- we don't retry
-                    bu:finish(); -- must free resource
-                    backupDB:close()
-                    backupDBClosed = true;
-                    ParaIO.DeleteFile(filePath);
                     -- move the previous snapshot to current logIndex?
-                    local prevSnapshortName = getLatestSnapshotName(snapshotStore, name);
-                    if prevSnapshortName == format("%s0-0_%s_s.db", snapshotStore, name) then
-                        -- leave it
-                        logger.error("backing up the 1st snapshot %s err", filePath)
-                    else
-                        logger.info("copy %s to %s", prevSnapshortName, filePath)
-                        if not (ParaIO.CopyFile(prevSnapshortName, filePath, true)) then
-                            logger.error("copy %s to %s failed", prevSnapshortName, filePath);
-                            exit(-1);
-                        end
-                    end
+                    -- local prevSnapshortName = getLatestSnapshotName(snapshotStore, name);
+                    -- if prevSnapshortName == format("%s0-0_%s_s.db", snapshotStore, name) then
+                    --     -- leave it
+                    --     logger.error("backing up the 1st snapshot %s err", filePath)
+                    -- else
+                    --     logger.info("copy %s to %s", prevSnapshortName, filePath)
+                    --     if not (ParaIO.CopyFile(prevSnapshortName, filePath, true)) then
+                    --         logger.error("copy %s to %s failed", prevSnapshortName, filePath);
+                    --         exit(-1);
+                    --     end
+                    -- end
                 else
                     logger.error("must be a BUG!!!")
-                    bu:finish();
-                    backupDB:close()
-                    backupDBClosed = true;
-                    ParaIO.DeleteFile(filePath);
                     exit(-1)
                 end
-            else
-                bu:finish();
             end
+            bu:finish();
         else
             -- A call to sqlite3_backup_init() will fail, returning NULL,
             -- if there is already a read or read-write transaction open on the destination database
             logger.error("backup_init failed")
-            deleteBackupDB = true;
+            ParaIO.DeleteFile(filePath);
+            backup_success = false;
         end
         
         bu = nil;
-        
-        if not backupDBClosed then
-            backupDB:close()
-        end
+
+        backupDB:close()
         srcDB:close()
-        if deleteBackupDB then
-            ParaIO.DeleteFile(filePath);
-        end
     end
+    return backup_success;
 end
 
 local function activate()
