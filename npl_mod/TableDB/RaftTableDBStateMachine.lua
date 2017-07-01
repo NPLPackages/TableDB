@@ -505,22 +505,18 @@ function do_backup(msg)
         local filePath = snapshotStore .. string.format("%d-%d_%s_s.db", snapshot.lastLogIndex, snapshot.lastLogTerm, name);
         local srcDBPath = collection .. ".db";
         logger.info("backing up %s to %s", name, filePath);
-        
-        -- local t = ParaIO.open(filePath, "rw");
-        -- t:close();
+
         local backupDB = sqlite3.open(filePath)
         local srcDB = sqlite3.open(srcDBPath)
         -- local srcDB = collection.storageProvider._db
 
         -- backup can get error
         local bu = sqlite3.backup_init(backupDB, 'main', srcDB, 'main')
-        
         if bu then
             local stepResult = bu:step(-1);
             if stepResult ~= ERR.DONE then
                 logger.error("back up failed")
                 backup_success = false;
-                ParaIO.DeleteFile(filePath);
 
                 -- an error occured
                 if stepResult == ERR.BUSY or stepResult == ERR.LOCKED then
@@ -547,14 +543,17 @@ function do_backup(msg)
             -- A call to sqlite3_backup_init() will fail, returning NULL,
             -- if there is already a read or read-write transaction open on the destination database
             logger.error("backup_init failed")
-            ParaIO.DeleteFile(filePath);
             backup_success = false;
         end
         
         bu = nil;
 
-        backupDB:close()
         srcDB:close()
+        backupDB:close()
+        if not backup_success then
+            ParaIO.DeleteFile(filePath);
+            return backup_success;
+        end
     end
     return backup_success;
 end
