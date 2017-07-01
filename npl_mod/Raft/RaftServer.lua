@@ -187,7 +187,6 @@ function RaftServer:processRequest(request)
     return response;
 end
 
--- synchronized
 function RaftServer:handleAppendEntriesRequest(request)
     -- we allow the server to be continue after term updated to save a round message
     self:updateTerm(request.term);
@@ -281,7 +280,6 @@ function RaftServer:handleAppendEntriesRequest(request)
     return response;
 end
 
--- synchronized
 function RaftServer:handleVoteRequest(request)
     -- we allow the server to be continue after term updated to save a round message
     self:updateTerm(request.term);
@@ -449,7 +447,6 @@ function RaftServer:requestAppendEntries(peer)
     return false;
 end
 
---synchronized
 function RaftServer:handlePeerResponse(response, error)
     if (error ~= nil) then
         self.logger.info("peer response error: %s", error.string);
@@ -517,14 +514,12 @@ function RaftServer:handleAppendEntriesResponse(response)
         self:commit(matchedIndexes[majority]);
         needToCatchup = peer:clearPendingCommit() or response.nextIndex < self.logStore:getFirstAvailableIndex();
     else
-        -- synchronized(peer){
         -- Improvement: if peer's real log length is less than was assumed, reset to that length directly
         if (response.nextIndex > 0 and peer.nextLogIndex > response.nextIndex) then
             peer.nextLogIndex = response.nextIndex;
         else
             peer.nextLogIndex = peer.nextLogIndex - 1;
         end
-    -- }
     end
     
     -- This may not be a leader anymore, such as the response was sent out long time ago
@@ -545,7 +540,6 @@ function RaftServer:handleInstallSnapshotResponse(response)
     -- If there are pending logs to be synced or commit index need to be advanced, continue to send appendEntries to this peer
     local needToCatchup = true;
     if (response.accepted) then
-        -- synchronized(peer){
         local context = peer.snapshotSyncContext;
         if (context == nil) then
             self.logger.info("no snapshot sync context for this peer, drop the response");
@@ -570,7 +564,6 @@ function RaftServer:handleInstallSnapshotResponse(response)
                 context.offset = response.nextIndex;
             end
         end
-    -- }
     else
         self.logger.info("peer declines to install the snapshot, will retry");
     end
@@ -610,7 +603,6 @@ function RaftServer:handleHeartbeatTimeout(peer)
     self.logger.debug("Heartbeat timeout for %d", peer:getId());
     if (self.role == ServerRole.Leader) then
         self:requestAppendEntries(peer);
-        -- synchronized(peer){
         if (peer.heartbeatEnabled) then
             -- Schedule another heartbeat if heartbeat is still enabled
             peer.heartbeatTimer:Change(peer.currentHeartbeatInterval, nil);
@@ -788,7 +780,6 @@ function RaftServer:snapshotAndCompact(indexCommitted)
             end
             
             if not err and result then
-                -- synchronized(this){
                 o.logger.debug("snapshot created, compact the log store");
                 
                 o.logStore:compact(snapshot.lastLogIndex);
@@ -807,13 +798,11 @@ function RaftServer:snapshotAndCompact(indexCommitted)
 end
 
 function RaftServer:createAppendEntriesRequest(peer)
-    -- synchronized(this){
     local startingIndex = self.logStore:getStartIndex();
     local currentNextIndex = self.logStore:getFirstAvailableIndex();
     local commitIndex = self.quickCommitIndex;
     local term = self.state.term;
-    -- }
-    -- synchronized(peer){
+
     if (peer.nextLogIndex == 0) then
         peer.nextLogIndex = currentNextIndex;
     end
@@ -932,7 +921,6 @@ function RaftServer:reconfigure(newConfig)
 
 end
 
--- synchronized
 function RaftServer:handleExtendedMessages(request)
     if (request.messageType.int == RaftMessageType.AddServerRequest.int) then
         return self:handleAddServerRequest(request);
@@ -1048,7 +1036,6 @@ function RaftServer:handleSnapshotSyncRequest(snapshotSyncRequest)
     return true;
 end
 
--- synchronized
 function RaftServer:handleExtendedResponse(response, error)
     if (error ~= nil) then
         self:handleExtendedResponseError(error);
@@ -1493,7 +1480,6 @@ function RaftServer:getSnapshotSyncBlockSize()
 end
 
 function RaftServer:createSyncSnapshotRequest(peer, lastLogIndex, term, commitIndex)
-    -- synchronized(peer){
     local context = peer.snapshotSyncContext;
     local snapshot
     if context then
