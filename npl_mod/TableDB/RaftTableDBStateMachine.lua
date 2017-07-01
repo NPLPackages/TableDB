@@ -520,6 +520,7 @@ function do_backup(msg)
             if stepResult ~= ERR.DONE then
                 logger.error("back up failed")
                 backup_success = false;
+                ParaIO.DeleteFile(filePath);
 
                 -- an error occured
                 if stepResult == ERR.BUSY or stepResult == ERR.LOCKED then
