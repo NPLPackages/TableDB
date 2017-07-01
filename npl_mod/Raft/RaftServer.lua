@@ -565,7 +565,11 @@ function RaftServer:handleInstallSnapshotResponse(response)
             end
         end
     else
-        self.logger.info("peer declines to install the snapshot, will retry");
+        -- Improvement: if peer's real log length is bigger than was assumed, reset to that length directly
+        if (response.nextIndex > 0 and peer.nextLogIndex < response.nextIndex) then
+            peer.nextLogIndex = response.nextIndex;
+        end
+        self.logger.info("peer declines to install the snapshot, may retry");
     end
     
     -- This may not be a leader anymore, such as the response was sent out long time ago
@@ -717,7 +721,6 @@ function RaftServer:commit(targetIndex)
     end
     
     if (self.logStore:getFirstAvailableIndex() - 1 > self.state.commitIndex and self.quickCommitIndex > self.state.commitIndex) then
-        -- self.commitingThread.moreToCommit();
         real_commit(self);
     end
 end
@@ -808,13 +811,13 @@ function RaftServer:createAppendEntriesRequest(peer)
     end
     
     local lastLogIndex = peer.nextLogIndex - 1;
-    -- }
     if (lastLogIndex >= currentNextIndex) then
         self.logger.error("Peer's lastLogIndex is too large %d v.s. %d, server exits", lastLogIndex, currentNextIndex);
         self.stateMachine:exit(-1);
     end
     -- for syncing the snapshots, if the lastLogIndex == lastSnapshot.getLastLogIndex, we could get the term from the snapshot
     if (lastLogIndex > 0 and lastLogIndex < startingIndex - 1) then
+        -- this may also happens when the peer's lastLogIndex is stale due to the response err
         return self:createSyncSnapshotRequest(peer, lastLogIndex, term, commitIndex);
     end
     local lastLogTerm = self:termForLastLog(lastLogIndex);
@@ -988,8 +991,8 @@ function RaftServer:handleInstallSnapshotRequest(request)
     
     -- We don't want to apply a snapshot that is older than we have, this may not happen, but just in case
     if (snapshotSyncRequest.snapshot.lastLogIndex <= self.quickCommitIndex) then
-        self.logger.error("Received a snapshot which is older than this server (%d)", self.id);
-        response.nextIndex = 0;
+        self.logger.error("Received a snapshot (%d) which is older than this (%d) server (%d)", snapshotSyncRequest.snapshot.lastLogIndex, self.id, self.quickCommitIndex);
+        response.nextIndex = self.logStore:getFirstAvailableIndex();
         response.accepted = false;
         return response;
     end
@@ -1553,6 +1556,7 @@ function RaftServer:termForLastLog(logIndex)
     local lastSnapshot = self.stateMachine:getLastSnapshot();
     if (lastSnapshot == nil or logIndex ~= lastSnapshot.lastLogIndex) then
         self.logger.error("logIndex is beyond the range that no term could be retrieved");
+        return;
     end
     return lastSnapshot.lastLogTerm;
 end
@@ -1561,6 +1565,9 @@ end
 -- TODO: resemble IOThread in TableDB ? this may cause synchronize issue
 function real_commit(server)
     local currentCommitIndex = server.state.commitIndex;
+    if server.quickCommitIndex <= currentCommitIndex then
+        return ;
+    end
     while (currentCommitIndex < server.quickCommitIndex and currentCommitIndex < server.logStore:getFirstAvailableIndex() - 1) do
         currentCommitIndex = currentCommitIndex + 1;
         server.logger.trace("committing...currentCommitIndex:%d, quickCommitIndex:%d, logStore:FirstAvailableIndex:%d",
