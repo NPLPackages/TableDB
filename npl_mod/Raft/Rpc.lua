@@ -112,9 +112,9 @@ local added_runtime = {}
 -- private: whenever a message arrives
 function Rpc:OnActivated(msg)
   -- this is for tracing raft client
-  if type(self.localAddress) == "table" then
-    self.logger.trace(msg)
-  end
+  -- if type(self.localAddress) == "table" then
+  --   self.logger.trace(msg)
+  -- end
   if(msg.tid) then
      -- unauthenticated? reject as early as possible or accept it.
      local messageType = msg.msg.messageType
@@ -283,6 +283,9 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
   end
 
   local vFileId = format("(%s)%s%s", self.remoteThread or "main", self.remoteAddress or "", self.filename)
+  if string.match(self.remoteAddress, "%(%a+%)")  then 
+    vFileId = format("%s%s", self.remoteAddress or "", self.filename)
+  end
   local msg = {
     type="run", 
     msg = msg, 

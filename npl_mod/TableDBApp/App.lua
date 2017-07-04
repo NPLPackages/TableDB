@@ -70,8 +70,6 @@ logger.info("local state info"..util.table_tostring(parsed_url))
 -- local mp = MessagePrinter:new(baseDir, parsed_url.host, mpPort)
 
 
-
-
 local function executeInServerMode(stateMachine)
     local raftParameters = RaftParameters:new()
     raftParameters.electionTimeoutUpperBound = 5000;
@@ -99,9 +97,9 @@ local function executeAsClient()
     if clientMode == "appendEntries" then
       NPL.load("(gl)npl_mod/TableDB/test/test_TableDatabase.lua");
       -- TestSQLOperations();
-      TestInsertThroughputNoIndex()
+      -- TestInsertThroughputNoIndex()
       -- TestPerformance()
-      -- TestBulkOperations()
+      TestBulkOperations()
       -- TestTimeout()
       -- TestBlockingAPI()
       -- TestBlockingAPILatency()

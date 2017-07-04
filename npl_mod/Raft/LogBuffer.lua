@@ -56,8 +56,8 @@ function LogBuffer:lastEntry()
 end
 
 function LogBuffer:entryAt(index)
-    self.logger.trace("entryAt>index:%d, self.startIndex:%d, self.buffer len:%d",
-                       index, self.startIndex, self:bufferSize())
+    -- self.logger.trace("entryAt>index:%d, self.startIndex:%d, self.buffer len:%d",
+    --                    index, self.startIndex, self:bufferSize())
     return self.buffer[index];
 end
 

@@ -102,7 +102,7 @@ end
 -- how many seconds to wait on busy database, before we send "queue_full" error. This parameter only takes effect when self.WaitOnBusyDB is true.
 RaftSqliteStore.MaxWaitSeconds = 5;
 -- default time out for a given request. default to 5 seconds
-RaftSqliteStore.DefaultTimeout = 50000;
+RaftSqliteStore.DefaultTimeout = 5000;
 -- internal timer period
 RaftSqliteStore.monitorPeriod = 5000;
 -- true to log everything.

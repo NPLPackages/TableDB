@@ -138,7 +138,6 @@ function RaftTableDBStateMachine:start2(RaftSqliteStore)
 end
 
 
-local RTDBRequestRPCInitedInTDB = false;
 --[[
 * Commit the log data at the {@code logIndex}
 * @param logIndex the log index in the logStore
@@ -159,23 +158,19 @@ function RaftTableDBStateMachine:commit(logIndex, data)
             cb_index = raftLogEntryValue.cb_index,
         }
 
+        this.logger.trace("result:%s", util.table_tostring(msg))
+
+        local remoteAddress = format("%s%s", raftLogEntryValue.callbackThread, raftLogEntryValue.serverId)
         if not re_exec then
             this.latestError = err;
             this.latestData = data;
         end
         
-        self.logger.trace("%s", util.table_tostring(msg))
-        -- for tdb thread
-        if not RTDBRequestRPCInitedInTDB then
-            RTDBRequestRPCInitedInTDB = true;
-            Rpc:new():init("RTDBRequestRPC");
-        end
-
-        local remoteAddress = format("%s%s", raftLogEntryValue.callbackThread, raftLogEntryValue.serverId)
-        RTDBRequestRPC(nil, remoteAddress, msg)
+        RTDBRequestRPC(nil, remoteAddress, msg);
     end;
 
     if raftLogEntryValue.cb_index <= self.latestCommand then
+        self.logger.info("got a retry msg, %d <= %d", raftLogEntryValue.cb_index, self.latestCommand);
         cbFunc(this.latestError, this.latestData, true);
         return;
     end
