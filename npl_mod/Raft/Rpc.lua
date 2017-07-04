@@ -40,7 +40,7 @@ local Rpc = commonlib.gettable("Raft.Rpc");
 
 local rpc_instances = {};
 
-Rpc.DefaultTimeout = 5000;
+Rpc.DefaultTimeout = 10000;
 
 function Rpc:new(o)
   o = o or {};
@@ -190,7 +190,9 @@ function Rpc:OnActivated(msg)
       local activate_result = NPL.activate(vFileId, response)
 
       if activate_result ~= 0 then
-        activate_result = NPL.activate_with_timeout(self.MaxWaitSeconds, vFileId, response)
+        if added_runtime[msg.nid] then
+          activate_result = NPL.activate_with_timeout(self.MaxWaitSeconds, vFileId, response)
+        end
         if activate_result ~= 0 then
           self.logger.error("activate on %s failed %d, msg type:%s", vFileId, activate_result, response.type)
           if result.callbackFunc then
@@ -280,8 +282,7 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
     callback.timer:Change(timeout, nil)
   end
 
-
-  local vFileId = format("%s%s", self.remoteAddress or "", self.filename)
+  local vFileId = format("(%s)%s%s", self.remoteThread or "main", self.remoteAddress or "", self.filename)
   local msg = {
     type="run", 
     msg = msg, 
@@ -290,9 +291,9 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
     callbackThread = self.thread_name,
     remoteAddress = self.localAddress,
   }
-  if type(self.localAddress) == "table" then
+  -- if type(self.localAddress) == "table" then
     self.logger.trace("activate on %s, msg:%s", vFileId, util.table_tostring(msg))
-  end
+  -- end
   local activate_result = NPL.activate(vFileId, msg);
   -- handle memory leak
   if activate_result ~= 0 then

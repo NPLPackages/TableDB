@@ -144,6 +144,11 @@ function RaftClient:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry)
     
     local HandleResponse = function(err, response)
         if not err then
+            -- this random leader is the true leader
+            if response.destination == nil and response.accepted == nil and response.cb_index == -1 then
+                response.destination = self.leaderId;
+                response.accepted = true;
+            end
             this.logger.debug("response from remote server, leader: %d, accepted: %s",
                 response.destination, response.accepted and "true" or "false");
             if (not response.accepted) then

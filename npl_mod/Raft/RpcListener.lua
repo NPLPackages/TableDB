@@ -23,12 +23,13 @@ local Rutils = commonlib.gettable("Raft.Rutils");
 
 local RpcListener = commonlib.gettable("Raft.RpcListener");
 
-function RpcListener:new(ip, port, serverId, servers) 
+function RpcListener:new(ip, port, serverId, servers, threadName) 
     local o = {
         ip = ip,
         port = port,
         thisServerId = serverId,
         servers = servers,
+        threadName = threadName,
         logger = LoggerFactory.getLogger("RpcListener"),
     };
 
@@ -75,6 +76,7 @@ function RpcListener:startListening(messageHandler)
         Rutils.initConnect(self.thisServerId, server)
     end
 
+    RaftRequestRPC.remoteThread = self.threadName;
     RaftRequestRPC:MakePublic();
 
 end

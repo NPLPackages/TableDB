@@ -31,7 +31,7 @@ local LOG_START_INDEX_FILE = "store.sti";
 local LOG_INDEX_FILE_BAK = "store.idx.bak";
 local LOG_STORE_FILE_BAK = "store.data.bak";
 local LOG_START_INDEX_FILE_BAK = "store.sti.bak";
-local BUFFER_SIZE = 1000;
+local BUFFER_SIZE = 10000;
 
 -- NOTE: 
 -- we use Double instead of Long at where it should be a Long
@@ -66,7 +66,7 @@ function FileBasedSequentialLogStore:new(logContainer)
     local startIndexFileSize = o.startIndexFile:GetFileSize()
     local indexFileSize = o.indexFile:GetFileSize()
 
-    o.logger.trace("FileBasedSequentialLogStore:new>startIndexFileSize:%d, indexFileSize:%d", startIndexFileSize, indexFileSize)
+    o.logger.trace("new>startIndexFileSize:%d, indexFileSize:%d", startIndexFileSize, indexFileSize)
 
     if(startIndexFileSize == 0) then
         -- local valid = openFile(self, "rw")
@@ -151,6 +151,8 @@ end
    @param logEntry
 ]]--
 function FileBasedSequentialLogStore:writeAt(logIndex, logEntry)
+    self.logger.trace("writeAt>logIndex:%d, self.startIndex:%d, self.entriesInStore:%d",
+                       logIndex, self.startIndex, self.entriesInStore)
     if logIndex < self.startIndex then
         return;
     end
@@ -222,7 +224,7 @@ function FileBasedSequentialLogStore:getLogEntries(startIndex, endIndex)
         return entries
     end
 
-    self.logger.trace("getLogEntries:pre fill entries len:%d", #entries)
+    -- self.logger.trace("getLogEntries:pre fill entries len:%d", #entries)
     -- fill with buffer
     local bufferFirstIndex = self.buffer:fill(startIndex, targetEndIndex, entries);
     
@@ -266,7 +268,7 @@ end
    @return the log entry or null if index >= {@code this.getFirstAvailableIndex()}
 ]]--
 function FileBasedSequentialLogStore:getLogEntryAt(logIndex)
-    self.logger.trace("FileBasedSequentialLogStore:getLogEntryAt>logIndex:%d, self.startIndex:%d, self.entriesInStore:%d",
+    self.logger.trace("getLogEntryAt>logIndex:%d, self.startIndex:%d, self.entriesInStore:%d",
                        logIndex, self.startIndex, self.entriesInStore)
     if logIndex < self.startIndex then
         return;
@@ -281,6 +283,8 @@ function FileBasedSequentialLogStore:getLogEntryAt(logIndex)
     if(entry ~= nil) then
         return entry;
     end
+
+    self.logger.trace("getLogEntryAt>will read file");
 
     -- local valid = openFile(self, "rw")
     -- assert(valid and self.prevMode == "rw", format("openFile err, %s, prevMode:%s", valid and "valid" or "invalid", self.prevMode))
@@ -299,7 +303,7 @@ function FileBasedSequentialLogStore:getLogEntryAt(logIndex)
    @return log pack
 ]]--
 function FileBasedSequentialLogStore:packLog(logIndex, itemsToPack)
-    self.logger.trace("FileBasedSequentialLogStore:packLog>logIndex:%d, itemsToPack:%d, self.startIndex:%d, entriesInStore:%d",
+    self.logger.trace("packLog>logIndex:%d, itemsToPack:%d, self.startIndex:%d, entriesInStore:%d",
                        logIndex, itemsToPack, self.startIndex, self.entriesInStore);
     if logIndex < self.startIndex then
         return;
@@ -334,14 +338,14 @@ function FileBasedSequentialLogStore:packLog(logIndex, itemsToPack)
 
     self.dataFile:seek(startOfLog);
 
-    self.logger.trace("FileBasedSequentialLogStore:packLog>startOfLog:%d, endOfLog:%d", startOfLog, endOfLog);
+    self.logger.trace("packLog>startOfLog:%d, endOfLog:%d", startOfLog, endOfLog);
 
     -- "<memory>" is a special name for memory file, both read/write is possible. 
     local file = ParaIO.open("<memory>", "rw");
     local bytes;
     if(file:IsValid()) then
         local dataBytes = endOfLog - startOfLog
-        self.logger.trace("FileBasedSequentialLogStore:packLog>indexBytes:%d, dataBytes:%d", indexBytes, dataBytes)
+        self.logger.trace("packLog>indexBytes:%d, dataBytes:%d", indexBytes, dataBytes)
         file:WriteDouble(indexBytes)
         file:WriteDouble(dataBytes)
        
@@ -383,7 +387,7 @@ end
    @param logPack
 ]]--
 function FileBasedSequentialLogStore:applyLogPack(logIndex, logPack)
-   self.logger.trace("FileBasedSequentialLogStore:applyLogPack>logIndex:%d, self.startIndex:%d, entriesInStore:%d",
+   self.logger.trace("applyLogPack>logIndex:%d, self.startIndex:%d, entriesInStore:%d",
                      logIndex, self.startIndex, self.entriesInStore);
    if logIndex < self.startIndex then
         return;
@@ -415,7 +419,7 @@ function FileBasedSequentialLogStore:applyLogPack(logIndex, logPack)
         file:ReadBytes(dataBytes, logBuffer)
         assert(#indexBuffer == indexBytes, format("indexBuffer:%d len ~= indexBytes:%d len", #indexBuffer, indexBytes));        
         assert(#logBuffer == dataBytes, format("logBuffer:%d len ~= dataBytes:%d len", #logBuffer, dataBytes));
-        self.logger.trace("FileBasedSequentialLogStore:applyLogPack>indexBytes:%d, dataBytes:%d", indexBytes, dataBytes)
+        self.logger.trace("applyLogPack>indexBytes:%d, dataBytes:%d", indexBytes, dataBytes)
 
         local indexFilePosition, dataFilePosition;
         -- openFile(self, "rw")
@@ -429,7 +433,7 @@ function FileBasedSequentialLogStore:applyLogPack(logIndex, logPack)
         end
         -- openFile(self, "rw")
 
-        self.logger.trace("FileBasedSequentialLogStore:applyLogPack>indexFilePosition:%d, dataFilePosition:%d", indexFilePosition, dataFilePosition);
+        self.logger.trace("applyLogPack>indexFilePosition:%d, dataFilePosition:%d", indexFilePosition, dataFilePosition);
         self.indexFile:seek(indexFilePosition);
         self.indexFile:WriteBytes(indexBytes, indexBuffer);
         self.indexFile:SetFilePointer(indexFilePosition+indexBytes, 0);
@@ -550,17 +554,17 @@ function FileBasedSequentialLogStore:fillBuffer()
         self.dataFile:seek(dataStart);
         while(self.indexFile:getpos() < indexFileSize) do
             local dataEnd = self.indexFile:ReadDouble();
-            self.logger.trace("FileBasedSequentialLogStore:fillBuffer>dataStart:%d, dataEnd:%d", dataStart, dataEnd)
+            self.logger.trace("fillBuffer>dataStart:%d, dataEnd:%d", dataStart, dataEnd)
             local entry = self:readEntry(dataEnd - dataStart);
             -- util.table_print(entry)
             self.buffer:append(entry);
             dataStart = dataEnd;
         end
-        self.logger.trace("FileBasedSequentialLogStore:fillBuffer>dataStart:%d, dataEnd:%d", dataStart, self.dataFile:GetFileSize())
+        self.logger.trace("fillBuffer>dataStart:%d, dataEnd:%d", dataStart, self.dataFile:GetFileSize())
         local entry = self:readEntry(self.dataFile:GetFileSize() - dataStart);
         self.buffer:append(entry);
     end
-    -- self.logger.trace("FileBasedSequentialLogStore:fillBuffer>buffer firstIndex:%d, entries:%d", self.buffer:firstIndex(), self.buffer:bufferSize())
+    -- self.logger.trace("fillBuffer>buffer firstIndex:%d, entries:%d", self.buffer:firstIndex(), self.buffer:bufferSize())
     -- local valid = openFile(self, "rw")
     -- assert(valid and self.prevMode == "rw", format("openFile err, %s, prevMode:%s", valid and "valid" or "invalid", self.prevMode))
 end
@@ -605,7 +609,7 @@ function FileBasedSequentialLogStore:readEntry(size)
     self.dataFile:ReadBytes(1, valueTypeByte);
     local valueType = valueTypeByte[1]
     local valueBytes = {}
-    -- print(format("FileBasedSequentialLogStore:readEntry>%d", size-DoubleBytes-1))
+    -- print(format("readEntry>%d", size-DoubleBytes-1))
     assert(size-DoubleBytes-1 > 0, "size error")
     self.dataFile:ReadBytes(size-DoubleBytes-1, valueBytes);
     -- util.table_print(valueBytes)

@@ -41,22 +41,22 @@ local raftClient;
 RaftSqliteStore.name = "raft";
 RaftSqliteStore.thread_name = format("(%s)", __rts__:GetName());
 
-function RaftSqliteStore:createRaftClient(baseDir, localAddress)
+function RaftSqliteStore:createRaftClient(threadName, baseDir, host, port, id)
   local baseDir = baseDir or "./"
   local stateManager = ServerStateManager:new(baseDir);
   local config = stateManager:loadClusterConfiguration();
 
-  local localAddress = localAddress or {
-    host = "localhost",
-    port = "9004",
-    id = "server4:",
+  local localAddress = {
+    host = host or "localhost",
+    port = port or "9004",
+    id = id or "server4:",
   }
 
   if #localAddress.id < 4 then
     localAddress.id = format("server%s:", localAddress.id)
   end
 
-  rtdb = RaftTableDBStateMachine:new(baseDir, localAddress.host, localAddress.port)
+  rtdb = RaftTableDBStateMachine:new(threadName, baseDir, localAddress.host, localAddress.port)
   
   NPL.StartNetServer(localAddress.host, localAddress.port);
 
@@ -92,7 +92,7 @@ function RaftSqliteStore:init(collection, init_args)
   self.collection = collection;
   print(util.table_tostring(init_args))
   if not raftClient then
-    self:createRaftClient(init_args.baseDir, init_args.localAddress)
+    self:createRaftClient(unpack(init_args));
   end
   return self;
 end
@@ -188,6 +188,7 @@ function RaftSqliteStore:WaitForSyncModeReply(timeout, cb_index)
         end
         if(cb_index and out_msg.msg and out_msg.msg.cb_index == cb_index) or
            (cb_index == nil and out_msg.msg and out_msg.msg.destination and out_msg.msg.destination ~= -1) then
+          logger.debug("got the correct msg");
           reply_msg = out_msg.msg;
           break;
         end

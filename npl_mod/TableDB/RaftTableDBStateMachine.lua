@@ -35,7 +35,7 @@ local RaftTableDBStateMachine = commonlib.gettable("TableDB.RaftTableDBStateMach
 -- for function not in class
 local logger = LoggerFactory.getLogger("RaftTableDBStateMachine");
 
-function RaftTableDBStateMachine:new(baseDir, ip, listeningPort)
+function RaftTableDBStateMachine:new(threadName, baseDir, ip, listeningPort)
     local o = {
         ip = ip,
         port = listeningPort,
@@ -45,6 +45,8 @@ function RaftTableDBStateMachine:new(baseDir, ip, listeningPort)
         messageSender = nil,
         MaxWaitSeconds = 5,
         latestCommand = -1,
+        
+        threadName = threadName,
         
         collections = {},
         
@@ -78,6 +80,7 @@ function RaftTableDBStateMachine:start(raftMessageSender)
     
     -- for init connect
     Rpc:new():init("RaftRequestRPCInit");
+    RaftRequestRPCInit.remoteThread = self.threadName;
     RaftRequestRPCInit:MakePublic();
 
     local this = self;
@@ -85,7 +88,7 @@ function RaftTableDBStateMachine:start(raftMessageSender)
         msg = this:processMessage(msg)
         return msg;
     end)
-    
+    RTDBRequestRPC.remoteThread = self.threadName;
     RTDBRequestRPC:MakePublic();
     
     self.db = TableDatabase:new();
@@ -120,6 +123,7 @@ end
 function RaftTableDBStateMachine:start2(RaftSqliteStore)
     -- for init connect
     Rpc:new():init("RaftRequestRPCInit");
+    RaftRequestRPCInit.remoteThread = self.threadName;
     RaftRequestRPCInit:MakePublic();
 
     local this = self
@@ -128,6 +132,7 @@ function RaftTableDBStateMachine:start2(RaftSqliteStore)
         RaftSqliteStore:handleResponse(msg)
     end)
 
+    RTDBRequestRPC.remoteThread = self.threadName;
     RTDBRequestRPC:MakePublic();
 
 end

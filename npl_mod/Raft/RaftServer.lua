@@ -229,9 +229,10 @@ function RaftServer:handleAppendEntriesRequest(request)
         local index = request.lastLogIndex + 1;
         local logIndex = 1;
         self.logger.trace("initial->entry len:%d, index:%d, logIndex:%d", #logEntries, index, logIndex)
-        while (index < self.logStore:getFirstAvailableIndex() and
-            logIndex < #logEntries + 1 and
-            logEntries[logIndex].term == self.logStore:getLogEntryAt(index).term) do
+        while index < self.logStore:getFirstAvailableIndex() and
+            logIndex < #logEntries + 1 --do
+             and
+            logEntries[logIndex].term == self.logStore:getLogEntryAt(index).term do
             logIndex = logIndex + 1;
             index = index + 1;
         end
@@ -526,7 +527,8 @@ function RaftServer:handleAppendEntriesResponse(response)
     -- and the role was updated by UpdateTerm call
     -- Try to match up the logs for this peer
     if (self.role == ServerRole.Leader and needToCatchup) then
-        self:requestAppendEntries(peer);
+        self.logger.info("server %d needToCatchup %d < %d", peer:getId(), peer.nextLogIndex, self.logStore:getFirstAvailableIndex())
+        -- self:requestAppendEntries(peer);
     end
 end
 
@@ -571,7 +573,8 @@ function RaftServer:handleInstallSnapshotResponse(response)
             peer.matchedIndex = response.nextIndex - 1;
             peer.snapshotSyncContext = nil;
         end
-        self.logger.info("peer declines to install the snapshot, may retry");
+        self.logger.info("peer (%d) declines (%d) to install the snapshot (%d), may retry",
+                          peer:getId(), peer.nextLogIndex, self.logStore:getStartIndex());
     end
     
     -- This may not be a leader anymore, such as the response was sent out long time ago
@@ -820,6 +823,7 @@ function RaftServer:createAppendEntriesRequest(peer)
     -- for syncing the snapshots, if the lastLogIndex == lastSnapshot.getLastLogIndex, we could get the term from the snapshot
     if (lastLogIndex > 0 and lastLogIndex < startingIndex - 1) then
         -- this may also happens when the peer's lastLogIndex is stale due to the response err
+        self.logger.trace("sync snapshot %d to peer %d, %d", startingIndex, peer:getId(), lastLogIndex);
         return self:createSyncSnapshotRequest(peer, lastLogIndex, term, commitIndex);
     end
     local lastLogTerm = self:termForLastLog(lastLogIndex);
@@ -992,8 +996,10 @@ function RaftServer:handleInstallSnapshotRequest(request)
     local snapshotSyncRequest = SnapshotSyncRequest:fromBytes(logEntries[1].value);
     
     -- We don't want to apply a snapshot that is older than we have, this may not happen, but just in case
-    if (snapshotSyncRequest.snapshot.lastLogIndex <= self.quickCommitIndex) then
-        self.logger.error("Received a snapshot (%d) which is older than this (%d) server (%d)", snapshotSyncRequest.snapshot.lastLogIndex, self.id, self.quickCommitIndex);
+    -- if (snapshotSyncRequest.snapshot.lastLogIndex <= self.quickCommitIndex) then
+    if (snapshotSyncRequest.snapshot.lastLogIndex <= self.logStore:getFirstAvailableIndex()) then
+        self.logger.error("Received a snapshot (%d) which is older than this (%d) server (%d, %d)",
+                           snapshotSyncRequest.snapshot.lastLogIndex, self.id, self.quickCommitIndex, self.logStore:getFirstAvailableIndex());
         response.nextIndex = self.logStore:getFirstAvailableIndex();
         response.accepted = false;
         return response;
@@ -1567,12 +1573,13 @@ end
 -- TODO: resemble IOThread in TableDB ? this may cause synchronize issue
 function real_commit(server)
     local currentCommitIndex = server.state.commitIndex;
-    if server.quickCommitIndex <= currentCommitIndex then
+    if server.quickCommitIndex <= currentCommitIndex or 
+       currentCommitIndex >= server.logStore:getFirstAvailableIndex() - 1 then
         return ;
     end
     while (currentCommitIndex < server.quickCommitIndex and currentCommitIndex < server.logStore:getFirstAvailableIndex() - 1) do
         currentCommitIndex = currentCommitIndex + 1;
-        server.logger.trace("committing...currentCommitIndex:%d, quickCommitIndex:%d, logStore:FirstAvailableIndex:%d",
+        server.logger.trace("real_commit...currentCommitIndex:%d, quickCommitIndex:%d, logStore:FirstAvailableIndex:%d",
             currentCommitIndex, server.quickCommitIndex, server.logStore:getFirstAvailableIndex())
         local logEntry = server.logStore:getLogEntryAt(currentCommitIndex);
         

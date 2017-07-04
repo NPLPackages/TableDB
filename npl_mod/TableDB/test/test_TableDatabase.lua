@@ -98,7 +98,7 @@ function TestInsertThroughputNoIndex()
 			if(err) then
 				-- echo({err, data});
 			end
-			p:Next();
+		  p:Next();
 		end)
 	end, total_times, max_jobs):OnFinished(function(total)
 		npl_profiler.perf_end("tableDB_BlockingAPILatency", true)
@@ -241,8 +241,13 @@ function TestBulkOperations()
 	local db = TableDatabase:new():connect("temp/test_raft_database/");
 	db.TestBulkOps:makeEmpty({}, function()  end);
 
-	local total_records = 100000;
-	local chunk_size = 1000;
+	NPL.load("(gl)script/ide/Debugger/NPLProfiler.lua");
+	local npl_profiler = commonlib.gettable("commonlib.npl_profiler");
+	npl_profiler.perf_reset();
+	npl_profiler.perf_begin("TestBulkOperations", true)
+
+	local total_records = 10000;
+	local chunk_size = 1;
 
 	local count = 0;
 	local function DoNextChunk()
@@ -256,6 +261,8 @@ function TestBulkOperations()
 				finished = finished +1;
 				if(count == total_records) then
 					echo({"all operations are finished"});
+					npl_profiler.perf_end("TestBulkOperations", true)
+					log(commonlib.serialize(npl_profiler.perf_get(), true));
 				elseif(finished == chunk_size) then
 					echo({"a chunk is done", count});
 					DoNextChunk();
