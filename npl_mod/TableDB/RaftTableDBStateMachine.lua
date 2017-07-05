@@ -35,7 +35,7 @@ local RaftTableDBStateMachine = commonlib.gettable("TableDB.RaftTableDBStateMach
 -- for function not in class
 local logger = LoggerFactory.getLogger("RaftTableDBStateMachine");
 
-function RaftTableDBStateMachine:new(threadName, baseDir, ip, listeningPort)
+function RaftTableDBStateMachine:new(baseDir, ip, listeningPort, threadName)
     local o = {
         ip = ip,
         port = listeningPort,

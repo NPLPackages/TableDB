@@ -22,9 +22,8 @@ The implementation is basically a port from [jraft](https://github.com/datatechn
 > there should be an auto conversion from TLA+ to programming languages, even they are talking things in different ways, but they are identical
 
 #### Threading model
-  Now the implementation uses 2 threads. 
-  1. main thread.
-  2. create snapshot thread, which used when create a snapshot for the state machine.
+  Now the implementation is Single Thread model. 
+
 
 #### Logic
   The Core Raft algorithm logic is in RaftServer, whose implementation is straight forward.
@@ -42,7 +41,7 @@ To use TableDB Raft, u need to add a `tabledb.config.xml` file in the Tabledb `r
 ```xml
 <tabledb>
 	<providers>
-		<provider type="TableDB.RaftSqliteStore" name="raft" file="(g1)npl_mod/TableDB/RaftSqliteStore.lua">./,localhost,9004,4
+		<provider type="TableDB.RaftSqliteStore" name="raft" file="(g1)npl_mod/TableDB/RaftSqliteStore.lua">./,localhost,9004,4,rtdb
 		</provider>
 	</providers>
 	<tables>

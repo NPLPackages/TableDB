@@ -41,7 +41,7 @@ local raftClient;
 RaftSqliteStore.name = "raft";
 RaftSqliteStore.thread_name = format("(%s)", __rts__:GetName());
 
-function RaftSqliteStore:createRaftClient(threadName, baseDir, host, port, id)
+function RaftSqliteStore:createRaftClient(baseDir, host, port, id, threadName)
   local baseDir = baseDir or "./"
   local stateManager = ServerStateManager:new(baseDir);
   local config = stateManager:loadClusterConfiguration();
@@ -56,7 +56,7 @@ function RaftSqliteStore:createRaftClient(threadName, baseDir, host, port, id)
     localAddress.id = format("server%s:", localAddress.id)
   end
 
-  rtdb = RaftTableDBStateMachine:new(threadName, baseDir, localAddress.host, localAddress.port)
+  rtdb = RaftTableDBStateMachine:new(baseDir, localAddress.host, localAddress.port, threadName)
   
   NPL.StartNetServer(localAddress.host, localAddress.port);
 

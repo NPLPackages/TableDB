@@ -152,7 +152,7 @@ local function activate()
     started = true;
     -- raft stateMachine
     logger.info("start stateMachine");
-    local rtdb = RaftTableDBStateMachine:new(threadName, baseDir, parsed_url.host, mpPort)
+    local rtdb = RaftTableDBStateMachine:new(baseDir, parsed_url.host, mpPort, threadName)
     if raftMode:lower() == "server" then
       -- executeInServerMode(mp)
       executeInServerMode(rtdb)
