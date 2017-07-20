@@ -40,7 +40,7 @@ local Rpc = commonlib.gettable("Raft.Rpc");
 
 local rpc_instances = {};
 
-Rpc.DefaultTimeout = 5000;
+Rpc.DefaultTimeout = 10000;
 
 function Rpc:new(o)
   o = o or {};
@@ -112,9 +112,9 @@ local added_runtime = {}
 -- private: whenever a message arrives
 function Rpc:OnActivated(msg)
   -- this is for tracing raft client
-  if type(self.localAddress) == "table" then
-    self.logger.trace(msg)
-  end
+  -- if type(self.localAddress) == "table" then
+  --   self.logger.trace(msg)
+  -- end
   if(msg.tid) then
      -- unauthenticated? reject as early as possible or accept it.
      local messageType = msg.msg.messageType
@@ -190,7 +190,9 @@ function Rpc:OnActivated(msg)
       local activate_result = NPL.activate(vFileId, response)
 
       if activate_result ~= 0 then
-        activate_result = NPL.activate_with_timeout(self.MaxWaitSeconds, vFileId, response)
+        if added_runtime[msg.nid] then
+          activate_result = NPL.activate_with_timeout(self.MaxWaitSeconds, vFileId, response)
+        end
         if activate_result ~= 0 then
           self.logger.error("activate on %s failed %d, msg type:%s", vFileId, activate_result, response.type)
           if result.callbackFunc then
@@ -280,8 +282,10 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
     callback.timer:Change(timeout, nil)
   end
 
-
-  local vFileId = format("%s%s", self.remoteAddress or "", self.filename)
+  local vFileId = format("(%s)%s%s", self.remoteThread or "main", self.remoteAddress or "", self.filename)
+  if string.match(self.remoteAddress, "%(%a+%)")  then 
+    vFileId = format("%s%s", self.remoteAddress or "", self.filename)
+  end
   local msg = {
     type="run", 
     msg = msg, 
@@ -290,9 +294,9 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
     callbackThread = self.thread_name,
     remoteAddress = self.localAddress,
   }
-  if type(self.localAddress) == "table" then
+  -- if type(self.localAddress) == "table" then
     self.logger.trace("activate on %s, msg:%s", vFileId, util.table_tostring(msg))
-  end
+  -- end
   local activate_result = NPL.activate(vFileId, msg);
   -- handle memory leak
   if activate_result ~= 0 then

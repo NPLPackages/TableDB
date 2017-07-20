@@ -37,11 +37,16 @@ local LoggerFactory = NPL.load("(gl)npl_mod/Raft/LoggerFactory.lua");
 local logger = LoggerFactory.getLogger("App")
 
 
+local threadName = ParaEngine.GetAppCommandLineByParam("threadName", "main");
 local baseDir = ParaEngine.GetAppCommandLineByParam("baseDir", "");
 local mpPort = ParaEngine.GetAppCommandLineByParam("mpPort", "8090");
 local raftMode = ParaEngine.GetAppCommandLineByParam("raftMode", "server");
 local clientMode = ParaEngine.GetAppCommandLineByParam("clientMode", "appendEntries");
 local serverId = tonumber(ParaEngine.GetAppCommandLineByParam("serverId", "5"));
+
+if threadName ~= "main" then
+    NPL.CreateRuntimeState(threadName, 0):Start();
+end
 
 logger.info("app arg:"..baseDir..mpPort..raftMode)
 
@@ -64,9 +69,6 @@ logger.info("local state info"..util.table_tostring(parsed_url))
 -- message printer
 -- local mp = MessagePrinter:new(baseDir, parsed_url.host, mpPort)
 
--- raft stateMachine
-local rtdb = RaftTableDBStateMachine:new(baseDir, parsed_url.host, mpPort)
-
 
 local function executeInServerMode(stateMachine)
     local raftParameters = RaftParameters:new()
@@ -80,7 +82,7 @@ local function executeInServerMode(stateMachine)
     raftParameters.snapshotDistance = 5000;
     raftParameters.snapshotBlockSize = 0;
 
-    local rpcListener = RpcListener:new(parsed_url.host, parsed_url.port, thisServer.id, config.servers)
+    local rpcListener = RpcListener:new(parsed_url.host, parsed_url.port, thisServer.id, config.servers, threadName)
     local context = RaftContext:new(stateManager,
                                     stateMachine,
                                     raftParameters,
@@ -94,10 +96,10 @@ local function executeAsClient()
 
     if clientMode == "appendEntries" then
       NPL.load("(gl)npl_mod/TableDB/test/test_TableDatabase.lua");
-      TestSQLOperations();
+      -- TestSQLOperations();
       -- TestInsertThroughputNoIndex()
       -- TestPerformance()
-      -- TestBulkOperations()
+      TestBulkOperations()
       -- TestTimeout()
       -- TestBlockingAPI()
       -- TestBlockingAPILatency()
@@ -140,14 +142,26 @@ local function executeAsClient()
     end
 end
 
-if raftMode:lower() == "server" then
-  -- executeInServerMode(mp)
-  executeInServerMode(rtdb)
-elseif raftMode:lower() == "client" then
+local vfileID = format("(%s)npl_mod/TableDBApp/App.lua", threadName);
+NPL.activate(vfileID, {start = true});
 
-  executeAsClient()
+
+local started = false;
+local function activate()
+  if(not started and msg and msg.start) then
+    started = true;
+    -- raft stateMachine
+    logger.info("start stateMachine");
+    local rtdb = RaftTableDBStateMachine:new(baseDir, parsed_url.host, mpPort, threadName)
+    if raftMode:lower() == "server" then
+      -- executeInServerMode(mp)
+      executeInServerMode(rtdb)
+    elseif raftMode:lower() == "client" then
+      executeAsClient()
+    end
+  end
 end
 
+NPL.this(activate);
 
-
-NPL.this(function() end);
+-- NPL.this(function() end);

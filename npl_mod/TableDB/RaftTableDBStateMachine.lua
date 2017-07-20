@@ -35,7 +35,7 @@ local RaftTableDBStateMachine = commonlib.gettable("TableDB.RaftTableDBStateMach
 -- for function not in class
 local logger = LoggerFactory.getLogger("RaftTableDBStateMachine");
 
-function RaftTableDBStateMachine:new(baseDir, ip, listeningPort)
+function RaftTableDBStateMachine:new(baseDir, ip, listeningPort, threadName)
     local o = {
         ip = ip,
         port = listeningPort,
@@ -45,6 +45,8 @@ function RaftTableDBStateMachine:new(baseDir, ip, listeningPort)
         messageSender = nil,
         MaxWaitSeconds = 5,
         latestCommand = -1,
+        
+        threadName = threadName,
         
         collections = {},
         
@@ -78,6 +80,7 @@ function RaftTableDBStateMachine:start(raftMessageSender)
     
     -- for init connect
     Rpc:new():init("RaftRequestRPCInit");
+    RaftRequestRPCInit.remoteThread = self.threadName;
     RaftRequestRPCInit:MakePublic();
 
     local this = self;
@@ -85,7 +88,7 @@ function RaftTableDBStateMachine:start(raftMessageSender)
         msg = this:processMessage(msg)
         return msg;
     end)
-    
+    RTDBRequestRPC.remoteThread = self.threadName;
     RTDBRequestRPC:MakePublic();
     
     self.db = TableDatabase:new();
@@ -120,6 +123,7 @@ end
 function RaftTableDBStateMachine:start2(RaftSqliteStore)
     -- for init connect
     Rpc:new():init("RaftRequestRPCInit");
+    RaftRequestRPCInit.remoteThread = self.threadName;
     RaftRequestRPCInit:MakePublic();
 
     local this = self
@@ -128,12 +132,12 @@ function RaftTableDBStateMachine:start2(RaftSqliteStore)
         RaftSqliteStore:handleResponse(msg)
     end)
 
+    RTDBRequestRPC.remoteThread = self.threadName;
     RTDBRequestRPC:MakePublic();
 
 end
 
 
-local RTDBRequestRPCInitedInTDB = false;
 --[[
 * Commit the log data at the {@code logIndex}
 * @param logIndex the log index in the logStore
@@ -154,23 +158,19 @@ function RaftTableDBStateMachine:commit(logIndex, data)
             cb_index = raftLogEntryValue.cb_index,
         }
 
+        this.logger.trace("result:%s", util.table_tostring(msg))
+
+        local remoteAddress = format("%s%s", raftLogEntryValue.callbackThread, raftLogEntryValue.serverId)
         if not re_exec then
             this.latestError = err;
             this.latestData = data;
         end
         
-        self.logger.trace("%s", util.table_tostring(msg))
-        -- for tdb thread
-        if not RTDBRequestRPCInitedInTDB then
-            RTDBRequestRPCInitedInTDB = true;
-            Rpc:new():init("RTDBRequestRPC");
-        end
-
-        local remoteAddress = format("%s%s", raftLogEntryValue.callbackThread, raftLogEntryValue.serverId)
-        RTDBRequestRPC(nil, remoteAddress, msg)
+        RTDBRequestRPC(nil, remoteAddress, msg);
     end;
 
     if raftLogEntryValue.cb_index <= self.latestCommand then
+        self.logger.info("got a retry msg, %d <= %d", raftLogEntryValue.cb_index, self.latestCommand);
         cbFunc(this.latestError, this.latestData, true);
         return;
     end

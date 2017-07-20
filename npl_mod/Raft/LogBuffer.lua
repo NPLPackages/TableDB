@@ -56,8 +56,8 @@ function LogBuffer:lastEntry()
 end
 
 function LogBuffer:entryAt(index)
-    -- self.logger.trace("LogBuffer:entryAt>index:%d->%s, self.startIndex:%d, self.buffer len:%d",
-    --                    index, util.table_tostring(self.buffer[index]), self.startIndex, self:bufferSize())
+    -- self.logger.trace("entryAt>index:%d, self.startIndex:%d, self.buffer len:%d",
+    --                    index, self.startIndex, self:bufferSize())
     return self.buffer[index];
 end
 
@@ -74,9 +74,9 @@ function LogBuffer:fill(start, endi, result)
         result[#result + 1] = self:entryAt(i)
     end
 
-    self.logger.trace("LogBuffer:fill>start:%d, end:%d, result len:%d, self.startIndex:%d, self.buffer len:%d",
+    self.logger.trace("fill>start:%d, end:%d, result len:%d, self.startIndex:%d, self.buffer len:%d",
                        start, endi, #result, self.startIndex, self:bufferSize())
-    -- self.logger.trace("LogBuffer:fill>result:%s", util.table_tostring(result))
+    -- self.logger.trace("fill>result:%s", util.table_tostring(result))
 
     return self.startIndex;
 end
@@ -96,7 +96,7 @@ function LogBuffer:append(entry)
 
     self.buffer[self:lastIndex() + 1] = entry
     self.entriesInBuffer = self.entriesInBuffer + 1;
-    -- self.logger.trace("LogBuffer:append>index:%d->%s, self.startIndex:%d, self.buffer len:%d",
+    -- self.logger.trace("append>index:%d->%s, self.startIndex:%d, self.buffer len:%d",
     --                    self:lastIndex(), util.table_tostring(entry), self.startIndex, self:bufferSize())
     -- maxSize
     if self.maxSize < self.entriesInBuffer then
