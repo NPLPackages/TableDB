@@ -278,3 +278,4 @@ client/
 start*.bat
 RpcClient.lua
 temp/*
+*.dll
