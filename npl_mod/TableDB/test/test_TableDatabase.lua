@@ -69,6 +69,7 @@ function TestSQLOperations()
 	db.User:find({ ["+name"] = {"1", limit=2} }, function(err, rows) assert(#rows==2); end);
 	-- return at most 1 row whose id is greater than -1
 	db.User:find({ _id = { gt = -1, limit = 1, skip == 1} }, function(err, rows) assert(#rows==1); echo("all tests succeed!") end);
+	db.User:close();
 end
 
 
@@ -104,6 +105,7 @@ function TestInsertThroughputNoIndex()
 		npl_profiler.perf_end("tableDB_BlockingAPILatency", true)
 		log(commonlib.serialize(npl_profiler.perf_get(), true));			
 	end);
+	db.insertNoIndex:close();
 end
 
 function TestPerformance()
@@ -124,6 +126,7 @@ function TestPerformance()
 
 	-- this not necessary now, but put here as an example.
 	db.User:exec({QueueSize=10001}, function(err, data) end);
+	db.User:close()
 
 	-- use at most 200MB memory, instead of the default 2MB
 	-- db.User:exec({CacheSize=-200000}, function(err, data) end);
@@ -134,7 +137,7 @@ function TestPerformance()
 	NPL.load("(gl)script/ide/System/Concurrent/Parallel.lua");
 	local Parallel = commonlib.gettable("System.Concurrent.Parallel");
 
-    db.PerfTest:makeEmpty({}, function() 
+  db.PerfTest:makeEmpty({}, function() 
 		echo("emptied");
 		-- this will force creating index on `name`
 		db.PerfTest:findOne({name = ""}, function() 
@@ -142,7 +145,8 @@ function TestPerformance()
 				insertFlush();
 			end);
 		end);
-    end);
+  end);
+	db.PerfTest:close()
     
 	local lastTime = ParaGlobal.timeGetTime();
 	local function CheckTickLog(...)
@@ -281,6 +285,7 @@ function TestTimeout()
 	
 	db.User:silient({name="will always timeout"}, function(err, data) echo(err, data) end);
 	db.User:silient({name="will always timeout"}, function(err, data) echo(err, data) end);
+	db.User:close();
 end
 
 
@@ -306,6 +311,7 @@ function TestBlockingAPI()
 	local user = db.User:new({name="LXZ", password="1", email="lixizhi@yeah.net"});
 	local err, data = user:save();   
 	echo(data);
+	db.User:close();
 end
 
 -- it can do about 12000/s with sync API. 
@@ -330,10 +336,11 @@ function TestBlockingAPILatency()
 	local count = 10000;
 	for i=1, count do
 		local err, data = db.blockingAPI:insertOne(nil, {count=i, data=math.random()})
-		-- echo(data);
+		echo(data);
 	end
 	npl_profiler.perf_end("tableDB_BlockingAPILatency", true)
-	log(commonlib.serialize(npl_profiler.perf_get(), true));		
+	log(commonlib.serialize(npl_profiler.perf_get(), true));
+	db.blockingAPI:close();
 end
 
 function TestSqliteStore()
@@ -341,7 +348,7 @@ function TestSqliteStore()
 	NPL.load("(gl)script/ide/System/Database/SqliteStore.lua");
 	local SqliteStore = commonlib.gettable("System.Database.SqliteStore");
 	local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
-	local db = TableDatabase:new():connect("temp/test_raft_database/", function()  echo("connected1") end);
+	local db = TableDatabase:new():connect("temp/test_sqlite_database/", function()  echo("connected1") end);
 	local store = SqliteStore:new():init(db.User);
 
 	-- testing adding record
@@ -361,14 +368,18 @@ function TestConnect()
 	db1.User:findOne({name="npl"}, function(err, data) echo(data) end);
 	db2.User:findOne({name="npl"}, function(err, data) echo(data) end);
 	db1.User:findOne({name="npl"}, function(err, data) echo(data) end);
+	db1.User:close()
+	db2.User:close()
 end
 
 function TestRemoveIndex()
 	NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
 	local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
-	local db = TableDatabase:new():connect("temp/test_raft_database/");	
+	local db = TableDatabase:new():connect("temp/test_raft_database/");
+	db.testIndex:makeEmpty({});
 	db.testIndex:findOne({subkey1 = "", subkey2 = "", subkey3 = ""}, function() end)
 	db.testIndex:removeIndex({"subkey1"}, function() end)
+	db.testIndex:close();
 end
 
 function TestTable()
@@ -390,6 +401,7 @@ function TestTable()
 	db.User:findOne({name="LXZ"}, function(err, user)
 		assert(user.name == "LXZ" and user.password=="123");
 	end)
+	db.User:close();
 end
 
 function TestTableDatabase()
@@ -418,6 +430,7 @@ function TestTableDatabase()
 	user:save();
 
 	User:updateOne({name="LXZ"}, {password="312"}, function(err)	end);
+	db.User:close();
 end
 
 
@@ -455,6 +468,8 @@ function TestRangedQuery()
 	db.rangedTest:exec("EXPLAIN QUERY PLAN select * from iIndex where name > 95 limit 3", function(err, rows)
 		echo(rows); 
 	end);
+
+	db.rangedTest:close();
 
 end
 
@@ -500,6 +515,7 @@ function TestPagination()
 		   -- ...
 		end);
 	end);
+	db.pagedUsers:close();
 end
 
 function TestCompoundIndex()
@@ -563,6 +579,7 @@ function TestCompoundIndex()
 	db.compoundTest:count({state="china", company="tatfook"}, function(err, count)  
 		assert(count == 16)
 	end);
+	db.compoundTest:close();
 end
 
 function TestCountAPI()
@@ -591,6 +608,7 @@ function TestCountAPI()
 	db.countTest:count({["+state+name+company"] = {"china", gt="name50"}}, function(err, count)  
 		assert(count == 19) 
 	end);
+	db.countTest:close();
 end
 
 function TestDelete()
@@ -632,6 +650,8 @@ function TestDelete()
 	db.deleteTest:delete({duplicated_name="1"}, function(err, count)
 		assert(count == 2);
 	end)
+
+	db.deleteTest:close();
 end
 
 function TestMultipleDB()
@@ -648,6 +668,8 @@ function TestMultipleDB()
 	
 	db_cluster1.User:find({name="db",}, function(err, rows) assert(rows[1].email == "db_cluster1@1") end);
 	db_cluster2.User:find({name="db",}, function(err, rows) assert(rows[1].email == "db_cluster2@1") end);
+	db_cluster1.User:close();
+	db_cluster2.User:close();
 end
 
 function TestOpenDatabase()
@@ -660,13 +682,13 @@ function TestOpenDatabase()
 		name = "tabledb", 
 		{
 			name = "providers", 
-			{ name = "provider", attr = { name = "raft", type = "TableDB.RaftSqliteStore", file = "(g1)npl_mod/TableDB/RaftSqliteStore.lua" }, "./, localhost, 9004, server4:" }
+			{ name = "provider", attr = { name = "raft", type = "TableDB.RaftSqliteStore", file = "(g1)npl_mod/TableDB/RaftSqliteStore.lua" }, "./,localhost,9004,4,rtdb" }
 		},
 		{
 			name = "tables",
 			{ name = "table", attr = { provider = "raft", name = "RaftUsers" } }, 
 			{ name = "table", attr = { provider = "raft", name = "RaftTemp" } },
-			{ name = "table", attr = { name = "DefaultToLocalProvider" } }, 
+			{ name = "table", attr = { provider = "raft", name = "default" } }, 
 		}
 	}
 
@@ -675,14 +697,12 @@ function TestOpenDatabase()
 	ParaIO.CreateDirectory(config_path);
 	local file = ParaIO.open(config_path, "w");
 	if (file:IsValid()) then
-
 		file:WriteString(str);
 		file:close();
-
 	end
 
 	local db = TableDatabase:new():connect("temp/test_raft_database/");	
-
+	db = nil;
 end
 
 -- TestOpenDatabase()
