@@ -37,7 +37,7 @@ local logger = LoggerFactory.getLogger("App")
 
 local threadName = ParaEngine.GetAppCommandLineByParam("threadName", "main");
 local baseDir = ParaEngine.GetAppCommandLineByParam("baseDir", "");
-local mpPort = ParaEngine.GetAppCommandLineByParam("mpPort", "8090");
+-- local mpPort = ParaEngine.GetAppCommandLineByParam("mpPort", "8090");
 local raftMode = ParaEngine.GetAppCommandLineByParam("raftMode", "server");
 local clientMode = ParaEngine.GetAppCommandLineByParam("clientMode", "appendEntries");
 local serverId = tonumber(ParaEngine.GetAppCommandLineByParam("serverId", "5"));
@@ -46,7 +46,7 @@ if threadName ~= "main" then
     NPL.CreateRuntimeState(threadName, 0):Start();
 end
 
-logger.info("app arg:"..baseDir..mpPort..raftMode)
+logger.info("app arg:"..baseDir.." "..raftMode)
 
 local stateManager = ServerStateManager:new(baseDir);
 local config = stateManager:loadClusterConfiguration();
