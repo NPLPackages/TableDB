@@ -44,7 +44,7 @@ function RaftTableDBStateMachine:new(baseDir, ip, listeningPort, threadName)
         commitIndex = 0,
         messageSender = nil,
         MaxWaitSeconds = 5,
-        latestCommand = -1,
+        latestCommand = -2,
         
         threadName = threadName,
         
@@ -79,7 +79,9 @@ function RaftTableDBStateMachine:start(raftMessageSender)
     self.messageSender = raftMessageSender;
     
     -- for init connect
-    Rpc:new():init("RaftRequestRPCInit");
+    Rpc:new():init("RaftRequestRPCInit", function (...)
+        print("RaftRequestRPCInit callback")
+    end);
     RaftRequestRPCInit.remoteThread = self.threadName;
     RaftRequestRPCInit:MakePublic();
 
