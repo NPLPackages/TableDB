@@ -70,6 +70,7 @@ function RpcListener:startListening(messageHandler)
 	att:SetField("IdleTimeoutPeriod", 1200000);
     __rts__:SetMsgQueueSize(50000);
     -- port is need to be string here??
+    -- NPL.StartNetServer("0.0.0.0", tostring(self.port));
     NPL.StartNetServer(self.ip, tostring(self.port));
     
     for _, server in ipairs(self.servers) do
