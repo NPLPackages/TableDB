@@ -115,9 +115,8 @@ end
 
 --[[
 * Starts the client side TableDB, called by RaftConsensus, RaftConsensus will pass an instance of
-* RaftMessageSender for the state machine to send logs to cluster, so that all state machines
-* in the same cluster could be in synced
-* @param raftMessageSender
+* RaftSqliteStore for client to send logs to cluster
+* @param RaftSqliteStore
 ]]
 --
 function RaftTableDBStateMachine:start2(RaftSqliteStore)
@@ -270,9 +269,6 @@ end
 * Apply a snapshot to current state machine
 * @param snapshot
 * @return true if successfully applied, otherwise false
-
-
-how to handle multi collection snapshot data
 ]]
 --
 function RaftTableDBStateMachine:applySnapshot(snapshot)
@@ -289,13 +285,11 @@ end
 
 --[[
 * Read snapshot data at the specified offset to buffer and return bytes read
+* handle multi-collection snapshot data
 * @param snapshot the snapshot info
 * @param offset the offset of the snapshot data
 * @param buffer the buffer to be filled
 * @return bytes read
-
-
-how to handle multi collection snapshot data
 ]]
 --
 function RaftTableDBStateMachine:readSnapshotData(snapshot, currentCollectionName, offset, buffer, expectedSize)
@@ -314,10 +308,8 @@ end
 
 --[[
 * Read the last snapshot information
+* handle multi collection snapshot data
 * @return last snapshot information in the state machine or null if none
-
-
-how to handle multi collection snapshot data
 ]]
 --
 function RaftTableDBStateMachine:getLastSnapshot()
@@ -377,6 +369,7 @@ function RaftTableDBStateMachine:getLastSnapshot()
             collectionsNameSize[#collectionsNameSize + 1] = {name = name, size = fileSize};
         end
         if #collectionsNameSize > 0 then
+            -- make snapshot size to the first collection snapshot size
             return Snapshot:new(maxLastLogIndex, maxTerm, config, collectionsNameSize[1].size, collectionsNameSize)
         else
             -- Raft help us to create a collection based on the snapshot
@@ -388,9 +381,7 @@ end
 
 local do_backup;
 --[[
-* Create a snapshot data based on the snapshot information asynchronously
-* set the future to true if snapshot is successfully created, otherwise,
-* set it to false
+* Create a snapshot data based on the snapshot information (asynchronously)
 * @param snapshot the snapshot info
 * @return true if snapshot is created successfully, otherwise false
 ]]
@@ -445,7 +436,7 @@ end
 
 
 function RaftTableDBStateMachine:processMessage(message)
-    logger.info("Got message " .. util.table_tostring(message));
+    self.logger.info("Got message " .. util.table_tostring(message));
     return self.messageSender:appendEntries(message);
 end
 
@@ -520,7 +511,7 @@ function do_backup(msg)
 
                 -- an error occured
                 if stepResult == ERR.BUSY or stepResult == ERR.LOCKED then
-                    -- we don't retry
+                    -- we don't retry, Raft will handle for us
                     -- move the previous snapshot to current logIndex?
                     -- local prevSnapshortName = getLatestSnapshotName(snapshotStore, name);
                     -- if prevSnapshortName == format("%s0-0_%s_s.db", snapshotStore, name) then
