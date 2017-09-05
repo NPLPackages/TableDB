@@ -3,11 +3,11 @@ Title:
 Author: liuluheng
 Date: 2017.04.05
 Desc: 
-TEST ServerStateManager
+TEST FileBasedServerStateManager
 ------------------------------------------------------------
 NPL.load("(gl)script/ide/UnitTest/luaunit.lua");
-NPL.load("(gl)npl_mod/Raft/test/TestServerStateManager.lua");
-LuaUnit:run('TestServerStateManager') 
+NPL.load("(gl)npl_mod/Raft/test/TestFileBasedServerStateManager.lua");
+LuaUnit:run('TestFileBasedServerStateManager') 
 ------------------------------------------------------------
 ]]--
 
@@ -17,8 +17,8 @@ NPL.load("(gl)npl_mod/Raft/ClusterServer.lua");
 local ClusterServer = commonlib.gettable("Raft.ClusterServer");
 NPL.load("(gl)npl_mod/Raft/ServerState.lua");
 local ServerState = commonlib.gettable("Raft.ServerState");
-NPL.load("(gl)npl_mod/Raft/ServerStateManager.lua");
-local ServerStateManager = commonlib.gettable("Raft.ServerStateManager");
+NPL.load("(gl)npl_mod/Raft/FileBasedServerStateManager.lua");
+local FileBasedServerStateManager = commonlib.gettable("Raft.FileBasedServerStateManager");
 
 
 local MAX_LONG = 2^63 - 1;
@@ -29,9 +29,9 @@ local removeTestFiles, randomConfiguration, assertConfigEquals;
 local assertTrue = assert
 
 
-TestServerStateManager = {}
+TestFileBasedServerStateManager = {}
 
-function TestServerStateManager:testStateManager()
+function TestFileBasedServerStateManager:testStateManager()
     local container = "temp/logstore/";
     -- commonlib.Files.TouchFolder(container); -- this not works
     removeTestFiles(container);
@@ -50,7 +50,7 @@ function TestServerStateManager:testStateManager()
         self.logger.error("%s path error", filename)
     end
 
-    local manager = ServerStateManager:new(container);
+    local manager = FileBasedServerStateManager:new(container);
     assertTrue(manager.logStore ~= nil);
     assertTrue(manager:readState() == nil);
     local rounds = 50 + math.random(100);
