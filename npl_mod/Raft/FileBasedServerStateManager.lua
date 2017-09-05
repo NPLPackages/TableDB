@@ -91,7 +91,7 @@ end
 
 
 function FileBasedServerStateManager:persistState(serverState)
-    self.logger.trace("FileBasedServerStateManager:persistState>term:%f,commitIndex:%f,votedFor:%f", 
+    self.logger.trace("persistState>term:%f,commitIndex:%f,votedFor:%f", 
                         serverState.term, serverState.commitIndex, serverState.votedFor)
     self.serverStateFile:WriteDouble(serverState.term)
     self.serverStateFile:WriteDouble(serverState.commitIndex)

@@ -9,6 +9,7 @@ NPL.load("(gl)script/ide/commonlib.lua");
 NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 NPL.load("(gl)npl_mod/Raft/ServerState.lua");
 NPL.load("(gl)npl_mod/Raft/FileBasedServerStateManager.lua");
+-- NPL.load("(gl)npl_mod/Raft/SqliteBasedServerStateManager.lua");
 NPL.load("(gl)npl_mod/Raft/RaftParameters.lua");
 NPL.load("(gl)npl_mod/Raft/RaftContext.lua");
 NPL.load("(gl)npl_mod/Raft/RpcListener.lua");
@@ -24,6 +25,7 @@ local RaftTableDBStateMachine = commonlib.gettable("TableDB.RaftTableDBStateMach
 local ClusterServer = commonlib.gettable("Raft.ClusterServer");
 local RaftClient = commonlib.gettable("Raft.RaftClient");
 local FileBasedServerStateManager = commonlib.gettable("Raft.FileBasedServerStateManager");
+-- local SqliteBasedServerStateManager = commonlib.gettable("Raft.SqliteBasedServerStateManager");
 local RaftParameters = commonlib.gettable("Raft.RaftParameters");
 local RaftContext = commonlib.gettable("Raft.RaftContext");
 local RpcListener = commonlib.gettable("Raft.RpcListener");
@@ -50,7 +52,8 @@ end
 
 logger.info("app arg:"..baseDir..mpPort..raftMode)
 
-local stateManager = FileBasedServerStateManager:new(baseDir);
+local ServerStateManager = FileBasedServerStateManager;
+local stateManager = ServerStateManager:new(baseDir);
 local config = stateManager:loadClusterConfiguration();
 
 logger.info("config:%s", util.table_tostring(config))
