@@ -6,8 +6,8 @@ Desc:
 
 
 ------------------------------------------------------------
-NPL.load("(gl)npl_mod/Raft/ServerStateManager.lua");
-local ServerStateManager = commonlib.gettable("Raft.ServerStateManager");
+NPL.load("(gl)npl_mod/Raft/FileBasedServerStateManager.lua");
+local FileBasedServerStateManager = commonlib.gettable("Raft.FileBasedServerStateManager");
 ------------------------------------------------------------
 ]]--
 
@@ -22,7 +22,8 @@ local WALSequentialLogStore = commonlib.gettable("Raft.WALSequentialLogStore");
 local LoggerFactory = NPL.load("(gl)npl_mod/Raft/LoggerFactory.lua");
 local ServerState = commonlib.gettable("Raft.ServerState");
 local ClusterConfiguration = commonlib.gettable("Raft.ClusterConfiguration");
-local ServerStateManager = commonlib.gettable("Raft.ServerStateManager");
+
+local FileBasedServerStateManager = commonlib.gettable("Raft.FileBasedServerStateManager");
 
 local SequentialLogStore = WALSequentialLogStore
 local STATE_FILE = "server.state";
@@ -30,11 +31,11 @@ local CONFIG_FILE = "config.properties";
 local CLUSTER_CONFIG_FILE = "cluster.json";
 
 
-function ServerStateManager:new(dataDirectory)
+function FileBasedServerStateManager:new(dataDirectory)
     local o = {
         container = dataDirectory,
         logStore = SequentialLogStore:new(dataDirectory),
-        logger = LoggerFactory.getLogger("ServerStateManager")
+        logger = LoggerFactory.getLogger("FileBasedServerStateManager")
     };
     setmetatable(o, self);
 
@@ -53,17 +54,17 @@ function ServerStateManager:new(dataDirectory)
     return o;
 end
 
-function ServerStateManager:__index(name)
-    return rawget(self, name) or ServerStateManager[name];
+function FileBasedServerStateManager:__index(name)
+    return rawget(self, name) or FileBasedServerStateManager[name];
 end
 
-function ServerStateManager:__tostring()
+function FileBasedServerStateManager:__tostring()
     return util.table_tostring(self)
 end
 
 
 -- Load cluster configuration for this server
-function ServerStateManager:loadClusterConfiguration()
+function FileBasedServerStateManager:loadClusterConfiguration()
     local filename = self.container..CLUSTER_CONFIG_FILE
     local configFile = ParaIO.open(filename, "r");
     if configFile:IsValid() then
@@ -76,7 +77,7 @@ function ServerStateManager:loadClusterConfiguration()
 end
 
 -- Save cluster configuration
-function ServerStateManager:saveClusterConfiguration(configuration)
+function FileBasedServerStateManager:saveClusterConfiguration(configuration)
     local config = commonlib.Json.Encode(configuration);
     local filename = self.container..CLUSTER_CONFIG_FILE
     local configFile = ParaIO.open(filename, "w");
@@ -89,8 +90,8 @@ function ServerStateManager:saveClusterConfiguration(configuration)
 end
 
 
-function ServerStateManager:persistState(serverState)
-    self.logger.trace("ServerStateManager:persistState>term:%f,commitIndex:%f,votedFor:%f", 
+function FileBasedServerStateManager:persistState(serverState)
+    self.logger.trace("FileBasedServerStateManager:persistState>term:%f,commitIndex:%f,votedFor:%f", 
                         serverState.term, serverState.commitIndex, serverState.votedFor)
     self.serverStateFile:WriteDouble(serverState.term)
     self.serverStateFile:WriteDouble(serverState.commitIndex)
@@ -99,7 +100,7 @@ function ServerStateManager:persistState(serverState)
     self.serverStateFile:seek(0)
 end
 
-function ServerStateManager:readState()
+function FileBasedServerStateManager:readState()
     self.serverStateFile:close();
 
     local serverStateFile = ParaIO.open(self.serverStateFileName, "r");
@@ -122,7 +123,7 @@ function ServerStateManager:readState()
     return ServerState:new(term, commitIndex, votedFor);
 end
 
-function ServerStateManager:close()
+function FileBasedServerStateManager:close()
     self.serverStateFile:close();
     self.logStore:close();
 end
