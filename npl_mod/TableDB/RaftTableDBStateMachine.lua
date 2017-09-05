@@ -144,10 +144,44 @@ end
 ]]
 --
 function RaftTableDBStateMachine:commit(logIndex, data)
+    self.logger.info("commit:%d", logIndex);
+    
+	local config_path = data.rootFolder .. "/tabledb.config.xml";
+    if not ParaIO.DoesFileExist(config_path) then
+        self:createSqliteWALStoreConfig(data.rootFolder);
+        self.db:connect(data.rootFolder, function (...)
+            self.logger.info("connected to %s", data.rootFolder);
+        end);
+    end
+    local collection = self.db[data.collectionName];
+    collection:injectWALPage(data);
+
+    self.commitIndex = logIndex;
+end
+
+--[[
+* Rollback a preCommit item at index {@code logIndex}
+* @param logIndex log index to be rolled back
+* @param data
+]]
+--
+function RaftTableDBStateMachine:rollback(logIndex, data)
+-- need more thought here
+-- rollback on last root pair
+-- self._db:exec("ROLLBACK");
+end
+
+--[[
+* PreCommit a log entry at log index {@code logIndex}
+* @param logIndex the log index to commit
+* @param data
+]]
+--
+function RaftTableDBStateMachine:preCommit(logIndex, data)
     -- data is logEntry.value
     local raftLogEntryValue = RaftLogEntryValue:fromBytes(data);
 
-    self.logger.info("commit:%s", util.table_tostring(raftLogEntryValue))
+    self.logger.info("preCommit:%s", util.table_tostring(raftLogEntryValue))
 
     local this = self;
     local cbFunc = function(err, data, re_exec)
@@ -176,12 +210,15 @@ function RaftTableDBStateMachine:commit(logIndex, data)
     
     -- a dedicated IOThread
     if raftLogEntryValue.query_type == "connect" then
-        -- self.db:connect(raftLogEntryValue.query.rootFolder, cbFunc);
+        -- raftLogEntryValue.collection.db is nil when query_type is connect
+        -- we should create table.config.xml here and make the storageProvider to SqliteWALStore
+        self:createSqliteWALStoreConfig(raftLogEntryValue.query.rootFolder);
+        self.db:connect(raftLogEntryValue.query.rootFolder, cbFunc);
     else
         if raftLogEntryValue.enableSyncMode then
             self.db:EnableSyncMode(true);
         end
-        self.db:connect(raftLogEntryValue.collection.db);
+        -- self.db:connect(raftLogEntryValue.collection.db);
         local collection = self.db[raftLogEntryValue.collection.name];
         
         --add to collections
@@ -213,31 +250,6 @@ function RaftTableDBStateMachine:commit(logIndex, data)
     
     self.latestCommand = raftLogEntryValue.cb_index;
     self.commitIndex = logIndex;
-end
-
---[[
-* Rollback a preCommit item at index {@code logIndex}
-* @param logIndex log index to be rolled back
-* @param data
-]]
---
-function RaftTableDBStateMachine:rollback(logIndex, data)
--- need more thought here
--- rollback on last root pair
--- self._db:exec("ROLLBACK");
-end
-
---[[
-* PreCommit a log entry at log index {@code logIndex}
-* @param logIndex the log index to commit
-* @param data
-]]
---
-function RaftTableDBStateMachine:preCommit(logIndex, data)
--- add cb_index to response
--- local raftLogEntryValue = RaftLogEntryValue:fromBytes(data);
--- self.messages[raftLogEntryValue.cb_index] = raftLogEntryValue;
--- self.pendingMessages[raftLogEntryValue.cb_index] = raftLogEntryValue;
 end
 
 --[[
@@ -441,16 +453,29 @@ function RaftTableDBStateMachine:processMessage(message)
 end
 
 
-function RaftTableDBStateMachine:addMessage(message)
-    index = string.find(message, ':');
-    if (index == nil) then
-        return;
-    end
-    
-    key = string.sub(message, 1, index - 1);
-    self.messages[key] = message;
-    self.pendingMessages[key] = nil;
+function RaftTableDBStateMachine:createSqliteWALStoreConfig(rootFolder)
+	NPL.load("(gl)script/ide/commonlib.lua");
+	NPL.load("(gl)script/ide/LuaXML.lua");
+	local config = { 
+		name = "tabledb", 
+		{
+			name = "providers", 
+			{ name = "provider", attr = { name = "sqliteWAL", type = "TableDB.SqliteWALStore", file = "(g1)npl_mod/TableDB/SqliteWALStore.lua" }, "" }
+		},
+		{
+			name = "tables",
+			{ name = "table", attr = { provider = "sqliteWAL", name = "default" } }, 
+		}
+	}
 
+	local config_path = rootFolder .. "/tabledb.config.xml";
+	local str = commonlib.Lua2XmlString(config, true);
+	ParaIO.CreateDirectory(config_path);
+	local file = ParaIO.open(config_path, "w");
+	if (file:IsValid()) then
+		file:WriteString(str);
+		file:close();
+	end
 end
 
 
