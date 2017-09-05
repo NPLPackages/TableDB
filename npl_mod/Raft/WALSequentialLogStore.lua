@@ -320,5 +320,5 @@ function WALSequentialLogStore:readEntry(size)
 end
 
 function WALSequentialLogStore:close()
-    self.db.raftLog:close();
+    -- self.db.raftLog:close();
 end
