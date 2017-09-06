@@ -117,7 +117,15 @@ local function executeAsClient()
     else
       NPL.load("(gl)npl_mod/TableDB/RaftSqliteStore.lua");
       local RaftSqliteStore = commonlib.gettable("TableDB.RaftSqliteStore");
-      RaftSqliteStore:createRaftClient()
+      local param = {
+        baseDir = "./",
+        host = "localhost",
+        port = "9004",
+        id = "server4:",
+        threadName = "rtdb",
+        rootFolder = "temp/test_raft_database",
+      }
+      RaftSqliteStore:createRaftClient(param.baseDir, param.host, param.port, param.id, param.threadName, param.rootFolder);
       local raftClient = RaftSqliteStore:getRaftClient();
 
       if clientMode == "addServer" then

@@ -446,3 +446,8 @@ end
 function RaftSqliteStore:makeEmpty(query, callbackFunc)
     return self:Send("makeEmpty", query, callbackFunc)
 end
+
+
+function RaftSqliteStore:Close()
+    return self:Send("close", {}, function() end);
+end

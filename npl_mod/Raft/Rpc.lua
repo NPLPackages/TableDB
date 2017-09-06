@@ -185,7 +185,7 @@ function Rpc:OnActivated(msg)
         callbackId = msg.callbackId
       }
       -- if type(self.localAddress) == "table" then
-        self.logger.trace("activate on %s, msg:%s", vFileId, util.table_tostring(response))
+        -- self.logger.trace("activate on %s, msg:%s", vFileId, util.table_tostring(response))
       -- end
       local activate_result = NPL.activate(vFileId, response)
 
@@ -295,7 +295,7 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
     remoteAddress = self.localAddress,
   }
   -- if type(self.localAddress) == "table" then
-    self.logger.trace("activate on %s, msg:%s", vFileId, util.table_tostring(msg))
+    -- self.logger.trace("activate on %s, msg:%s", vFileId, util.table_tostring(msg))
   -- end
   local activate_result = NPL.activate(vFileId, msg);
   -- handle memory leak

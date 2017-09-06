@@ -69,7 +69,7 @@ function TestSQLOperations()
 	db.User:find({ ["+name"] = {"1", limit=2} }, function(err, rows) assert(#rows==2); end);
 	-- return at most 1 row whose id is greater than -1
 	db.User:find({ _id = { gt = -1, limit = 1, skip == 1} }, function(err, rows) assert(#rows==1); echo("all tests succeed!") end);
-	db.User:close();
+	-- db.User:close();
 end
 
 
@@ -105,7 +105,7 @@ function TestInsertThroughputNoIndex()
 		npl_profiler.perf_end("tableDB_BlockingAPILatency", true)
 		log(commonlib.serialize(npl_profiler.perf_get(), true));			
 	end);
-	db.insertNoIndex:close();
+	-- db.insertNoIndex:close();
 end
 
 function TestPerformance()

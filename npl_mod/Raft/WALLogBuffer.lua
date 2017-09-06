@@ -67,6 +67,9 @@ function WALLogBuffer:writeAt(index, logEntry)
         return;
     end
     self.buffer[index] = logEntry;
+    if index == self:lastIndex() + 1 then
+        self.entriesInBuffer = self.entriesInBuffer + 1;
+    end
 end
 
 -- [start, end), returns the startIndex

@@ -46,6 +46,7 @@ end
 
 function SqliteWALStore:injectWALPage(query, callbackFunc)
     self._db:wal_inject_page(query.page_data, query.pgno, query.nTruncate, query.isCommit)
+    -- print(format("injected %d", query.logIndex));
     if (not self.checkpoint_timer:IsEnabled()) then
         self.checkpoint_timer:Change(self.AutoCheckPointInterval, self.AutoCheckPointInterval);
     end
