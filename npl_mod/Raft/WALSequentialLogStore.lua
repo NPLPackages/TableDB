@@ -3,7 +3,7 @@ Title:
 Author: liuluheng
 Date: 2017.03.25
 Desc:
-    not touch the disk.
+not touch the disk.
 ------------------------------------------------------------
 NPL.load("(gl)npl_mod/Raft/WALSequentialLogStore.lua");
 local WALSequentialLogStore = commonlib.gettable("Raft.WALSequentialLogStore");
@@ -143,7 +143,7 @@ Get log entries with index between {@code start} and {@code end}
 ]]
 --
 function WALSequentialLogStore:getLogEntries(startIndex, endIndex)
-    self.logger.trace("getLogEntries:startIndex:%d, endIndex:%d, self.startIndex:%d, self.entriesInStore:%d",
+    self.logger.trace("getLogEntries:startIndex:%d, endIndex:%d, startIndex:%d, entriesInStore:%d",
         startIndex, endIndex, self.startIndex, self.entriesInStore)
     if startIndex < self.startIndex then
         return;
@@ -181,7 +181,7 @@ Gets the log entry at the specified index
 ]]
 --
 function WALSequentialLogStore:getLogEntryAt(logIndex)
-    self.logger.trace("getLogEntryAt>logIndex:%d, self.startIndex:%d, self.entriesInStore:%d",
+    self.logger.trace("getLogEntryAt>logIndex:%d, startIndex:%d, entriesInStore:%d",
         logIndex, self.startIndex, self.entriesInStore)
     if logIndex < self.startIndex then
         return;
@@ -196,15 +196,18 @@ function WALSequentialLogStore:getLogEntryAt(logIndex)
     if (entry ~= nil) then
         return entry;
     else
-        -- should never goes here
-        self.db.raftLog:find({logIndex = logIndex}, function(err, data)
-            if not err and data.logEntry then
-                entry = data.logEntry
-            else
-                self.logger.error("badly wrong!! getting an entry not in the raftLog DB");
-            end
-        end)
+        self.db:EnableSyncMode(true);
+
+        local err, data = self.db.raftLog:findOne({logIndex = logIndex});
+        if not err and data and data.logEntry then
+            entry = data.logEntry
+        else
+            self.logger.error("badly wrong!! getting %d entry not in the raftLog DB", logIndex);
+        end
+        self.db:EnableSyncMode(false);
     end
+    
+    return entry;
 end
 
 --[[
@@ -215,7 +218,7 @@ Pack {@code itemsToPack} log items starts from {@code index}
 ]]
 --
 function WALSequentialLogStore:packLog(logIndex, itemsToPack)
-    self.logger.trace("packLog>logIndex:%d, itemsToPack:%d, self.startIndex:%d, entriesInStore:%d",
+    self.logger.trace("packLog>logIndex:%d, itemsToPack:%d, startIndex:%d, entriesInStore:%d",
         logIndex, itemsToPack, self.startIndex, self.entriesInStore);
     if logIndex < self.startIndex then
         return;
@@ -234,6 +237,7 @@ function WALSequentialLogStore:packLog(logIndex, itemsToPack)
     local file = ParaIO.open("<memory>", "w");
     local bytes;
     if (file:IsValid()) then
+        file:WriteInt(itemsToPack);
         file:WriteInt(#str)
         file:WriteString(str)
         bytes = file:GetText(0, -1)
@@ -255,7 +259,7 @@ Apply the log pack to current log store, starting from index
 ]]
 --
 function WALSequentialLogStore:applyLogPack(logIndex, logPack)
-    self.logger.trace("applyLogPack>logIndex:%d, self.startIndex:%d, entriesInStore:%d",
+    self.logger.trace("applyLogPack>logIndex:%d, startIndex:%d, entriesInStore:%d",
         logIndex, self.startIndex, self.entriesInStore);
     if logIndex < self.startIndex then
         return;
@@ -274,6 +278,12 @@ function WALSequentialLogStore:applyLogPack(logIndex, logPack)
             file:WriteBytes(#bytes, bytes);
         end
         file:seek(0)
+        
+        local items = file:ReadInt();
+        local index = logIndex - self.startIndex + 1;
+        if(index == self.entriesInStore + 1) then
+            self.entriesInStore = index - 1 + items;
+        end
         
         local n = file:ReadInt();
         local str = file:ReadString(n)
@@ -320,5 +330,5 @@ function WALSequentialLogStore:readEntry(size)
 end
 
 function WALSequentialLogStore:close()
-    -- self.db.raftLog:close();
+-- self.db.raftLog:close();
 end

@@ -57,7 +57,7 @@ function RpcListener:startListening(messageHandler)
     -- use Rpc for incoming Request message
     local this = self
     Rpc:new():init("RaftRequestRPC", function(self, msg) 
-        this.logger.trace("RaftRequestRPC:%s",util.table_tostring(msg));
+        -- this.logger.trace("RaftRequestRPC:%s",util.table_tostring(msg));
         msg = messageHandler:processRequest(msg)
         return msg;
     end)

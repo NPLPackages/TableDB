@@ -130,11 +130,9 @@ function RaftServer:new(ctx)
     -- election timer
     o:restartElectionTimer()
     
-    
     -- register WAL Page handler
-    NPL.this(function()
-        o:handleWALRequest(msg);
-    end, {filename = WALHandlerFile});
+    NPL.this(function() o:handleWALRequest(msg) end, {filename = WALHandlerFile});
+    
     o.logger.info(format("Server %d started", o.id))
     return o;
 end
@@ -233,7 +231,7 @@ function RaftServer:handleAppendEntriesRequest(request)
         local logEntries = request.logEntries;
         local index = request.lastLogIndex + 1;
         local logIndex = 1;
-        self.logger.trace("initial->entry len:%d, index:%d, logIndex:%d", #logEntries, index, logIndex)
+        self.logger.trace("Init>%d entries, confirmedIndex:%d, entryIndex:%d", #logEntries, index, logIndex)
         while index < self.logStore:getFirstAvailableIndex() and
             logIndex < #logEntries + 1 --do
             and
@@ -241,7 +239,7 @@ function RaftServer:handleAppendEntriesRequest(request)
             logIndex = logIndex + 1;
             index = index + 1;
         end
-        self.logger.trace("checked overlap->entry len:%d, index:%d, logIndex:%d", #logEntries, index, logIndex)
+        self.logger.trace("Olap>%d entries, confirmedIndex:%d, entryIndex:%d", #logEntries, index, logIndex)
         
         -- dealing with overwrites
         while (index < self.logStore:getFirstAvailableIndex() and logIndex < #logEntries + 1) do
@@ -256,19 +254,19 @@ function RaftServer:handleAppendEntriesRequest(request)
             self.logStore:writeAt(index, logEntries[logIndex]);
             if (logEntry.valueType == LogValueType.Application) then
                 -- self.stateMachine:preCommit(index, logEntry.value);
-            elseif (logEntry.valueType == LogValueType.Configuration) then
+                elseif (logEntry.valueType == LogValueType.Configuration) then
                 self.logger.info("received a configuration change at index %d from leader", index);
                 self.configChanging = true;
-            end
-            
-            logIndex = logIndex + 1;
-            index = index + 1;
+                end
+                
+                logIndex = logIndex + 1;
+                index = index + 1;
         end
-        self.logger.trace("dealed overwrite->entry len:%d, index:%d, logIndex:%d", #logEntries, index, logIndex)
+        self.logger.trace("Oite>%d entries, confirmedIndex:%d, entryIndex:%d", #logEntries, index, logIndex)
         -- append the new log entries
         while (logIndex < #logEntries + 1) do
             local logEntry = logEntries[logIndex];
-            self.logger.trace("dealing with logEntry:" .. util.table_tostring(logEntry))
+            self.logger.trace("append entryIndex:" .. logIndex)
             logIndex = logIndex + 1;
             local indexForEntry = self.logStore:append(logEntry);
             if (logEntry.valueType == LogValueType.Configuration) then
@@ -725,7 +723,7 @@ function RaftServer:updateTerm(term)
 end
 
 function RaftServer:commit(targetIndex)
-    self.logger.trace("committing..targetIndex:%d, quickCommitIndex:%d", targetIndex, self.quickCommitIndex)
+    self.logger.trace("commit index:%d, quickCommitIndex:%d", targetIndex, self.quickCommitIndex)
     if (targetIndex > self.quickCommitIndex) then
         self.quickCommitIndex = targetIndex;
         
@@ -1594,7 +1592,7 @@ function real_commit(server)
     end
     while (currentCommitIndex < server.quickCommitIndex and currentCommitIndex < server.logStore:getFirstAvailableIndex() - 1) do
         currentCommitIndex = currentCommitIndex + 1;
-        server.logger.trace("real_commit...currentCommitIndex:%d, quickCommitIndex:%d, logStore:FirstAvailableIndex:%d",
+        server.logger.trace("real_commit>currentCommitIndex:%d, quickCommitIndex:%d, FirstAvailableIndex:%d",
             currentCommitIndex, server.quickCommitIndex, server.logStore:getFirstAvailableIndex())
         local logEntry = server.logStore:getLogEntryAt(currentCommitIndex);
         

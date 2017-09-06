@@ -145,6 +145,7 @@ end
 --
 function RaftTableDBStateMachine:commit(logIndex, data)
     self.logger.info("commit:%d", logIndex);
+    data.logIndex = logIndex;
     
 	local config_path = data.rootFolder .. "/tabledb.config.xml";
     if not ParaIO.DoesFileExist(config_path) then
