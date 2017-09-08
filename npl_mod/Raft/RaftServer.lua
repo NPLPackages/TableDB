@@ -437,7 +437,7 @@ end
 
 function RaftServer:requestAllAppendEntries()
     -- be careful with the table and sequence array !
-    self.logger.trace("#self.peers:%d, peers table size:%d", #self.peers, Rutils.table_size(self.peers))
+    -- self.logger.trace("#self.peers:%d, peers table size:%d", #self.peers, Rutils.table_size(self.peers))
     if (Rutils.table_size(self.peers) == 0) then
         self:commit(self.logStore:getFirstAvailableIndex() - 1);
         return;
@@ -524,7 +524,7 @@ function RaftServer:handleAppendEntriesResponse(response)
         -- majority is a float without math.ceil
         -- lua index start form 1
         local majority = math.ceil((Rutils.table_size(self.peers) + 1) / 2);
-        self.logger.trace("total server num:%d, major num:%d", Rutils.table_size(self.peers) + 1, majority)
+        self.logger.trace("total server:%d, major:%d", Rutils.table_size(self.peers) + 1, majority)
         self:commit(matchedIndexes[majority]);
         needToCatchup = peer:clearPendingCommit() or response.nextIndex < self.logStore:getFirstAvailableIndex();
     else
