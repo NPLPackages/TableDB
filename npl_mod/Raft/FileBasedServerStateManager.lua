@@ -39,6 +39,8 @@ function FileBasedServerStateManager:new(dataDirectory)
     };
     setmetatable(o, self);
 
+    o.logger.info("started");
+
     local configFile = ParaIO.open(o.container..CONFIG_FILE, "r");
     if configFile:IsValid() then
         local line = configFile:readline()
@@ -108,6 +110,7 @@ function FileBasedServerStateManager:readState()
         self.serverStateFile = ParaIO.open(self.serverStateFileName, "rw");
         assert(self.serverStateFile:IsValid(), "serverStateFile not Valid")
         self.serverStateFile:seek(0)
+        self.logger.info("state file size == 0")
         return;
     end
 
