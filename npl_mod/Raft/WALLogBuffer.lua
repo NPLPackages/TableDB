@@ -85,7 +85,7 @@ function WALLogBuffer:fill(start, endi, result)
         result[#result + 1] = self:entryAt(i)
     end
     
-    self.logger.trace("fill>start:%d, end:%d, result len:%d, self.startIndex:%d, self.buffer len:%d",
+    self.logger.trace("fill>start:%d, end:%d, result len:%d, startIndex:%d, bufferLen:%d",
         start, endi, #result, self.startIndex, self:bufferSize())
     -- self.logger.trace("fill>result:%s", util.table_tostring(result))
     return self.startIndex;

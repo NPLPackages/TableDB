@@ -61,6 +61,8 @@ function RpcListener:startListening(messageHandler)
         msg = messageHandler:processRequest(msg)
         return msg;
     end)
+    RaftRequestRPC.remoteThread = self.threadName;
+    RaftRequestRPC:MakePublic();
 
 	-- set NPL attributes before starting the server. 
 	local att = NPL.GetAttributeObject();
@@ -69,14 +71,11 @@ function RpcListener:startListening(messageHandler)
 	att:SetField("IdleTimeout", true);
 	att:SetField("IdleTimeoutPeriod", 1200000);
     __rts__:SetMsgQueueSize(50000);
-    -- port is need to be string here??
-    NPL.StartNetServer(self.ip, tostring(self.port));
+    NPL.StartNetServer(self.ip, self.port);
     
     for _, server in ipairs(self.servers) do
         Rutils.initConnect(self.thisServerId, server)
     end
 
-    RaftRequestRPC.remoteThread = self.threadName;
-    RaftRequestRPC:MakePublic();
 
 end
