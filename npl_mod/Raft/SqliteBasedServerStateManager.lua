@@ -3,8 +3,7 @@ Title:
 Author: liuluheng
 Date: 2017.03.25
 Desc:
-    FileBased is better
-    FIXME: use sqlite instead of TableDB
+    FileBased is better, but without threadsafty
 
 ------------------------------------------------------------
 NPL.load("(gl)npl_mod/Raft/SqliteBasedServerStateManager.lua");
@@ -16,10 +15,11 @@ NPL.load("(gl)script/ide/Files.lua");
 NPL.load("(gl)script/ide/Json.lua");
 NPL.load("(gl)npl_mod/Raft/ClusterConfiguration.lua");
 NPL.load("(gl)npl_mod/Raft/ServerState.lua");
-NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
-local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
+NPL.load("(gl)script/sqlite/sqlite3.lua");
+
 -- NPL.load("(gl)npl_mod/Raft/FileBasedSequentialLogStore.lua");
 -- local FileBasedSequentialLogStore = commonlib.gettable("Raft.FileBasedSequentialLogStore");
+
 NPL.load("(gl)npl_mod/Raft/WALSequentialLogStore.lua");
 local WALSequentialLogStore = commonlib.gettable("Raft.WALSequentialLogStore");
 local LoggerFactory = NPL.load("(gl)npl_mod/Raft/LoggerFactory.lua");
@@ -29,7 +29,6 @@ local ClusterConfiguration = commonlib.gettable("Raft.ClusterConfiguration");
 local SqliteBasedServerStateManager = commonlib.gettable("Raft.SqliteBasedServerStateManager");
 
 local SequentialLogStore = WALSequentialLogStore
-local STATE_FILE = "server.state";
 local CONFIG_FILE = "config.properties";
 local CLUSTER_CONFIG_FILE = "cluster.json";
 
@@ -39,21 +38,26 @@ function SqliteBasedServerStateManager:new(dataDirectory)
         container = dataDirectory,
         logStore = SequentialLogStore:new(dataDirectory),
         logger = LoggerFactory.getLogger("SqliteBasedServerStateManager"),
-        -- this will start both db client and db server if not.
-        db = TableDatabase:new():connect(dataDirectory, function() end);
     };
     setmetatable(o, self);
-    
+    local stateDBFileName = o.container .. "/serverState.db";
+    o.logger.info("started with state DB:%s", stateDBFileName);
+    o.db = sqlite3.open(stateDBFileName);
+    o.db:exec("CREATE TABLE serverState (id INTEGER UNIQUE, term INTEGER, commitIndex INTEGER, votedFor INTEGER)");
+
     local configFile = ParaIO.open(o.container .. CONFIG_FILE, "r");
     if configFile:IsValid() then
         local line = configFile:readline()
         local index = string.find(line, "=")
         o.serverId = tonumber(string.sub(line, index + 1))
     end
+
+    local insert = o.db:prepare("INSERT INTO serverState VALUES (:id, :term, :commitIndex, :votedFor)")
     
-    o.db:EnableSyncMode(true);
-    
-    -- o.db.serverState:insertOne(nil, {serverId=o.serverId});
+    insert:bind(o.serverId, -1, -1, -1);
+    insert:exec();
+    insert:close();
+
     return o;
 end
 
@@ -96,25 +100,23 @@ end
 function SqliteBasedServerStateManager:persistState(serverState)
     self.logger.trace("persistState>term:%f,commitIndex:%f,votedFor:%f",
         serverState.term, serverState.commitIndex, serverState.votedFor);
-    -- self.db.serverState:deleteOne({serverId = self.serverId});
-    self.db.serverState:insertOne({serverId = self.serverId}, {
-        serverId = self.serverId,
-        term = serverState.term,
-        commitIndex = serverState.commitIndex,
-        votedFor = serverState.votedFor,
-    });
+
+    local update = self.db:prepare("UPDATE serverState Set term=?,commitIndex=?,votedFor=? WHERE id = ?")
+    update:bind(serverState.term, serverState.commitIndex, serverState.votedFor, self.serverId);
+    update:exec();
+    update:close();
+
 end
 
 function SqliteBasedServerStateManager:readState()
-    local serverState;
-    local err, data = self.db.serverState:findOne({serverId = self.serverId});
-    if not err and data then
-        serverState = ServerState:new(data.term, data.commitIndex, data.votedFor);
-    else
-        self.logger.error("persistState first");
+    local stmt, err = self.db:prepare("SELECT term, commitIndex, votedFor FROM serverState WHERE id = " .. self.serverId);
+    if stmt then
+        local row = stmt:first_row();
+        stmt:close();
+        if row.term ~= -1 then
+            return ServerState:new(row.term, row.commitIndex, row.votedFor);
+        end
     end
-    
-    return serverState;
 end
 
 function SqliteBasedServerStateManager:close()
