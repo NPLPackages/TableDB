@@ -17,7 +17,7 @@ local SqliteStore = commonlib.gettable("System.Database.SqliteStore");
 local SqliteWALStore = commonlib.inherit(SqliteStore, commonlib.gettable("TableDB.SqliteWALStore"));
 
 local cbWALHandlerFile = "(%s)RPC/WALHandler.lua";
-local cb_thread = "rtdb"
+local cb_thread = "raft"
 
 function SqliteWALStore:ctor()
 end

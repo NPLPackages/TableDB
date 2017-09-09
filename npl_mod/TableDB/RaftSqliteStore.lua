@@ -17,8 +17,7 @@ NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 local util = commonlib.gettable("System.Compiler.lib.util")
 NPL.load("(gl)npl_mod/TableDB/RaftLogEntryValue.lua");
 local RaftLogEntryValue = commonlib.gettable("TableDB.RaftLogEntryValue");
-NPL.load("(gl)npl_mod/Raft/FileBasedServerStateManager.lua");
-local FileBasedServerStateManager = commonlib.gettable("Raft.FileBasedServerStateManager");
+
 NPL.load("(gl)npl_mod/TableDB/RaftTableDBStateMachine.lua");
 local RaftTableDBStateMachine = commonlib.gettable("TableDB.RaftTableDBStateMachine");
 NPL.load("(gl)npl_mod/Raft/RaftClient.lua");
@@ -34,9 +33,20 @@ local raftClient;
 RaftSqliteStore.name = "raft";
 RaftSqliteStore.thread_name = format("(%s)", __rts__:GetName());
 
-function RaftSqliteStore:createRaftClient(baseDir, host, port, id, threadName, rootFolder)
+function RaftSqliteStore:createRaftClient(baseDir, host, port, id, threadName, rootFolder, userFile)
+  local ServerStateManager;
+  if userFile then
+    NPL.load("(gl)npl_mod/Raft/FileBasedServerStateManager.lua");
+    local FileBasedServerStateManager = commonlib.gettable("Raft.FileBasedServerStateManager");
+    ServerStateManager = FileBasedServerStateManager;
+  else
+    NPL.load("(gl)npl_mod/Raft/SqliteBasedServerStateManager.lua");
+    local SqliteBasedServerStateManager = commonlib.gettable("Raft.SqliteBasedServerStateManager");
+    ServerStateManager = SqliteBasedServerStateManager;
+  end
+
   local baseDir = baseDir or "./"
-  local stateManager = FileBasedServerStateManager:new(baseDir);
+  local stateManager = ServerStateManager:new(baseDir);
   local config = stateManager:loadClusterConfiguration();
 
   local localAddress = {
