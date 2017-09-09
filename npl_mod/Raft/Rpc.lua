@@ -85,9 +85,19 @@ function Rpc:SetPublicFile(filename)
   filename = filename or format("Rpc/%s.lua", self.fullname);
   self.filename = filename;
 
-  NPL.this(function() 
-    self:OnActivated(msg);
-  end, {filename = self.filename});
+  if self.filename == "RaftRequestRPC" then
+    NPL.this(function() 
+      self:OnActivated(msg);
+    end, {PreemptiveCount = 2000, MsgQueueSize=50000, filename = self.filename});
+  elseif self.filename == "RTDBRequestRPC" then
+    NPL.this(function() 
+      self:OnActivated(msg);
+    end, {PreemptiveCount = 1000, filename = self.filename}); 
+  else
+    NPL.this(function() 
+        self:OnActivated(msg);
+      end, {filename = self.filename});
+  end
 
   self.logger.info("%s installed to file %s", self.fullname, self.filename);
 end
