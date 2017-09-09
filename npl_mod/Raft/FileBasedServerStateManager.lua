@@ -39,7 +39,6 @@ function FileBasedServerStateManager:new(dataDirectory)
     };
     setmetatable(o, self);
 
-    o.logger.info("started");
 
     local configFile = ParaIO.open(o.container..CONFIG_FILE, "r");
     if configFile:IsValid() then
@@ -49,6 +48,7 @@ function FileBasedServerStateManager:new(dataDirectory)
     end
     
     o.serverStateFileName = o.container..STATE_FILE;
+    o.logger.info("started with stateFile:%s", o.serverStateFileName);
     o.serverStateFile = ParaIO.open(o.serverStateFileName, "rw");
     assert(o.serverStateFile:IsValid(), "serverStateFile not Valid")
     o.serverStateFile:seek(0)
