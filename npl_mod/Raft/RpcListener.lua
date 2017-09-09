@@ -61,6 +61,8 @@ function RpcListener:startListening(messageHandler)
         msg = messageHandler:processRequest(msg)
         return msg;
     end)
+    RaftRequestRPC.remoteThread = self.threadName;
+    RaftRequestRPC:MakePublic();
 
 	-- set NPL attributes before starting the server. 
 	local att = NPL.GetAttributeObject();
@@ -77,7 +79,5 @@ function RpcListener:startListening(messageHandler)
         Rutils.initConnect(self.thisServerId, server)
     end
 
-    RaftRequestRPC.remoteThread = self.threadName;
-    RaftRequestRPC:MakePublic();
 
 end
