@@ -56,6 +56,7 @@ function RaftTableDBStateMachine:new(baseDir, ip, listeningPort, threadName)
     if not ParaIO.CreateDirectory(o.snapshotStore) then
         o.logger.error("%s dir create error", o.snapshotStore)
     end
+
     return o;
 end
 
@@ -154,6 +155,14 @@ function RaftTableDBStateMachine:commit(logIndex, data)
             self.logger.info("connected to %s", data.rootFolder);
         end);
     end
+
+    --add to collections
+    if not self.collections[data.collectionName] then
+        local collectionPath = data.rootFolder .. data.collectionName;
+        self.logger.trace("add collection %s->%s", data.collectionName, collectionPath)
+        self.collections[data.collectionName] = collectionPath;
+    end
+
     local collection = self.db[data.collectionName];
     collection:injectWALPage(data);
 
