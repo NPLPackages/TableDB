@@ -70,6 +70,65 @@ function TestSQLOperations()
 	-- return at most 1 row whose id is greater than -1
 	db.User:find({ _id = { gt = -1, limit = 1, skip == 1} }, function(err, rows) assert(#rows==1); echo("all tests succeed!") end);
 	-- db.User:close();
+
+
+	-- Note: `db.User2` will automatically create the `User2` collection table if not.
+	-- clear all data
+	db.User2:makeEmpty({}, function(err, count) echo("deleted"..(count or 0)) end);
+	-- insert 1
+	db.User2:insertOne(nil, {name="1", email="1@1",}, function(err, data)  assert(data.email=="1@1") 	end)
+	-- insert 1 with duplicate name
+	db.User2:insertOne(nil, {name="1", email="1@1.dup",}, function(err, data)  assert(data.email=="1@1.dup") 	end)
+	
+	-- find or findOne will automatically create index on `name` and `email` field.
+	-- indices are NOT forced to be unique. The caller needs to ensure this see `insertOne` below. 
+	db.User2:find({name="1",}, function(err, rows) assert(#rows==2); end);
+	db.User2:find({name="1", email="1@1"}, function(err, rows) assert(rows[1].email=="1@1"); end);
+	-- find with compound index of name and email
+	db.User2:find({ ["+name+email"] = {"1", "1@1"} }, function(err, rows) assert(#rows==1); end);
+	
+	-- force insert
+	db.User2:insertOne(nil, {name="LXZ", password="123"}, function(err, data)  assert(data.password=="123") 	end)
+	-- this is an update or insert command, if the query has result, it will actually update first matching row rather than inserting one. 
+	-- this is usually a good way to force uniqueness on key or compound keys, 
+	db.User2:insertOne({name="LXZ"}, {name="LXZ", password="1", email="lixizhi@yeah.net"}, function(err, data)  assert(data.password=="1") 	end)
+
+	-- insert another one
+	db.User2:insertOne({name="LXZ2"}, {name="LXZ2", password="123", email="lixizhi@yeah.net"}, function(err, data)  assert(data.password=="123") 	end)
+	-- update one
+	db.User2:updateOne({name="LXZ2",}, {name="LXZ2", password="2", email="lixizhi@yeah.net"}, function(err, data)  assert(data.password=="2") end)
+	-- remove and update fields
+	db.User2:updateOne({name="LXZ2",}, {_unset = {"password"}, updated="with unset"}, function(err, data)  assert(data.password==nil and data.updated=="with unset") end)
+	-- replace the entire document
+	db.User2:replaceOne({name="LXZ2",}, {name="LXZ2", email="lixizhi@yeah.net"}, function(err, data)  assert(data.updated==nil) end)
+	-- force flush to disk, otherwise the db IO thread will do this at fixed interval
+    db.User2:flush({}, function(err, bFlushed) assert(bFlushed==true) end);
+	-- select one, this will automatically create `name` index
+	db.User2:findOne({name="LXZ"}, function(err, user) assert(user.password=="1");	end)
+	-- array field such as {"password", "1"} are additional checks, but does not use index. 
+	db.User2:findOne({name="LXZ", {"password", "1"}, {"email", "lixizhi@yeah.net"}}, function(err, user) assert(user.password=="1");	end)
+	-- search on non-unqiue-indexed rows, this will create index `email` (not-unique index)
+	db.User2:find({email="lixizhi@yeah.net"}, function(err, rows) assert(#rows==2); end);
+	-- search and filter result with password=="1"
+	db.User2:find({name="LXZ", email="lixizhi@yeah.net", {"password", "1"}, }, function(err, rows) assert(#rows==1 and rows[1].password=="1"); end);
+	-- find all rows with custom timeout 1 second
+	db.User2:find({}, function(err, rows) assert(#rows==4); end, 1000);
+	-- remove item
+	db.User2:deleteOne({name="LXZ2"}, function(err, count) assert(count==1);	end);
+	-- wait flush may take up to 3 seconds
+	db.User2:waitflush({}, function(err, bFlushed) assert(bFlushed==true) end);
+	-- set cache to 2000KB
+	db.User2:exec({CacheSize=-2000}, function(err, data) end);
+	-- run select command from Collection 
+	db.User2:exec("Select * from Collection", function(err, rows) assert(#rows==3) end);
+	-- remove index fields
+	db.User2:removeIndex({"email", "name"}, function(err, bSucceed) assert(bSucceed == true) end)
+	-- full table scan without using index by query with array items.
+	db.User2:find({ {"name", "LXZ"}, {"password", "1"} }, function(err, rows) assert(#rows==1 and rows[1].name=="LXZ"); end);
+	-- find with left subset of previously created compound key "+name+email"
+	db.User2:find({ ["+name"] = {"1", limit=2} }, function(err, rows) assert(#rows==2); end);
+	-- return at most 1 row whose id is greater than -1
+	db.User2:find({ _id = { gt = -1, limit = 1, skip == 1} }, function(err, rows) assert(#rows==1); echo("all tests succeed!") end);
 end
 
 
@@ -88,24 +147,25 @@ function TestInsertThroughputNoIndex()
 	local npl_profiler = commonlib.gettable("commonlib.npl_profiler");
 	npl_profiler.perf_reset();
 
-	npl_profiler.perf_begin("tableDB_BlockingAPILatency", true)
-	local total_times = 10000; -- a million non-indexed insert operation
-	local max_jobs = 10; -- concurrent jobs count
+	npl_profiler.perf_begin("tableDB_InsertThroughputNoIndex", true)
+	local total_times = 1000000; -- a million non-indexed insert operation
+	local max_jobs = 1000; -- concurrent jobs count
 	NPL.load("(gl)script/ide/System/Concurrent/Parallel.lua");
 	local Parallel = commonlib.gettable("System.Concurrent.Parallel");
 	local p = Parallel:new():init()
+
 	p:RunManyTimes(function(count)
 		db.insertNoIndex:insertOne(nil, {count=count, data=math.random()}, function(err, data)
 			if(err) then
 				-- echo({err, data});
 			end
+			p:Next();
 		end)
-		p:Next();
 	end, total_times, max_jobs):OnFinished(function(total)
-		npl_profiler.perf_end("tableDB_BlockingAPILatency", true)
-		log(commonlib.serialize(npl_profiler.perf_get(), true));			
+		npl_profiler.perf_end("tableDB_InsertThroughputNoIndex", true)
+		log(commonlib.serialize(npl_profiler.perf_get(), true));		
+		echo({"finished",total})	
 	end);
-	-- db.insertNoIndex:close();
 end
 
 function TestPerformance()
@@ -118,15 +178,15 @@ function TestPerformance()
 	
 	-- how many times for each CRUD operations.
 	local nTimes = 10000; 
-	local max_jobs = 1000; -- concurrent jobs count
+	local max_jobs = 100; -- concurrent jobs count
 	local insertFlush, testRoundTrip, randomCRUD, findMany;
 	
 	-- this will start both db client and db server if not.
 	local db = TableDatabase:new():connect("temp/test_raft_database/");
 
 	-- this not necessary now, but put here as an example.
-	db.User:exec({QueueSize=10001}, function(err, data) end);
-	db.User:close()
+	-- db.User:exec({QueueSize=10001}, function(err, data) end);
+	-- db.User:close()
 
 	-- use at most 200MB memory, instead of the default 2MB
 	-- db.User:exec({CacheSize=-200000}, function(err, data) end);
@@ -146,7 +206,7 @@ function TestPerformance()
 			end);
 		end);
   end);
-	db.PerfTest:close()
+	-- db.PerfTest:close()
     
 	local lastTime = ParaGlobal.timeGetTime();
 	local function CheckTickLog(...)
@@ -251,7 +311,7 @@ function TestBulkOperations()
 	npl_profiler.perf_begin("TestBulkOperations", true)
 
 	local total_records = 10000;
-	local chunk_size = 1;
+	local chunk_size = 100;
 
 	local count = 0;
 	local function DoNextChunk()
