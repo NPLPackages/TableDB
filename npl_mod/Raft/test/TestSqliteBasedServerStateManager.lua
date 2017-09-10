@@ -21,8 +21,8 @@ NPL.load("(gl)npl_mod/Raft/SqliteBasedServerStateManager.lua");
 local SqliteBasedServerStateManager = commonlib.gettable("Raft.SqliteBasedServerStateManager");
 
 
-local MAX_LONG = 2 ^ 63 - 1;
-local MAX_INT = 2 ^ 31 - 1;
+local MAX_LONG = 2 ^ 13 - 1;
+local MAX_INT = 2 ^ 13 - 1;
 
 local removeTestFiles, randomConfiguration, assertConfigEquals;
 
