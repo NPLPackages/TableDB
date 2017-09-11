@@ -65,7 +65,7 @@ end
 local sqlHandlerFile = format("(%s)npl_mod/TableDB/SQLHandler.lua", threadName);
 NPL.activate(sqlHandlerFile, {start = true, baseDir = baseDir, useFile = true});
 
-logger.info("app arg:"..baseDir..mpPort..raftMode)
+logger.info("app arg:"..baseDir.. " " ..raftMode)
 
 local stateManager = ServerStateManager:new(baseDir);
 local config = stateManager:loadClusterConfiguration();
@@ -113,10 +113,10 @@ local function executeAsClient()
 
     if clientMode == "appendEntries" then
       NPL.load("(gl)npl_mod/TableDB/test/test_TableDatabase.lua");
-      TestSQLOperations();
+      -- TestSQLOperations();
       -- TestInsertThroughputNoIndex()
       -- TestPerformance()
-      -- TestBulkOperations()
+      TestBulkOperations()
       -- TestTimeout()
       -- TestBlockingAPI()
       -- TestBlockingAPILatency()
