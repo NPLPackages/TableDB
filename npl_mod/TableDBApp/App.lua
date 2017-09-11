@@ -40,7 +40,7 @@ local logger = LoggerFactory.getLogger("App")
 
 local threadName = ParaEngine.GetAppCommandLineByParam("threadName", "main");
 local baseDir = ParaEngine.GetAppCommandLineByParam("baseDir", "");
-local mpPort = ParaEngine.GetAppCommandLineByParam("mpPort", "8090");
+-- local mpPort = ParaEngine.GetAppCommandLineByParam("mpPort", "8090");
 local raftMode = ParaEngine.GetAppCommandLineByParam("raftMode", "server");
 local clientMode = ParaEngine.GetAppCommandLineByParam("clientMode", "appendEntries");
 local serverId = tonumber(ParaEngine.GetAppCommandLineByParam("serverId", "5"));
@@ -67,7 +67,7 @@ end
 local sqlHandlerFile = format("(%s)npl_mod/TableDB/SQLHandler.lua", threadName);
 NPL.activate(sqlHandlerFile, {start = true, baseDir = baseDir, useFile = true});
 
-logger.info("app arg:"..baseDir..mpPort..raftMode)
+logger.info("app arg:"..baseDir.. " " ..raftMode)
 
 local stateManager = ServerStateManager:new(baseDir);
 local config = stateManager:loadClusterConfiguration();
@@ -115,10 +115,10 @@ local function executeAsClient()
 
     if clientMode == "appendEntries" then
       NPL.load("(gl)npl_mod/TableDB/test/test_TableDatabase.lua");
-      TestSQLOperations();
+      -- TestSQLOperations();
       -- TestInsertThroughputNoIndex()
       -- TestPerformance()
-      -- TestBulkOperations()
+      TestBulkOperations()
       -- TestTimeout()
       -- TestBlockingAPI()
       -- TestBlockingAPILatency()
