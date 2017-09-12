@@ -155,7 +155,7 @@ function SQLHandler:handle(data)
     -- a dedicated IOThread
     if raftLogEntryValue.query_type == "connect" then
         -- raftLogEntryValue.collection.db is nil when query_type is connect
-        -- we should create table.config.xml here and make the storageProvider to SqliteWALStore
+        -- we should create tabledb.config.xml here and make the storageProvider to SqliteWALStore
         self:createSqliteWALStoreConfig(raftLogEntryValue.query.rootFolder);
         self.db:connect(raftLogEntryValue.query.rootFolder, cbFunc);
     else
