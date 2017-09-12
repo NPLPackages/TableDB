@@ -33,9 +33,9 @@ local raftClient;
 RaftSqliteStore.name = "raft";
 RaftSqliteStore.thread_name = format("(%s)", __rts__:GetName());
 
-function RaftSqliteStore:createRaftClient(baseDir, host, port, id, threadName, rootFolder, userFile)
+function RaftSqliteStore:createRaftClient(baseDir, host, port, id, threadName, rootFolder, useFile)
   local ServerStateManager;
-  if userFile then
+  if useFile then
     NPL.load("(gl)npl_mod/Raft/FileBasedServerStateManager.lua");
     local FileBasedServerStateManager = commonlib.gettable("Raft.FileBasedServerStateManager");
     ServerStateManager = FileBasedServerStateManager;
