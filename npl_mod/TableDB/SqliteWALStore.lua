@@ -15,9 +15,13 @@ NPL.load("(gl)script/sqlite/sqlite3.lua");
 NPL.load("(gl)script/ide/System/Database/SqliteStore.lua");
 local SqliteStore = commonlib.gettable("System.Database.SqliteStore");
 local SqliteWALStore = commonlib.inherit(SqliteStore, commonlib.gettable("TableDB.SqliteWALStore"));
+local LoggerFactory = NPL.load("(gl)npl_mod/Raft/LoggerFactory.lua");
 
 local cbWALHandlerFile = "(%s)RPC/WALHandler.lua";
 local cb_thread = "raft"
+
+SqliteWALStore.logger = LoggerFactory.getLogger("SqliteWALStore");
+
 
 function SqliteWALStore:ctor()
 end
@@ -36,17 +40,20 @@ function SqliteWALStore:init(collection, init_args)
         }
         
         NPL.activate(self:GetReplyAddress(cb_thread or "main"), msg);
-        
-        -- print(format("wal_page_hook: pgSize %d, pgno %d, nTruncate %d, isCommit %d", #page_data, pgno, nTruncate, isCommit))
+        self.logger.trace("pgSize %d, pgno %d, nTruncate %d, isCommit %d", #page_data, pgno, nTruncate, isCommit);
         return 1
     end)
-    
+
     return self;
 end
 
 function SqliteWALStore:injectWALPage(query, callbackFunc)
-    self._db:wal_inject_page(query.page_data, query.pgno, query.nTruncate, query.isCommit)
-    -- print(format("injected %d", query.logIndex));
+    local r = self._db:wal_inject_page(query.page_data, query.pgno, query.nTruncate, query.isCommit)
+    if r ~= 0 then
+      self.logger.error("%d inject failed", query.logIndex);
+    else
+      self.logger.trace("injected %d", query.logIndex);
+    end
     if (not self.checkpoint_timer:IsEnabled()) then
         self.checkpoint_timer:Change(self.AutoCheckPointInterval, self.AutoCheckPointInterval);
     end
