@@ -25,6 +25,7 @@ local LogValueType = NPL.load("(gl)npl_mod/Raft/LogValueType.lua");
 local WALSequentialLogStore = commonlib.gettable("Raft.WALSequentialLogStore");
 
 local BUFFER_SIZE = 1000;
+local LOG_START_INDEX_FILE = "store.sti";
 
 
 function WALSequentialLogStore:new(logContainer)
@@ -39,8 +40,17 @@ function WALSequentialLogStore:new(logContainer)
     };
     setmetatable(o, self);
     
-    -- always start from 1, 0, emptyBuffer
-    o.startIndex = 1;
+    o.startIndexFileName = o.logContainer..LOG_START_INDEX_FILE
+    o.startIndexFile = ParaIO.open(o.startIndexFileName, "rw");
+    assert(o.startIndexFile:IsValid(), "startIndex cannot open");
+    local startIndexFileSize = o.startIndexFile:GetFileSize()
+    if(startIndexFileSize == 0) then
+        o.startIndex = 1;
+        o.startIndexFile:WriteDouble(o.startIndex);
+    else
+        o.startIndex = o.startIndexFile:ReadDouble();
+    end
+
     o.entriesInStore = 0;
     o.buffer = WALLogBuffer:new(o.startIndex, o.bufferSize);
     
@@ -309,16 +319,17 @@ function WALSequentialLogStore:compact(lastLogIndex)
         return;
     end
     
-    local lastIndex = lastLogIndex - self.startIndex;
     if (lastLogIndex >= self:getFirstAvailableIndex() - 1) then
-        self.startIndex = lastLogIndex + 1;
         self.entriesInStore = 0;
-        self.buffer:reset(lastLogIndex + 1);
     else
         self.entriesInStore = self.entriesInStore - (lastLogIndex - self.startIndex + 1);
-        self.startIndex = lastLogIndex + 1;
-        self.buffer:reset(self.startIndex);
     end
+
+    self.startIndex = lastLogIndex + 1;
+    self.buffer:reset(self.startIndex);
+    -- save the starting index
+    self.startIndexFile:seek(0);
+    self.startIndexFile:WriteDouble(self.startIndex);
     
     return true;
 end
@@ -331,4 +342,5 @@ end
 
 function WALSequentialLogStore:close()
 -- self.db.raftLog:close();
+    self.startIndexFile:close();
 end
