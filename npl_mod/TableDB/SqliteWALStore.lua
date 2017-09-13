@@ -50,7 +50,7 @@ end
 function SqliteWALStore:injectWALPage(query, callbackFunc)
     local r = self._db:wal_inject_page(query.page_data, query.pgno, query.nTruncate, query.isCommit)
     if r ~= 0 then
-      self.logger.error("%d inject failed", query.logIndex);
+      self.logger.error("%d inject failed, %d", query.logIndex, r);
     else
       self.logger.trace("injected %d", query.logIndex);
     end
