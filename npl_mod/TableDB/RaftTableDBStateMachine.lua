@@ -79,9 +79,7 @@ function RaftTableDBStateMachine:start(raftMessageSender)
     self.messageSender = raftMessageSender;
     
     -- for init connect
-    Rpc:new():init("RaftRequestRPCInit", function (...)
-        print("RaftRequestRPCInit callback")
-    end);
+    Rpc:new():init("RaftRequestRPCInit");
     RaftRequestRPCInit.remoteThread = self.threadName;
     RaftRequestRPCInit:MakePublic();
 
