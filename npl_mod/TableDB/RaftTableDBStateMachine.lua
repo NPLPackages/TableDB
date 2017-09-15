@@ -94,12 +94,12 @@ function RaftTableDBStateMachine:start(raftMessageSender)
     
     self.db = TableDatabase:new();
     -- start tdb
-    NPL.load("(gl)script/ide/System/Database/IORequest.lua");
-    local IORequest = commonlib.gettable("System.Database.IORequest");
-    IORequest:Send("init_tdb", self.db);
+    -- NPL.load("(gl)script/ide/System/Database/IORequest.lua");
+    -- local IORequest = commonlib.gettable("System.Database.IORequest");
+    -- IORequest:Send("init_tdb", self.db);
     
-    self.snapshotThread = "Snapshot";
-    NPL.CreateRuntimeState(self.snapshotThread, 0):Start();
+    -- self.snapshotThread = "Snapshot";
+    -- NPL.CreateRuntimeState(self.snapshotThread, 0):Start();
 --     local this = self
 --     Rpc:new():init("SnapshotRPC", function(self, msg)
 --             this.logger.info(util.table_tostring(msg))
@@ -155,6 +155,12 @@ function RaftTableDBStateMachine:commit(logIndex, data)
             self.logger.info("connected to %s", data.rootFolder);
         end);
     end
+
+    -- if self.db:GetRootFolder() == "temp/TableDatabase/" then
+    --     self.db:connect(data.rootFolder, function (...)
+    --         self.logger.info("connected to %s", data.rootFolder);
+    --     end);
+    -- end
 
     --add to collections
     if not self.collections[data.collectionName] then
