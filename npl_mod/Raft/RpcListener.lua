@@ -69,8 +69,9 @@ function RpcListener:startListening(messageHandler)
 	att:SetField("IdleTimeout", true);
 	att:SetField("IdleTimeoutPeriod", 1200000);
     __rts__:SetMsgQueueSize(50000);
-    -- port is need to be string here??
-    NPL.StartNetServer(self.ip, tostring(self.port));
+    -- for docker
+    -- NPL.StartNetServer("0.0.0.0", tostring(self.port));
+    NPL.StartNetServer(self.ip, self.port);
     
     for _, server in ipairs(self.servers) do
         Rutils.initConnect(self.thisServerId, server)

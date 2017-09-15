@@ -9,7 +9,7 @@ for %%i in (1 2 3) do (
     copy /Y init-cluster.json "%curdir%\server%%i\cluster.json"
     echo server.id=%%i> "%curdir%\server%%i\config.properties"
     echo start server%%i
-    start "server%%i" /D "%curdir%\server%%i" npl -d bootstrapper="npl_mod/TableDBApp/App.lua" servermode="true" dev="../../" raftMode="server" threadName="rtdb" baseDir="" mpPort="800%%i"
+    start "server%%i" /D "%curdir%\server%%i" npl -d bootstrapper="npl_mod/TableDBApp/App.lua" servermode="true" dev="../../" raftMode="server" threadName="rtdb" baseDir="" REM mpPort="800%%i"
 )
 
 goto done

@@ -16,7 +16,6 @@ NPL.load("(gl)npl_mod/TableDBApp/MessagePrinter.lua");
 NPL.load("(gl)npl_mod/Raft/RaftClient.lua");
 NPL.load("(gl)script/ide/socket/url.lua");
 NPL.load("(gl)npl_mod/Raft/RaftConsensus.lua");
-NPL.load("(gl)npl_mod/Raft/RpcClient.lua");
 NPL.load("(gl)npl_mod/Raft/ClusterServer.lua");
 NPL.load("(gl)npl_mod/TableDB/RaftTableDBStateMachine.lua");
 
@@ -29,7 +28,6 @@ local RaftContext = commonlib.gettable("Raft.RaftContext");
 local RpcListener = commonlib.gettable("Raft.RpcListener");
 local url = commonlib.gettable("commonlib.socket.url")
 local RaftConsensus = commonlib.gettable("Raft.RaftConsensus");
-local RpcClient = commonlib.gettable("Raft.RpcClient");
 local MessagePrinter = commonlib.gettable("TableDBApp.MessagePrinter");
 local util = commonlib.gettable("System.Compiler.lib.util")
 local LoggerFactory = NPL.load("(gl)npl_mod/Raft/LoggerFactory.lua");
@@ -39,7 +37,7 @@ local logger = LoggerFactory.getLogger("App")
 
 local threadName = ParaEngine.GetAppCommandLineByParam("threadName", "main");
 local baseDir = ParaEngine.GetAppCommandLineByParam("baseDir", "");
-local mpPort = ParaEngine.GetAppCommandLineByParam("mpPort", "8090");
+-- local mpPort = ParaEngine.GetAppCommandLineByParam("mpPort", "8090");
 local raftMode = ParaEngine.GetAppCommandLineByParam("raftMode", "server");
 local clientMode = ParaEngine.GetAppCommandLineByParam("clientMode", "appendEntries");
 local serverId = tonumber(ParaEngine.GetAppCommandLineByParam("serverId", "5"));
@@ -48,7 +46,7 @@ if threadName ~= "main" then
     NPL.CreateRuntimeState(threadName, 0):Start();
 end
 
-logger.info("app arg:"..baseDir..mpPort..raftMode)
+logger.info("app arg:"..baseDir.." "..raftMode)
 
 local stateManager = ServerStateManager:new(baseDir);
 local config = stateManager:loadClusterConfiguration();
