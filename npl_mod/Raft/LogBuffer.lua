@@ -3,7 +3,7 @@ Title:
 Author: liuluheng
 Date: 2017.03.25
 Desc: 
-the LogBuffer is startIndex based
+    the LogBuffer is startIndex based
 ------------------------------------------------------------
 NPL.load("(gl)npl_mod/Raft/LogBuffer.lua");
 local LogBuffer = commonlib.gettable("Raft.LogBuffer");

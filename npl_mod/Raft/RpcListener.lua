@@ -57,10 +57,12 @@ function RpcListener:startListening(messageHandler)
     -- use Rpc for incoming Request message
     local this = self
     Rpc:new():init("RaftRequestRPC", function(self, msg) 
-        this.logger.trace("RaftRequestRPC:%s",util.table_tostring(msg));
+        -- this.logger.trace("RaftRequestRPC:%s",util.table_tostring(msg));
         msg = messageHandler:processRequest(msg)
         return msg;
     end)
+    RaftRequestRPC.remoteThread = self.threadName;
+    RaftRequestRPC:MakePublic();
 
 	-- set NPL attributes before starting the server. 
 	local att = NPL.GetAttributeObject();
@@ -70,14 +72,12 @@ function RpcListener:startListening(messageHandler)
 	att:SetField("IdleTimeoutPeriod", 1200000);
     __rts__:SetMsgQueueSize(50000);
     -- for docker
-    -- NPL.StartNetServer("0.0.0.0", tostring(self.port));
+    -- NPL.StartNetServer("0.0.0.0", self.port);
     NPL.StartNetServer(self.ip, self.port);
     
     for _, server in ipairs(self.servers) do
         Rutils.initConnect(self.thisServerId, server)
     end
 
-    RaftRequestRPC.remoteThread = self.threadName;
-    RaftRequestRPC:MakePublic();
 
 end

@@ -40,7 +40,7 @@ NPL.load("(gl)npl_mod/Raft/Rutils.lua");
 local Rutils = commonlib.gettable("Raft.Rutils");
 
 local RaftServer = commonlib.gettable("Raft.RaftServer");
-
+local WALHandlerFile = "RPC/WALHandler.lua";
 
 local DEFAULT_SNAPSHOT_SYNC_BLOCK_SIZE = 4 * 1024;
 
@@ -129,6 +129,9 @@ function RaftServer:new(ctx)
     --  });
     -- election timer
     o:restartElectionTimer()
+    
+    -- register WAL Page handler
+    NPL.this(function() o:handleWALRequest(msg) end, {filename = WALHandlerFile});
     
     o.logger.info(format("Server %d started", o.id))
     return o;
@@ -228,15 +231,15 @@ function RaftServer:handleAppendEntriesRequest(request)
         local logEntries = request.logEntries;
         local index = request.lastLogIndex + 1;
         local logIndex = 1;
-        self.logger.trace("initial->entry len:%d, index:%d, logIndex:%d", #logEntries, index, logIndex)
+        self.logger.trace("Init>%d entries, confirmedIndex:%d, entryIndex:%d", #logEntries, index, logIndex)
         while index < self.logStore:getFirstAvailableIndex() and
             logIndex < #logEntries + 1 --do
-             and
+            and
             logEntries[logIndex].term == self.logStore:getLogEntryAt(index).term do
             logIndex = logIndex + 1;
             index = index + 1;
         end
-        self.logger.trace("checked overlap->entry len:%d, index:%d, logIndex:%d", #logEntries, index, logIndex)
+        self.logger.trace("Olap>%d entries, confirmedIndex:%d, entryIndex:%d", #logEntries, index, logIndex)
         
         -- dealing with overwrites
         while (index < self.logStore:getFirstAvailableIndex() and logIndex < #logEntries + 1) do
@@ -250,27 +253,27 @@ function RaftServer:handleAppendEntriesRequest(request)
             
             self.logStore:writeAt(index, logEntries[logIndex]);
             if (logEntry.valueType == LogValueType.Application) then
-                self.stateMachine:preCommit(index, logEntry.value);
-            elseif (logEntry.valueType == LogValueType.Configuration) then
+                -- self.stateMachine:preCommit(index, logEntry.value);
+                elseif (logEntry.valueType == LogValueType.Configuration) then
                 self.logger.info("received a configuration change at index %d from leader", index);
                 self.configChanging = true;
-            end
-            
-            logIndex = logIndex + 1;
-            index = index + 1;
+                end
+                
+                logIndex = logIndex + 1;
+                index = index + 1;
         end
-        self.logger.trace("dealed overwrite->entry len:%d, index:%d, logIndex:%d", #logEntries, index, logIndex)
+        self.logger.trace("Oite>%d entries, confirmedIndex:%d, entryIndex:%d", #logEntries, index, logIndex)
         -- append the new log entries
         while (logIndex < #logEntries + 1) do
             local logEntry = logEntries[logIndex];
-            self.logger.trace("dealing with logEntry:" .. util.table_tostring(logEntry))
+            self.logger.trace("append entryIndex:" .. logIndex)
             logIndex = logIndex + 1;
             local indexForEntry = self.logStore:append(logEntry);
             if (logEntry.valueType == LogValueType.Configuration) then
                 self.logger.info("received a configuration change at index %d from leader", indexForEntry);
                 self.configChanging = true;
             elseif (logEntry.valueType == LogValueType.Application) then
-                self.stateMachine:preCommit(indexForEntry, logEntry.value);
+                -- self.stateMachine:preCommit(indexForEntry, logEntry.value);
             end
         end
     end
@@ -308,6 +311,14 @@ function RaftServer:handleVoteRequest(request)
     return response;
 end
 
+
+function RaftServer:handleWALRequest(request)
+    local logEntry = LogEntry:new(term, request)
+    local logIndex = self.logStore:append(logEntry)
+    self:requestAllAppendEntries();
+end
+
+
 function RaftServer:handleClientRequest(request)
     local response = {
         messageType = RaftMessageType.AppendEntriesResponse,
@@ -323,16 +334,18 @@ function RaftServer:handleClientRequest(request)
     
     local term = self.state.term
     
+    -- the leader executes the SQL, but the followers just append to WAL
     if request.logEntries and #request.logEntries > 0 then
         for i, v in ipairs(request.logEntries) do
-            local logEntry = LogEntry:new(term, v.value)
-            local logIndex = self.logStore:append(logEntry)
+            -- local logEntry = LogEntry:new(term, v.value)
+            -- local logIndex = self.logStore:append(logEntry)
             self.stateMachine:preCommit(logIndex, v.value);
         end
     end
     
-    self:requestAllAppendEntries();
+    -- self:requestAllAppendEntries();
     response.accepted = true;
+    -- nextIndex is not used in RaftClient for now
     response.nextIndex = self.logStore:getFirstAvailableIndex();
     return response
 end
@@ -424,7 +437,7 @@ end
 
 function RaftServer:requestAllAppendEntries()
     -- be careful with the table and sequence array !
-    self.logger.trace("#self.peers:%d, peers table size:%d", #self.peers, Rutils.table_size(self.peers))
+    -- self.logger.trace("#self.peers:%d, peers table size:%d", #self.peers, Rutils.table_size(self.peers))
     if (Rutils.table_size(self.peers) == 0) then
         self:commit(self.logStore:getFirstAvailableIndex() - 1);
         return;
@@ -511,7 +524,7 @@ function RaftServer:handleAppendEntriesResponse(response)
         -- majority is a float without math.ceil
         -- lua index start form 1
         local majority = math.ceil((Rutils.table_size(self.peers) + 1) / 2);
-        self.logger.trace("total server num:%d, major num:%d", Rutils.table_size(self.peers) + 1, majority)
+        self.logger.trace("total server:%d, major:%d", Rutils.table_size(self.peers) + 1, majority)
         self:commit(matchedIndexes[majority]);
         needToCatchup = peer:clearPendingCommit() or response.nextIndex < self.logStore:getFirstAvailableIndex();
     else
@@ -528,7 +541,7 @@ function RaftServer:handleAppendEntriesResponse(response)
     -- Try to match up the logs for this peer
     if (self.role == ServerRole.Leader and needToCatchup) then
         self.logger.info("server %d needToCatchup %d < %d", peer:getId(), peer.nextLogIndex, self.logStore:getFirstAvailableIndex())
-        -- self:requestAppendEntries(peer);
+    -- self:requestAppendEntries(peer);
     end
 end
 
@@ -574,7 +587,7 @@ function RaftServer:handleInstallSnapshotResponse(response)
             peer.snapshotSyncContext = nil;
         end
         self.logger.info("peer (%d) declines (%d) to install the snapshot (%d), may retry",
-                          peer:getId(), peer.nextLogIndex, self.logStore:getStartIndex());
+            peer:getId(), peer.nextLogIndex, self.logStore:getStartIndex());
     end
     
     -- This may not be a leader anymore, such as the response was sent out long time ago
@@ -710,7 +723,7 @@ function RaftServer:updateTerm(term)
 end
 
 function RaftServer:commit(targetIndex)
-    self.logger.trace("committing..targetIndex:%d, quickCommitIndex:%d", targetIndex, self.quickCommitIndex)
+    self.logger.trace("commit index:%d, quickCommitIndex:%d", targetIndex, self.quickCommitIndex)
     if (targetIndex > self.quickCommitIndex) then
         self.quickCommitIndex = targetIndex;
         
@@ -810,7 +823,7 @@ function RaftServer:createAppendEntriesRequest(peer)
     local currentNextIndex = self.logStore:getFirstAvailableIndex();
     local commitIndex = self.quickCommitIndex;
     local term = self.state.term;
-
+    
     if (peer.nextLogIndex == 0) then
         peer.nextLogIndex = currentNextIndex;
     end
@@ -999,7 +1012,7 @@ function RaftServer:handleInstallSnapshotRequest(request)
     -- if (snapshotSyncRequest.snapshot.lastLogIndex <= self.quickCommitIndex) then
     if (snapshotSyncRequest.snapshot.lastLogIndex <= self.logStore:getFirstAvailableIndex()) then
         self.logger.error("Received a snapshot (%d) which is older than this (%d) server (%d, %d)",
-                           snapshotSyncRequest.snapshot.lastLogIndex, self.id, self.quickCommitIndex, self.logStore:getFirstAvailableIndex());
+            snapshotSyncRequest.snapshot.lastLogIndex, self.id, self.quickCommitIndex, self.logStore:getFirstAvailableIndex());
         response.nextIndex = self.logStore:getFirstAvailableIndex();
         response.accepted = false;
         return response;
@@ -1523,7 +1536,7 @@ function RaftServer:createSyncSnapshotRequest(peer, lastLogIndex, term, commitIn
     local blockSize = self:getSnapshotSyncBlockSize();
     local expectedSize = (sizeLeft > blockSize and blockSize) or sizeLeft;
     local data = {}
-
+    
     local sizeRead, error = self.stateMachine:readSnapshotData(snapshot, currentCollectionName, offset, data, expectedSize);
     if error then
         -- if there is i/o error, no reason to continue
@@ -1573,13 +1586,13 @@ end
 -- TODO: resemble IOThread in TableDB ? this may cause synchronize issue
 function real_commit(server)
     local currentCommitIndex = server.state.commitIndex;
-    if server.quickCommitIndex <= currentCommitIndex or 
-       currentCommitIndex >= server.logStore:getFirstAvailableIndex() - 1 then
-        return ;
+    if server.quickCommitIndex <= currentCommitIndex or
+        currentCommitIndex >= server.logStore:getFirstAvailableIndex() - 1 then
+        return;
     end
     while (currentCommitIndex < server.quickCommitIndex and currentCommitIndex < server.logStore:getFirstAvailableIndex() - 1) do
         currentCommitIndex = currentCommitIndex + 1;
-        server.logger.trace("real_commit...currentCommitIndex:%d, quickCommitIndex:%d, logStore:FirstAvailableIndex:%d",
+        server.logger.trace("real_commit>currentCommitIndex:%d, quickCommitIndex:%d, FirstAvailableIndex:%d",
             currentCommitIndex, server.quickCommitIndex, server.logStore:getFirstAvailableIndex())
         local logEntry = server.logStore:getLogEntryAt(currentCommitIndex);
         
@@ -1591,7 +1604,11 @@ function real_commit(server)
             -- do nothing
             server.logger.error("committed an empty LogEntry at %d !!", currentCommitIndex)
         elseif (logEntry.valueType == LogValueType.Application) then
-            server.stateMachine:commit(currentCommitIndex, logEntry.value);
+            if server.role ~= ServerRole.Leader then
+                -- only commit follower, leader committed in preCommit
+                server.stateMachine:commit(currentCommitIndex, logEntry.value);
+            end
+        
         elseif (logEntry.valueType == LogValueType.Configuration) then
             local newConfig = ClusterConfiguration:fromBytes(logEntry.value);
             server.logger.info("configuration at index %d is committed", newConfig.logIndex);
@@ -1617,7 +1634,7 @@ end
 
 local function activate()
     if (msg and msg.server) then
-    end
+        end
 end
 
 NPL.this(activate);
