@@ -1,15 +1,8 @@
 --[[
-Title: base class for store
-Author(s): LiXizhi, 
-Date: 2016/5/11
-Desc: Derived class should implement at least following functions for the database store provider.
-virtual functions:
-  findOne
-  find
-  deleteOne
-  updateOne
-  insertOne
-  removeIndex
+Title: RaftSqliteStore
+Author(s): liuluheng, 
+Date: 2017/7/31
+Desc:
 
 use the lib:
 ------------------------------------------------------------
@@ -24,8 +17,7 @@ NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 local util = commonlib.gettable("System.Compiler.lib.util")
 NPL.load("(gl)npl_mod/TableDB/RaftLogEntryValue.lua");
 local RaftLogEntryValue = commonlib.gettable("TableDB.RaftLogEntryValue");
-NPL.load("(gl)npl_mod/Raft/ServerStateManager.lua");
-local ServerStateManager = commonlib.gettable("Raft.ServerStateManager");
+
 NPL.load("(gl)npl_mod/TableDB/RaftTableDBStateMachine.lua");
 local RaftTableDBStateMachine = commonlib.gettable("TableDB.RaftTableDBStateMachine");
 NPL.load("(gl)npl_mod/Raft/RaftClient.lua");
@@ -41,7 +33,18 @@ local raftClient;
 RaftSqliteStore.name = "raft";
 RaftSqliteStore.thread_name = format("(%s)", __rts__:GetName());
 
-function RaftSqliteStore:createRaftClient(baseDir, host, port, id, threadName)
+function RaftSqliteStore:createRaftClient(baseDir, host, port, id, threadName, rootFolder, useFile)
+  local ServerStateManager;
+  if useFile then
+    NPL.load("(gl)npl_mod/Raft/FileBasedServerStateManager.lua");
+    local FileBasedServerStateManager = commonlib.gettable("Raft.FileBasedServerStateManager");
+    ServerStateManager = FileBasedServerStateManager;
+  else
+    NPL.load("(gl)npl_mod/Raft/SqliteBasedServerStateManager.lua");
+    local SqliteBasedServerStateManager = commonlib.gettable("Raft.SqliteBasedServerStateManager");
+    ServerStateManager = SqliteBasedServerStateManager;
+  end
+
   local baseDir = baseDir or "./"
   local stateManager = ServerStateManager:new(baseDir);
   local config = stateManager:loadClusterConfiguration();
@@ -63,7 +66,7 @@ function RaftSqliteStore:createRaftClient(baseDir, host, port, id, threadName)
   rtdb:start2(self)
   raftClient = RaftClient:new(localAddress, RTDBRequestRPC, config, LoggerFactory)
 
-  self:connect(self, {rootFolder = "dummyDatabase/"});
+  self:connect(self, {rootFolder = rootFolder});
 
 
 end
@@ -452,4 +455,9 @@ end
  
 function RaftSqliteStore:makeEmpty(query, callbackFunc)
     return self:Send("makeEmpty", query, callbackFunc)
+end
+
+
+function RaftSqliteStore:Close()
+    return self:Send("close", {}, function() end);
 end

@@ -85,9 +85,19 @@ function Rpc:SetPublicFile(filename)
   filename = filename or format("Rpc/%s.lua", self.fullname);
   self.filename = filename;
 
-  NPL.this(function() 
-    self:OnActivated(msg);
-  end, {filename = self.filename});
+  if self.filename == "RaftRequestRPC" then
+    NPL.this(function() 
+      self:OnActivated(msg);
+    end, {PreemptiveCount = 2000, MsgQueueSize=50000, filename = self.filename});
+  elseif self.filename == "RTDBRequestRPC" then
+    NPL.this(function() 
+      self:OnActivated(msg);
+    end, {PreemptiveCount = 1000, filename = self.filename}); 
+  else
+    NPL.this(function() 
+        self:OnActivated(msg);
+      end, {filename = self.filename});
+  end
 
   self.logger.info("%s installed to file %s", self.fullname, self.filename);
 end
@@ -135,6 +145,7 @@ function Rpc:OnActivated(msg)
           end
           NPL.accept(msg.tid, remoteAddress.id or "default_user");
           msg.nid = remoteAddress.id or "default_user"
+          self.logger.info("connection %s is established and accepted as %s, a client request", msg.tid, msg.nid);
         else
           -- this must be Raft internal message exclude the above 3
           if msg.msg.source then
@@ -143,11 +154,13 @@ function Rpc:OnActivated(msg)
           self.logger.trace("recv msg %s", util.table_tostring(msg))
           NPL.accept(msg.tid, remoteAddress or "default_user");
           msg.nid = remoteAddress or "default_user"
+          self.logger.info("connection %s is established and accepted as %s, raft internal request", msg.tid, msg.nid);
         end
      else
        if msg.name then
           -- for client rsp in state machine
           NPL.accept(msg.tid, msg.tid);
+          self.logger.info("connection %s is established and accepted as %s, client response", msg.tid, msg.nid);
        else
           self.logger.info("who r u? msg:%s", util.table_tostring(msg))
           NPL.reject(msg.tid);
@@ -185,7 +198,7 @@ function Rpc:OnActivated(msg)
         callbackId = msg.callbackId
       }
       -- if type(self.localAddress) == "table" then
-        self.logger.trace("activate on %s, msg:%s", vFileId, util.table_tostring(response))
+        -- self.logger.trace("activate on %s, msg:%s", vFileId, util.table_tostring(response))
       -- end
       local activate_result = NPL.activate(vFileId, response)
 
@@ -295,7 +308,7 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
     remoteAddress = self.localAddress,
   }
   -- if type(self.localAddress) == "table" then
-    self.logger.trace("activate on %s, msg:%s", vFileId, util.table_tostring(msg))
+    -- self.logger.trace("activate on %s, msg:%s", vFileId, util.table_tostring(msg))
   -- end
   local activate_result = NPL.activate(vFileId, msg);
   -- handle memory leak

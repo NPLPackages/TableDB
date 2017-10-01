@@ -35,10 +35,8 @@ local RaftTableDBStateMachine = commonlib.gettable("TableDB.RaftTableDBStateMach
 -- for function not in class
 local logger = LoggerFactory.getLogger("RaftTableDBStateMachine");
 
-function RaftTableDBStateMachine:new(baseDir, ip, listeningPort, threadName)
+function RaftTableDBStateMachine:new(baseDir, threadName)
     local o = {
-        ip = ip,
-        port = listeningPort,
         logger = LoggerFactory.getLogger("RaftTableDBStateMachine"),
         snapshotStore = baseDir .. "snapshot/",
         commitIndex = 0,
@@ -56,6 +54,7 @@ function RaftTableDBStateMachine:new(baseDir, ip, listeningPort, threadName)
     if not ParaIO.CreateDirectory(o.snapshotStore) then
         o.logger.error("%s dir create error", o.snapshotStore)
     end
+
     return o;
 end
 
@@ -93,12 +92,12 @@ function RaftTableDBStateMachine:start(raftMessageSender)
     
     self.db = TableDatabase:new();
     -- start tdb
-    NPL.load("(gl)script/ide/System/Database/IORequest.lua");
-    local IORequest = commonlib.gettable("System.Database.IORequest");
-    IORequest:Send("init_tdb", self.db);
+    -- NPL.load("(gl)script/ide/System/Database/IORequest.lua");
+    -- local IORequest = commonlib.gettable("System.Database.IORequest");
+    -- IORequest:Send("init_tdb", self.db);
     
-    self.snapshotThread = "Snapshot";
-    NPL.CreateRuntimeState(self.snapshotThread, 0):Start();
+    -- self.snapshotThread = "Snapshot";
+    -- NPL.CreateRuntimeState(self.snapshotThread, 0):Start();
 --     local this = self
 --     Rpc:new():init("SnapshotRPC", function(self, msg)
 --             this.logger.info(util.table_tostring(msg))
@@ -115,9 +114,8 @@ end
 
 --[[
 * Starts the client side TableDB, called by RaftConsensus, RaftConsensus will pass an instance of
-* RaftMessageSender for the state machine to send logs to cluster, so that all state machines
-* in the same cluster could be in synced
-* @param raftMessageSender
+* RaftSqliteStore for client to send logs to cluster
+* @param RaftSqliteStore
 ]]
 --
 function RaftTableDBStateMachine:start2(RaftSqliteStore)
@@ -145,10 +143,59 @@ end
 ]]
 --
 function RaftTableDBStateMachine:commit(logIndex, data)
+    self.logger.info("commit:%d", logIndex);
+    data.logIndex = logIndex;
+    
+	local config_path = data.rootFolder .. "/tabledb.config.xml";
+    if not ParaIO.DoesFileExist(config_path) then
+        self:createSqliteWALStoreConfig(data.rootFolder);
+        self.db:connect(data.rootFolder, function (...)
+            self.logger.info("connected to %s", data.rootFolder);
+        end);
+    end
+
+    -- if self.db:GetRootFolder() == "temp/TableDatabase/" then
+    --     self.db:connect(data.rootFolder, function (...)
+    --         self.logger.info("connected to %s", data.rootFolder);
+    --     end);
+    -- end
+
+    --add to collections
+    if not self.collections[data.collectionName] then
+        local collectionPath = data.rootFolder .. data.collectionName;
+        self.logger.trace("add collection %s->%s", data.collectionName, collectionPath)
+        self.collections[data.collectionName] = collectionPath;
+    end
+
+    local collection = self.db[data.collectionName];
+    collection:injectWALPage(data);
+
+    self.commitIndex = logIndex;
+end
+
+--[[
+* Rollback a preCommit item at index {@code logIndex}
+* @param logIndex log index to be rolled back
+* @param data
+]]
+--
+function RaftTableDBStateMachine:rollback(logIndex, data)
+-- need more thought here
+-- rollback on last root pair
+-- self._db:exec("ROLLBACK");
+end
+
+--[[
+* PreCommit a log entry at log index {@code logIndex}
+* @param logIndex the log index to commit
+* @param data
+]]
+--
+function RaftTableDBStateMachine:preCommit(logIndex, data)
     -- data is logEntry.value
     local raftLogEntryValue = RaftLogEntryValue:fromBytes(data);
 
-    self.logger.info("commit:%s", util.table_tostring(raftLogEntryValue))
+    self.logger.info("preCommit:%s", util.table_tostring(raftLogEntryValue))
 
     local this = self;
     local cbFunc = function(err, data, re_exec)
@@ -177,12 +224,15 @@ function RaftTableDBStateMachine:commit(logIndex, data)
     
     -- a dedicated IOThread
     if raftLogEntryValue.query_type == "connect" then
-        -- self.db:connect(raftLogEntryValue.query.rootFolder, cbFunc);
+        -- raftLogEntryValue.collection.db is nil when query_type is connect
+        -- we should create table.config.xml here and make the storageProvider to SqliteWALStore
+        self:createSqliteWALStoreConfig(raftLogEntryValue.query.rootFolder);
+        self.db:connect(raftLogEntryValue.query.rootFolder, cbFunc);
     else
         if raftLogEntryValue.enableSyncMode then
             self.db:EnableSyncMode(true);
         end
-        self.db:connect(raftLogEntryValue.collection.db);
+        -- self.db:connect(raftLogEntryValue.collection.db);
         local collection = self.db[raftLogEntryValue.collection.name];
         
         --add to collections
@@ -217,31 +267,6 @@ function RaftTableDBStateMachine:commit(logIndex, data)
 end
 
 --[[
-* Rollback a preCommit item at index {@code logIndex}
-* @param logIndex log index to be rolled back
-* @param data
-]]
---
-function RaftTableDBStateMachine:rollback(logIndex, data)
--- need more thought here
--- rollback on last root pair
--- self._db:exec("ROLLBACK");
-end
-
---[[
-* PreCommit a log entry at log index {@code logIndex}
-* @param logIndex the log index to commit
-* @param data
-]]
---
-function RaftTableDBStateMachine:preCommit(logIndex, data)
--- add cb_index to response
--- local raftLogEntryValue = RaftLogEntryValue:fromBytes(data);
--- self.messages[raftLogEntryValue.cb_index] = raftLogEntryValue;
--- self.pendingMessages[raftLogEntryValue.cb_index] = raftLogEntryValue;
-end
-
---[[
 * Save data for the snapshot
 * @param snapshot the snapshot information
 * @param offset offset of the data in the whole snapshot
@@ -270,9 +295,6 @@ end
 * Apply a snapshot to current state machine
 * @param snapshot
 * @return true if successfully applied, otherwise false
-
-
-how to handle multi collection snapshot data
 ]]
 --
 function RaftTableDBStateMachine:applySnapshot(snapshot)
@@ -289,13 +311,11 @@ end
 
 --[[
 * Read snapshot data at the specified offset to buffer and return bytes read
+* handle multi-collection snapshot data
 * @param snapshot the snapshot info
 * @param offset the offset of the snapshot data
 * @param buffer the buffer to be filled
 * @return bytes read
-
-
-how to handle multi collection snapshot data
 ]]
 --
 function RaftTableDBStateMachine:readSnapshotData(snapshot, currentCollectionName, offset, buffer, expectedSize)
@@ -314,10 +334,8 @@ end
 
 --[[
 * Read the last snapshot information
+* handle multi collection snapshot data
 * @return last snapshot information in the state machine or null if none
-
-
-how to handle multi collection snapshot data
 ]]
 --
 function RaftTableDBStateMachine:getLastSnapshot()
@@ -377,6 +395,7 @@ function RaftTableDBStateMachine:getLastSnapshot()
             collectionsNameSize[#collectionsNameSize + 1] = {name = name, size = fileSize};
         end
         if #collectionsNameSize > 0 then
+            -- make snapshot size to the first collection snapshot size
             return Snapshot:new(maxLastLogIndex, maxTerm, config, collectionsNameSize[1].size, collectionsNameSize)
         else
             -- Raft help us to create a collection based on the snapshot
@@ -388,9 +407,7 @@ end
 
 local do_backup;
 --[[
-* Create a snapshot data based on the snapshot information asynchronously
-* set the future to true if snapshot is successfully created, otherwise,
-* set it to false
+* Create a snapshot data based on the snapshot information (asynchronously)
 * @param snapshot the snapshot info
 * @return true if snapshot is created successfully, otherwise false
 ]]
@@ -445,21 +462,34 @@ end
 
 
 function RaftTableDBStateMachine:processMessage(message)
-    logger.info("Got message " .. util.table_tostring(message));
+    self.logger.info("Got message " .. util.table_tostring(message));
     return self.messageSender:appendEntries(message);
 end
 
 
-function RaftTableDBStateMachine:addMessage(message)
-    index = string.find(message, ':');
-    if (index == nil) then
-        return;
-    end
-    
-    key = string.sub(message, 1, index - 1);
-    self.messages[key] = message;
-    self.pendingMessages[key] = nil;
+function RaftTableDBStateMachine:createSqliteWALStoreConfig(rootFolder)
+	NPL.load("(gl)script/ide/commonlib.lua");
+	NPL.load("(gl)script/ide/LuaXML.lua");
+	local config = { 
+		name = "tabledb", 
+		{
+			name = "providers", 
+			{ name = "provider", attr = { name = "sqliteWAL", type = "TableDB.SqliteWALStore", file = "(g1)npl_mod/TableDB/SqliteWALStore.lua" }, "" }
+		},
+		{
+			name = "tables",
+			{ name = "table", attr = { provider = "sqliteWAL", name = "default" } }, 
+		}
+	}
 
+	local config_path = rootFolder .. "/tabledb.config.xml";
+	local str = commonlib.Lua2XmlString(config, true);
+	ParaIO.CreateDirectory(config_path);
+	local file = ParaIO.open(config_path, "w");
+	if (file:IsValid()) then
+		file:WriteString(str);
+		file:close();
+	end
 end
 
 
@@ -520,7 +550,7 @@ function do_backup(msg)
 
                 -- an error occured
                 if stepResult == ERR.BUSY or stepResult == ERR.LOCKED then
-                    -- we don't retry
+                    -- we don't retry, Raft will handle for us
                     -- move the previous snapshot to current logIndex?
                     -- local prevSnapshortName = getLatestSnapshotName(snapshotStore, name);
                     -- if prevSnapshortName == format("%s0-0_%s_s.db", snapshotStore, name) then

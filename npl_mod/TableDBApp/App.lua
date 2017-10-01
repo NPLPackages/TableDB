@@ -8,7 +8,9 @@ Desc:
 NPL.load("(gl)script/ide/commonlib.lua");
 NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 NPL.load("(gl)npl_mod/Raft/ServerState.lua");
-NPL.load("(gl)npl_mod/Raft/ServerStateManager.lua");
+
+
+
 NPL.load("(gl)npl_mod/Raft/RaftParameters.lua");
 NPL.load("(gl)npl_mod/Raft/RaftContext.lua");
 NPL.load("(gl)npl_mod/Raft/RpcListener.lua");
@@ -22,7 +24,6 @@ NPL.load("(gl)npl_mod/TableDB/RaftTableDBStateMachine.lua");
 local RaftTableDBStateMachine = commonlib.gettable("TableDB.RaftTableDBStateMachine");
 local ClusterServer = commonlib.gettable("Raft.ClusterServer");
 local RaftClient = commonlib.gettable("Raft.RaftClient");
-local ServerStateManager = commonlib.gettable("Raft.ServerStateManager");
 local RaftParameters = commonlib.gettable("Raft.RaftParameters");
 local RaftContext = commonlib.gettable("Raft.RaftContext");
 local RpcListener = commonlib.gettable("Raft.RpcListener");
@@ -38,6 +39,8 @@ local logger = LoggerFactory.getLogger("App")
 local threadName = ParaEngine.GetAppCommandLineByParam("threadName", "main");
 local baseDir = ParaEngine.GetAppCommandLineByParam("baseDir", "");
 -- local mpPort = ParaEngine.GetAppCommandLineByParam("mpPort", "8090");
+local listenIp = ParaEngine.GetAppCommandLineByParam("listenIp", "0.0.0.0");
+local listenPort = ParaEngine.GetAppCommandLineByParam("listenPort", nil);
 local raftMode = ParaEngine.GetAppCommandLineByParam("raftMode", "server");
 local clientMode = ParaEngine.GetAppCommandLineByParam("clientMode", "appendEntries");
 local serverId = tonumber(ParaEngine.GetAppCommandLineByParam("serverId", "5"));
@@ -46,7 +49,25 @@ if threadName ~= "main" then
     NPL.CreateRuntimeState(threadName, 0):Start();
 end
 
-logger.info("app arg:"..baseDir.." "..raftMode)
+local raftThreadName = "raft"
+NPL.CreateRuntimeState(raftThreadName, 0):Start();
+
+local useFileStateManager = true;
+local ServerStateManager;
+if useFileStateManager then
+  NPL.load("(gl)npl_mod/Raft/FileBasedServerStateManager.lua");
+  local FileBasedServerStateManager = commonlib.gettable("Raft.FileBasedServerStateManager");
+  ServerStateManager = FileBasedServerStateManager;
+else
+  NPL.load("(gl)npl_mod/Raft/SqliteBasedServerStateManager.lua");
+  local SqliteBasedServerStateManager = commonlib.gettable("Raft.SqliteBasedServerStateManager");
+  ServerStateManager = SqliteBasedServerStateManager;
+end
+
+local sqlHandlerFile = format("(%s)npl_mod/TableDB/SQLHandler.lua", threadName);
+NPL.activate(sqlHandlerFile, {start = true, baseDir = baseDir, useFile = true});
+
+logger.info("app arg:"..baseDir.. " " ..raftMode)
 
 local stateManager = ServerStateManager:new(baseDir);
 local config = stateManager:loadClusterConfiguration();
@@ -63,6 +84,9 @@ end
 local localEndpoint = thisServer.endpoint
 local parsed_url = url.parse(localEndpoint)
 logger.info("local state info"..util.table_tostring(parsed_url))
+if not listenPort then
+  listenPort = parsed_url.port
+end
 
 -- message printer
 -- local mp = MessagePrinter:new(baseDir, parsed_url.host, mpPort)
@@ -80,7 +104,7 @@ local function executeInServerMode(stateMachine)
     raftParameters.snapshotDistance = 5000;
     raftParameters.snapshotBlockSize = 0;
 
-    local rpcListener = RpcListener:new(parsed_url.host, parsed_url.port, thisServer.id, config.servers, threadName)
+    local rpcListener = RpcListener:new(listenIp, listenPort, thisServer.id, config.servers, raftThreadName)
     local context = RaftContext:new(stateManager,
                                     stateMachine,
                                     raftParameters,
@@ -114,7 +138,16 @@ local function executeAsClient()
     else
       NPL.load("(gl)npl_mod/TableDB/RaftSqliteStore.lua");
       local RaftSqliteStore = commonlib.gettable("TableDB.RaftSqliteStore");
-      RaftSqliteStore:createRaftClient()
+      local param = {
+        baseDir = "./",
+        host = "localhost",
+        port = "9004",
+        id = "server4:",
+        threadName = "rtdb",
+        rootFolder = "temp/test_raft_database",
+        useFile = useFileStateManager,
+      }
+      RaftSqliteStore:createRaftClient(param.baseDir, param.host, param.port, param.id, param.threadName, param.rootFolder, param.useFile);
       local raftClient = RaftSqliteStore:getRaftClient();
 
       if clientMode == "addServer" then
@@ -140,7 +173,7 @@ local function executeAsClient()
     end
 end
 
-local vfileID = format("(%s)npl_mod/TableDBApp/App.lua", threadName);
+local vfileID = format("(%s)npl_mod/TableDBApp/App.lua", raftThreadName);
 NPL.activate(vfileID, {start = true});
 
 
@@ -150,7 +183,7 @@ local function activate()
     started = true;
     -- raft stateMachine
     logger.info("start stateMachine");
-    local rtdb = RaftTableDBStateMachine:new(baseDir, parsed_url.host, mpPort, threadName)
+    local rtdb = RaftTableDBStateMachine:new(baseDir, raftThreadName)
     if raftMode:lower() == "server" then
       -- executeInServerMode(mp)
       executeInServerMode(rtdb)

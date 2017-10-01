@@ -103,10 +103,13 @@ function PeerServer:SendRequest(request, callbackFunc)
 		o:slowDownHeartbeating()
 
 		local err = {
-			string = string.format("activate %s from %s failed(%d), err:%s, msg:",
-				destination, source, activate_result or -1, err or "", util.table_tostring(request)),
+			string = string.format("%s->%s failed(%d):%s",
+				source, destination, activate_result or -1, err or ""),
 			request = request
 		}
+		if isAppendRequest then
+			err.string = err.string .. format(",commitIndex:%d", request.commitIndex);
+		end
 
 		if callbackFunc then
 			callbackFunc(msg, err)
