@@ -38,6 +38,8 @@ local logger = LoggerFactory.getLogger("App")
 local threadName = ParaEngine.GetAppCommandLineByParam("threadName", "main");
 local baseDir = ParaEngine.GetAppCommandLineByParam("baseDir", "");
 -- local mpPort = ParaEngine.GetAppCommandLineByParam("mpPort", "8090");
+local listenIp = ParaEngine.GetAppCommandLineByParam("listenIp", "0.0.0.0");
+local listenPort = ParaEngine.GetAppCommandLineByParam("listenPort", nil);
 local raftMode = ParaEngine.GetAppCommandLineByParam("raftMode", "server");
 local clientMode = ParaEngine.GetAppCommandLineByParam("clientMode", "appendEntries");
 local serverId = tonumber(ParaEngine.GetAppCommandLineByParam("serverId", "5"));
@@ -63,6 +65,9 @@ end
 local localEndpoint = thisServer.endpoint
 local parsed_url = url.parse(localEndpoint)
 logger.info("local state info"..util.table_tostring(parsed_url))
+if not listenPort then
+  listenPort = parsed_url.port
+end
 
 -- message printer
 -- local mp = MessagePrinter:new(baseDir, parsed_url.host, mpPort)
@@ -80,7 +85,7 @@ local function executeInServerMode(stateMachine)
     raftParameters.snapshotDistance = 5000;
     raftParameters.snapshotBlockSize = 0;
 
-    local rpcListener = RpcListener:new(parsed_url.host, parsed_url.port, thisServer.id, config.servers, threadName)
+    local rpcListener = RpcListener:new(listenIp, listenPort, thisServer.id, config.servers, threadName)
     local context = RaftContext:new(stateManager,
                                     stateMachine,
                                     raftParameters,
@@ -94,10 +99,10 @@ local function executeAsClient()
 
     if clientMode == "appendEntries" then
       NPL.load("(gl)npl_mod/TableDB/test/test_TableDatabase.lua");
-      -- TestSQLOperations();
+      TestSQLOperations();
       -- TestInsertThroughputNoIndex()
       -- TestPerformance()
-      TestBulkOperations()
+      -- TestBulkOperations()
       -- TestTimeout()
       -- TestBlockingAPI()
       -- TestBlockingAPILatency()
@@ -150,7 +155,7 @@ local function activate()
     started = true;
     -- raft stateMachine
     logger.info("start stateMachine");
-    local rtdb = RaftTableDBStateMachine:new(baseDir, parsed_url.host, mpPort, threadName)
+    local rtdb = RaftTableDBStateMachine:new(baseDir, threadName)
     if raftMode:lower() == "server" then
       -- executeInServerMode(mp)
       executeInServerMode(rtdb)

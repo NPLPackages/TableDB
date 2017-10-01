@@ -35,10 +35,8 @@ local RaftTableDBStateMachine = commonlib.gettable("TableDB.RaftTableDBStateMach
 -- for function not in class
 local logger = LoggerFactory.getLogger("RaftTableDBStateMachine");
 
-function RaftTableDBStateMachine:new(baseDir, ip, listeningPort, threadName)
+function RaftTableDBStateMachine:new(baseDir, threadName)
     local o = {
-        ip = ip,
-        port = listeningPort,
         logger = LoggerFactory.getLogger("RaftTableDBStateMachine"),
         snapshotStore = baseDir .. "snapshot/",
         commitIndex = 0,
