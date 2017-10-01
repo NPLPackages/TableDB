@@ -145,6 +145,7 @@ function Rpc:OnActivated(msg)
           end
           NPL.accept(msg.tid, remoteAddress.id or "default_user");
           msg.nid = remoteAddress.id or "default_user"
+          self.logger.info("connection %s is established and accepted as %s, a client request", msg.tid, msg.nid);
         else
           -- this must be Raft internal message exclude the above 3
           if msg.msg.source then
@@ -153,11 +154,13 @@ function Rpc:OnActivated(msg)
           self.logger.trace("recv msg %s", util.table_tostring(msg))
           NPL.accept(msg.tid, remoteAddress or "default_user");
           msg.nid = remoteAddress or "default_user"
+          self.logger.info("connection %s is established and accepted as %s, raft internal request", msg.tid, msg.nid);
         end
      else
        if msg.name then
           -- for client rsp in state machine
           NPL.accept(msg.tid, msg.tid);
+          self.logger.info("connection %s is established and accepted as %s, client response", msg.tid, msg.nid);
        else
           self.logger.info("who r u? msg:%s", util.table_tostring(msg))
           NPL.reject(msg.tid);
