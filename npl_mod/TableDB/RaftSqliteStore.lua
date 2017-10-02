@@ -56,7 +56,7 @@ function RaftSqliteStore:createRaftClient(baseDir, host, port, id, threadName)
     localAddress.id = format("server%s:", localAddress.id)
   end
 
-  rtdb = RaftTableDBStateMachine:new(baseDir, localAddress.host, localAddress.port, threadName)
+  rtdb = RaftTableDBStateMachine:new(baseDir, threadName)
   
   NPL.StartNetServer(localAddress.host, localAddress.port);
 
