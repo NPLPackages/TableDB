@@ -8,9 +8,6 @@ Desc:
 NPL.load("(gl)script/ide/commonlib.lua");
 NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
 NPL.load("(gl)npl_mod/Raft/ServerState.lua");
-
-
-
 NPL.load("(gl)npl_mod/Raft/RaftParameters.lua");
 NPL.load("(gl)npl_mod/Raft/RaftContext.lua");
 NPL.load("(gl)npl_mod/Raft/RpcListener.lua");
@@ -34,7 +31,6 @@ local util = commonlib.gettable("System.Compiler.lib.util")
 local LoggerFactory = NPL.load("(gl)npl_mod/Raft/LoggerFactory.lua");
 
 local logger = LoggerFactory.getLogger("App")
-
 
 local threadName = ParaEngine.GetAppCommandLineByParam("threadName", "main");
 local baseDir = ParaEngine.GetAppCommandLineByParam("baseDir", "");
@@ -118,10 +114,10 @@ local function executeAsClient()
 
     if clientMode == "appendEntries" then
       NPL.load("(gl)npl_mod/TableDB/test/test_TableDatabase.lua");
-      -- TestSQLOperations();
+      TestSQLOperations();
       -- TestInsertThroughputNoIndex()
       -- TestPerformance()
-      TestBulkOperations()
+      -- TestBulkOperations()
       -- TestTimeout()
       -- TestBlockingAPI()
       -- TestBlockingAPILatency()

@@ -47,7 +47,6 @@ function SQLHandler:new(baseDir, useFile)
         ServerStateManager = SqliteBasedServerStateManager;
     end
 
-
     local o = {
         baseDir = baseDir,
         stateManager = ServerStateManager:new(baseDir),
@@ -69,7 +68,6 @@ function SQLHandler:__tostring()
     return util.table_tostring(self)
 end
 
---
 function SQLHandler:start()
     __rts__:SetMsgQueueSize(50000);
     local this = self;
@@ -84,10 +82,6 @@ function SQLHandler:start()
     RTDBRequestRPC:MakePublic();
     
     self.db = TableDatabase:new();
-    -- start tdb
-    NPL.load("(gl)script/ide/System/Database/IORequest.lua");
-    local IORequest = commonlib.gettable("System.Database.IORequest");
-    IORequest:Send("init_tdb", self.db);
 
     self.logger.info("SQLHandler started");
 end
