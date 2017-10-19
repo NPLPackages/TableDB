@@ -51,6 +51,7 @@ end
 
 
 --Starts listening and handle all incoming messages with messageHandler
+--running in raft thread
 function RpcListener:startListening(messageHandler)
     self.logger.info("startListening")
 
