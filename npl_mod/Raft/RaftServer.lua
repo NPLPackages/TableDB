@@ -313,6 +313,7 @@ end
 
 
 function RaftServer:handleWALRequest(request)
+    local term = self.state.term
     local logEntry = LogEntry:new(term, request)
     local logIndex = self.logStore:append(logEntry)
     self:requestAllAppendEntries();
@@ -332,7 +333,7 @@ function RaftServer:handleClientRequest(request)
         return response
     end
     
-    local term = self.state.term
+    -- local term = self.state.term
     
     -- the leader executes the SQL, but the followers just append to WAL
     if request.logEntries and #request.logEntries > 0 then
