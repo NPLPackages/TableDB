@@ -109,7 +109,8 @@ function WALSequentialLogStore:append(logEntry)
         -- use TableDB deal with LogValueType other than Application
         self.db.raftLog:insertOne(nil, {logIndex = logIndex, logEntry = logEntry, });
     end
-    
+
+    self:persistLogIndex(logIndex);
     return logIndex;
 end
 
@@ -139,10 +140,13 @@ function WALSequentialLogStore:writeAt(logIndex, logEntry)
             end);
             self.db.raftLog:insertOne({logIndex = logIndex}, {logIndex = logIndex, logEntry = logEntry, });
         end
+    else
+        self.logger.error("this should not happen, must be a BUG!");
     end
     
     self.buffer:append(logEntry);
     self.entriesInStore = index;
+    self:persistLogIndex(logIndex);
 end
 
 --[[
@@ -327,9 +331,6 @@ function WALSequentialLogStore:compact(lastLogIndex)
 
     self.startIndex = lastLogIndex + 1;
     self.buffer:reset(self.startIndex);
-    -- save the starting index
-    self.startIndexFile:seek(0);
-    self.startIndexFile:WriteDouble(self.startIndex);
     
     return true;
 end
@@ -338,6 +339,11 @@ end
 function WALSequentialLogStore:readEntry(size)
 -- need this?
 -- read Entry from WAL
+end
+
+function WALSequentialLogStore:persistLogIndex(logIndex)
+    self.startIndexFile:seek(0);
+    self.startIndexFile:WriteDouble(logIndex);
 end
 
 function WALSequentialLogStore:close()
