@@ -1605,10 +1605,10 @@ function real_commit(server)
             -- do nothing
             server.logger.error("committed an empty LogEntry at %d !!", currentCommitIndex)
         elseif (logEntry.valueType == LogValueType.Application) then
-            if server.role ~= ServerRole.Leader then
+            -- if server.role ~= ServerRole.Leader then
                 -- only commit follower, leader committed in preCommit
-                server.stateMachine:commit(currentCommitIndex, logEntry.value);
-            end
+                server.stateMachine:commit(currentCommitIndex, logEntry.value, server.role == ServerRole.Leader);
+            -- end
         
         elseif (logEntry.valueType == LogValueType.Configuration) then
             local newConfig = ClusterConfiguration:fromBytes(logEntry.value);
