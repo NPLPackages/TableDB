@@ -15,17 +15,17 @@ NPL.load("(gl)script/ide/Files.lua");
 NPL.load("(gl)script/ide/Json.lua");
 NPL.load("(gl)npl_mod/Raft/ClusterConfiguration.lua");
 NPL.load("(gl)npl_mod/Raft/ServerState.lua");
--- NPL.load("(gl)npl_mod/Raft/FileBasedSequentialLogStore.lua");
--- local FileBasedSequentialLogStore = commonlib.gettable("Raft.FileBasedSequentialLogStore");
-NPL.load("(gl)npl_mod/Raft/WALSequentialLogStore.lua");
-local WALSequentialLogStore = commonlib.gettable("Raft.WALSequentialLogStore");
+NPL.load("(gl)npl_mod/Raft/FileBasedSequentialLogStore.lua");
+local FileBasedSequentialLogStore = commonlib.gettable("Raft.FileBasedSequentialLogStore");
+-- NPL.load("(gl)npl_mod/Raft/WALSequentialLogStore.lua");
+-- local WALSequentialLogStore = commonlib.gettable("Raft.WALSequentialLogStore");
 local LoggerFactory = NPL.load("(gl)npl_mod/Raft/LoggerFactory.lua");
 local ServerState = commonlib.gettable("Raft.ServerState");
 local ClusterConfiguration = commonlib.gettable("Raft.ClusterConfiguration");
 
 local FileBasedServerStateManager = commonlib.gettable("Raft.FileBasedServerStateManager");
 
-local SequentialLogStore = WALSequentialLogStore
+local SequentialLogStore = FileBasedSequentialLogStore
 local STATE_FILE = "server.state";
 local CONFIG_FILE = "config.properties";
 local CLUSTER_CONFIG_FILE = "cluster.json";
