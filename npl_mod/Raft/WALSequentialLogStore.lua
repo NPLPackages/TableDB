@@ -3,7 +3,9 @@ Title:
 Author: liuluheng
 Date: 2017.03.25
 Desc:
+use this if we do not want restart the server
 not touch the disk.
+TODO: remove startFile?
 ------------------------------------------------------------
 NPL.load("(gl)npl_mod/Raft/WALSequentialLogStore.lua");
 local WALSequentialLogStore = commonlib.gettable("Raft.WALSequentialLogStore");
