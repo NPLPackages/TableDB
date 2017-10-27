@@ -107,9 +107,18 @@ function LogBuffer:append(entry)
 end
 
 function LogBuffer:reset(startIndex)
-    self.buffer = {}
+    -- previous
+    -- self.buffer = {}
+    -- self.startIndex = startIndex
+    -- self.entriesInBuffer = 0
+
+    if startIndex > self.startIndex then
+        for i = self.startIndex, startIndex - 1 do
+            self.buffer[i] = nil
+            self.entriesInBuffer = self.entriesInBuffer - 1;
+        end
+    end
     self.startIndex = startIndex
-    self.entriesInBuffer = 0
 end
 
 function LogBuffer:bufferSize()
