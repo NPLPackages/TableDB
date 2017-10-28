@@ -541,8 +541,8 @@ function RaftServer:handleAppendEntriesResponse(response)
     -- and the role was updated by UpdateTerm call
     -- Try to match up the logs for this peer
     if (self.role == ServerRole.Leader and needToCatchup) then
-        self.logger.info("server %d needToCatchup %d < %d", peer:getId(), peer.nextLogIndex, self.logStore:getFirstAvailableIndex())
-    -- self:requestAppendEntries(peer);
+        self.logger.debug("server %d needToCatchup %d < %d", peer:getId(), peer.nextLogIndex, self.logStore:getFirstAvailableIndex())
+        self:requestAppendEntries(peer);
     end
 end
 
