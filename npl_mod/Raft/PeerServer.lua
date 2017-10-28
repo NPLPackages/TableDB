@@ -117,6 +117,9 @@ function PeerServer:SendRequest(request, callbackFunc)
 	end
 
 	local activate_result = RaftRequestRPC(source, destination, request, function(err, msg)
+		if (isAppendRequest) then
+			self:setFree();
+		end
 		if err then
 			return error_handler(msg, err, 0)
 		end
@@ -130,9 +133,6 @@ function PeerServer:SendRequest(request, callbackFunc)
 		error_handler(nil, nil, activate_result)
 	end
 
-	if (isAppendRequest) then
-		self:setFree();
-	end
 end
 
 
