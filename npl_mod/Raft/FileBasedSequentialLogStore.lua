@@ -148,7 +148,7 @@ function FileBasedSequentialLogStore:append(logEntry)
     -- self.dataFile:WriteBytes(#logEntry.value, {logEntry.value:byte(1, -1)});
     -- self.dataFile:write(logEntry.value, #logEntry.value);
     local valueBytes = logEntry.value
-    if logEntry.valueType ==  LogValueType.Application then
+    if logEntry.valueType == LogValueType.Application then
         valueBytes = walMsgToBytes(logEntry.value)
     end
     -- WriteBytes didn't work! BUG?
@@ -198,7 +198,7 @@ function FileBasedSequentialLogStore:writeAt(logIndex, logEntry)
     -- self.dataFile:WriteBytes(#logEntry.value, {logEntry.value:byte(1, -1)});
     -- self.dataFile:write(logEntry.value, #logEntry.value);
     local valueBytes = logEntry.value
-    if logEntry.valueType ==  LogValueType.Application then
+    if logEntry.valueType == LogValueType.Application then
         valueBytes = walMsgToBytes(logEntry.value)
     end
     -- WriteBytes didn't work! BUG?
@@ -481,6 +481,7 @@ function FileBasedSequentialLogStore:applyLogPack(logIndex, logPack)
 end
 
 --[[
+FIXME: 
 Compact the log store by removing all log entries including the log at the lastLogIndex
 @param lastLogIndex
 @return compact successfully or not
@@ -622,6 +623,7 @@ end
 
 function FileBasedSequentialLogStore:readEntry(size)
     -- we need this ??
+    assert(size > 0, "readEntry size error")
     if size <= 0 then
         return self.zeroEntry;
     end
@@ -635,10 +637,10 @@ function FileBasedSequentialLogStore:readEntry(size)
     self.dataFile:ReadBytes(size - DoubleBytes - 1, valueBytes);
     -- util.table_print(valueBytes)
     local value;
-    if valueType ==  LogValueType.Application then
-        local value = walMsgFromBytes(valueBytes)
+    if valueType == LogValueType.Application then
+        value = walMsgFromBytes(valueBytes)
     else
-        local value = string.char(unpack(valueBytes))
+        value = string.char(unpack(valueBytes))
     end
     -- local value = self.dataFile:ReadBytes(size-DoubleBytes-1, nil);
     return LogEntry:new(term, value, valueType);
