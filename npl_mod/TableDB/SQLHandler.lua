@@ -50,11 +50,20 @@ function SQLHandler:new(baseDir, useFile)
     local o = {
         baseDir = baseDir,
         stateManager = ServerStateManager:new(baseDir),
+        monitorPeriod = 5000;
         threadName = g_threadName,
         logger = LoggerFactory.getLogger("SQLHandler"),
         latestCommand = -2,
         collections = {},
     };
+
+    NPL.load("(gl)script/ide/timer.lua");
+    o.mytimer = commonlib.Timer:new({callbackFunc = function(timer)
+        o.logger.debug("reading server state")
+        o.state = o.stateManager:readState();
+    end})
+    o.mytimer:Change(o.monitorPeriod, o.monitorPeriod);
+
     setmetatable(o, self);
 
     return o;
@@ -69,7 +78,7 @@ function SQLHandler:__tostring()
 end
 
 function SQLHandler:start()
-    __rts__:SetMsgQueueSize(50000);
+    __rts__:SetMsgQueueSize(1000000);
     local this = self;
     Rpc:new():init("RaftRequestRPCInit");
     RaftRequestRPCInit.remoteThread = self.threadName;
@@ -87,18 +96,22 @@ function SQLHandler:start()
 end
 
 function SQLHandler:processMessage(request)
-    local state = self.stateManager:readState();
-    if not state then
-        return;
+    if not self.state then
+        self.logger.debug("reading server state")
+        self.state = self.stateManager:readState();
+        if not self.state then
+            return;
+        end
     end
+
     local response = {
         messageType = RaftMessageType.AppendEntriesResponse,
         source = self.stateManager.serverId,
-        destination = state.votedFor, -- use destination to indicate the leadId
-        term = state.term,
+        destination = self.state.votedFor, -- use destination to indicate the leadId
+        term = self.state.term,
     }
     
-    if state.votedFor ~= self.stateManager.serverId then
+    if self.state.votedFor ~= self.stateManager.serverId then
         response.accepted = false
         return response
     end
@@ -129,7 +142,7 @@ function SQLHandler:handle(data)
             cb_index = raftLogEntryValue.cb_index,
         }
 
-        this.logger.trace("result:%s", util.table_tostring(msg))
+        this.logger.trace("Result:%s", util.table_tostring(msg))
 
         local remoteAddress = format("%s%s", raftLogEntryValue.callbackThread, raftLogEntryValue.serverId)
         if not re_exec then
@@ -150,7 +163,7 @@ function SQLHandler:handle(data)
     if raftLogEntryValue.query_type == "connect" then
         -- raftLogEntryValue.collection.db is nil when query_type is connect
         -- we should create tabledb.config.xml here and make the storageProvider to SqliteWALStore
-        self:createSqliteWALStoreConfig(raftLogEntryValue.query.rootFolder);
+        -- self:createSqliteWALStoreConfig(raftLogEntryValue.query.rootFolder);
         self.db:connect(raftLogEntryValue.query.rootFolder, cbFunc);
     else
         if raftLogEntryValue.enableSyncMode then
