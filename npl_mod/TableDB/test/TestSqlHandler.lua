@@ -84,13 +84,17 @@ function TestSqlHandler:testPerformance()
             if (err) then
                 echo({err, data});
             end
-            -- local msg = {
-            --     err = err,
-            --     data = data,
-            --     cb_index = raftLogEntryValue.cb_index,
-            -- }
+            local msg = {
+                err = err,
+                data = data,
+                cb_index = raftLogEntryValue.cb_index,
+            }
     
             -- log(format("Result:%s\n", util.table_tostring(msg)))
+
+            local remoteAddress = format("%s%s", raftLogEntryValue.callbackThread, raftLogEntryValue.serverId)
+            
+            RTDBRequestRPC(nil, remoteAddress, msg);
             p:Next();
         end)
     end, total_times, max_jobs):OnFinished(function(total)
