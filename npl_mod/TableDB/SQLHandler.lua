@@ -128,7 +128,7 @@ function SQLHandler:processMessage(request)
 end
 
 
-function SQLHandler:handle(data)
+function SQLHandler:handle(data, callbackFunc)
     -- data is logEntry.value
     local raftLogEntryValue = RaftLogEntryValue:fromBytes(data);
 
@@ -152,6 +152,11 @@ function SQLHandler:handle(data)
         
         RTDBRequestRPC(nil, remoteAddress, msg);
     end;
+
+    -- for test
+    if callbackFunc then
+        cbFunc = callbackFunc;
+    end
 
     if raftLogEntryValue.cb_index <= self.latestCommand then
         self.logger.info("got a retry msg, %d <= %d", raftLogEntryValue.cb_index, self.latestCommand);

@@ -28,11 +28,11 @@ TestSqlHandler = {}
 
 function TestSqlHandler:testPerformance()
     local rootFolder = "temp/database/"
-    local baseDir = "temp/testSqlHandler"
-
+    local baseDir = "temp/testSqlHandler/"
+    
     removeTestFiles(rootFolder)
     removeTestFiles(baseDir)
-
+    
     local enableSyncMode = false;
     local serverId = "server0:"
     local sqlHandler = SQLHandler:new(baseDir, true);
@@ -50,7 +50,19 @@ function TestSqlHandler:testPerformance()
     local bytes = raftLogEntryValue:toBytes();
     sqlHandler:handle(bytes);
     
-    for i = 1, 10000 do
+    
+    NPL.load("(gl)script/ide/Debugger/NPLProfiler.lua");
+    local npl_profiler = commonlib.gettable("commonlib.npl_profiler");
+    npl_profiler.perf_reset();
+    
+    npl_profiler.perf_begin("testPerformance", true)
+    local total_times = 10000; -- a million non-indexed insert operation
+    local max_jobs = 1000; -- concurrent jobs count
+    NPL.load("(gl)script/ide/System/Concurrent/Parallel.lua");
+    local Parallel = commonlib.gettable("System.Concurrent.Parallel");
+    local p = Parallel:new():init()
+    p:RunManyTimes(function(count)
+        local i = count
         local query_type = "insertOne"
         local collection = {
             name = "testPerformance",
@@ -68,8 +80,23 @@ function TestSqlHandler:testPerformance()
         local raftLogEntryValue = RaftLogEntryValue:new(query_type, collection, query, i, serverId, enableSyncMode, thread_name);
         local bytes = raftLogEntryValue:toBytes();
         
-        sqlHandler:handle(bytes);
-    end
+        sqlHandler:handle(bytes, function(err, data)
+            if (err) then
+                echo({err, data});
+            end
+            -- local msg = {
+            --     err = err,
+            --     data = data,
+            --     cb_index = raftLogEntryValue.cb_index,
+            -- }
+    
+            -- log(format("Result:%s\n", util.table_tostring(msg)))
+            p:Next();
+        end)
+    end, total_times, max_jobs):OnFinished(function(total)
+        npl_profiler.perf_end("testPerformance", true)
+        log(commonlib.serialize(npl_profiler.perf_get(), true));
+    end);
 end
 
 function removeTestFiles(container)
