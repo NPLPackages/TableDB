@@ -148,9 +148,9 @@ function FileBasedSequentialLogStore:append(logEntry)
     -- self.dataFile:WriteBytes(#logEntry.value, {logEntry.value:byte(1, -1)});
     -- self.dataFile:write(logEntry.value, #logEntry.value);
     local valueBytes = logEntry.value
-    if logEntry.valueType == LogValueType.Application then
-        valueBytes = walMsgToBytes(logEntry.value)
-    end
+    -- if logEntry.valueType == LogValueType.Application then
+        -- valueBytes = walMsgToBytes(logEntry.value)
+    -- end
     -- WriteBytes didn't work! BUG?
     -- self.dataFile:WriteBytes(#valueBytes, valueBytes);
     self.dataFile:write(valueBytes, #valueBytes);
@@ -198,9 +198,9 @@ function FileBasedSequentialLogStore:writeAt(logIndex, logEntry)
     -- self.dataFile:WriteBytes(#logEntry.value, {logEntry.value:byte(1, -1)});
     -- self.dataFile:write(logEntry.value, #logEntry.value);
     local valueBytes = logEntry.value
-    if logEntry.valueType == LogValueType.Application then
-        valueBytes = walMsgToBytes(logEntry.value)
-    end
+    -- if logEntry.valueType == LogValueType.Application then
+    --     valueBytes = walMsgToBytes(logEntry.value)
+    -- end
     -- WriteBytes didn't work! BUG?
     -- self.dataFile:WriteBytes( #valueBytes, valueBytes);
     self.dataFile:write(valueBytes, #valueBytes);
@@ -636,9 +636,9 @@ function FileBasedSequentialLogStore:readEntry(size)
     assert(size - DoubleBytes - 1 > 0, "size error")
     self.dataFile:ReadBytes(size - DoubleBytes - 1, valueBytes);
     -- util.table_print(valueBytes)
-    local value;
+    local value = valueBytes;
     if valueType == LogValueType.Application then
-        value = walMsgFromBytes(valueBytes)
+    --     value = walMsgFromBytes(valueBytes)
     else
         value = string.char(unpack(valueBytes))
     end

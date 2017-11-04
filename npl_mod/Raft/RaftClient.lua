@@ -62,7 +62,9 @@ function RaftClient:__tostring()
     return util.table_tostring(self)
 end
 
-
+function RaftClient:setRequestRPC(RequestRPC)
+    self.RequestRPC = RequestRPC;
+end
 
 function RaftClient:appendEntries(values, callbackFunc)
     if values and #values == 0 then

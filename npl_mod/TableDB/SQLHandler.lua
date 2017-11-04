@@ -89,6 +89,15 @@ function SQLHandler:start()
     end)
     RTDBRequestRPC.remoteThread = self.threadName;
     RTDBRequestRPC:MakePublic();
+
+
+    Rpc:new():init("ConnectRequestRPC", function(self, msg)
+        msg = this:processMessage(msg)
+        return msg;
+    end)
+
+    ConnectRequestRPC.remoteThread = self.threadName;
+    ConnectRequestRPC:MakePublic();
     
     self.db = TableDatabase:new();
 
@@ -117,11 +126,11 @@ function SQLHandler:processMessage(request)
     end
 
     -- the leader executes the SQL, but the followers just append to WAL
-    if request.logEntries and #request.logEntries > 0 then
-        for i, v in ipairs(request.logEntries) do
-            self:handle(v.value);
-        end
-    end
+    -- if request.logEntries and #request.logEntries > 0 then
+    --     for i, v in ipairs(request.logEntries) do
+    --         self:handle(v.value);
+    --     end
+    -- end
     
     response.accepted = true;
     return response

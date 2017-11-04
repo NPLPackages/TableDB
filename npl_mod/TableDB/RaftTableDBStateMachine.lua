@@ -20,6 +20,8 @@ NPL.load("(gl)npl_mod/Raft/Rpc.lua");
 local Rpc = commonlib.gettable("Raft.Rpc");
 NPL.load("(gl)npl_mod/TableDB/RaftLogEntryValue.lua");
 local RaftLogEntryValue = commonlib.gettable("TableDB.RaftLogEntryValue");
+NPL.load("(gl)npl_mod/TableDB/RaftWALLogEntryValue.lua");
+local RaftWALLogEntryValue = commonlib.gettable("TableDB.RaftWALLogEntryValue");
 
 NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
 local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
@@ -133,6 +135,14 @@ function RaftTableDBStateMachine:start2(RaftSqliteStore)
     RTDBRequestRPC.remoteThread = self.threadName;
     RTDBRequestRPC:MakePublic();
 
+    Rpc:new():init("ConnectRequestRPC", function(self, msg)
+        this.logger.debug(format("Connect Response:%s", util.table_tostring(msg)))
+        RaftSqliteStore:handleResponse(msg)
+    end)
+
+    ConnectRequestRPC.remoteThread = "rtdb";
+    ConnectRequestRPC:MakePublic();
+
 end
 
 
@@ -143,7 +153,11 @@ end
 ]]
 --
 function RaftTableDBStateMachine:commit(logIndex, data, isLeader)
-    self.logger.info("commit:%d", logIndex);
+    -- if logIndex % 10 == 0 then
+        self.logger.info("commit:%d", logIndex);
+        -- end
+    
+    local data = RaftWALLogEntryValue:fromBytes(data);
     data.logIndex = logIndex;
     
 	local config_path = data.rootFolder .. "/tabledb.config.xml";
@@ -154,11 +168,9 @@ function RaftTableDBStateMachine:commit(logIndex, data, isLeader)
         end);
     end
 
-    -- if self.db:GetRootFolder() == "temp/TableDatabase/" then
-    --     self.db:connect(data.rootFolder, function (...)
-    --         self.logger.info("connected to %s", data.rootFolder);
-    --     end);
-    -- end
+    if data.pgno < 0 then
+        return;
+    end
 
     --add to collections
     if not self.collections[data.collectionName] then
@@ -167,10 +179,10 @@ function RaftTableDBStateMachine:commit(logIndex, data, isLeader)
         self.collections[data.collectionName] = collectionPath;
     end
 
-    if not isLeader then
+    -- if not isLeader then
         local collection = self.db[data.collectionName];
         collection:injectWALPage(data);
-    end
+    -- end
 
 
     self.commitIndex = logIndex;
@@ -195,78 +207,78 @@ end
 ]]
 --
 function RaftTableDBStateMachine:preCommit(logIndex, data)
-    -- data is logEntry.value
-    local raftLogEntryValue = RaftLogEntryValue:fromBytes(data);
+    -- -- data is logEntry.value
+    -- local raftLogEntryValue = RaftLogEntryValue:fromBytes(data);
 
-    self.logger.info("preCommit:%s", util.table_tostring(raftLogEntryValue))
+    -- self.logger.info("preCommit:%s", util.table_tostring(raftLogEntryValue))
 
-    local this = self;
-    local cbFunc = function(err, data, re_exec)
-        local msg = {
-            err = err,
-            data = data,
-            cb_index = raftLogEntryValue.cb_index,
-        }
+    -- local this = self;
+    -- local cbFunc = function(err, data, re_exec)
+    --     local msg = {
+    --         err = err,
+    --         data = data,
+    --         cb_index = raftLogEntryValue.cb_index,
+    --     }
 
-        this.logger.trace("result:%s", util.table_tostring(msg))
+    --     this.logger.trace("result:%s", util.table_tostring(msg))
 
-        local remoteAddress = format("%s%s", raftLogEntryValue.callbackThread, raftLogEntryValue.serverId)
-        if not re_exec then
-            this.latestError = err;
-            this.latestData = data;
-        end
+    --     local remoteAddress = format("%s%s", raftLogEntryValue.callbackThread, raftLogEntryValue.serverId)
+    --     if not re_exec then
+    --         this.latestError = err;
+    --         this.latestData = data;
+    --     end
         
-        RTDBRequestRPC(nil, remoteAddress, msg);
-    end;
+    --     RTDBRequestRPC(nil, remoteAddress, msg);
+    -- end;
 
-    if raftLogEntryValue.cb_index <= self.latestCommand then
-        self.logger.info("got a retry msg, %d <= %d", raftLogEntryValue.cb_index, self.latestCommand);
-        cbFunc(this.latestError, this.latestData, true);
-        return;
-    end
+    -- if raftLogEntryValue.cb_index <= self.latestCommand then
+    --     self.logger.info("got a retry msg, %d <= %d", raftLogEntryValue.cb_index, self.latestCommand);
+    --     cbFunc(this.latestError, this.latestData, true);
+    --     return;
+    -- end
     
-    -- a dedicated IOThread
-    if raftLogEntryValue.query_type == "connect" then
-        -- raftLogEntryValue.collection.db is nil when query_type is connect
-        -- we should create table.config.xml here and make the storageProvider to SqliteWALStore
-        self:createSqliteWALStoreConfig(raftLogEntryValue.query.rootFolder);
-        self.db:connect(raftLogEntryValue.query.rootFolder, cbFunc);
-    else
-        if raftLogEntryValue.enableSyncMode then
-            self.db:EnableSyncMode(true);
-        end
-        -- self.db:connect(raftLogEntryValue.collection.db);
-        local collection = self.db[raftLogEntryValue.collection.name];
+    -- -- a dedicated IOThread
+    -- if raftLogEntryValue.query_type == "connect" then
+    --     -- raftLogEntryValue.collection.db is nil when query_type is connect
+    --     -- we should create table.config.xml here and make the storageProvider to SqliteWALStore
+    --     self:createSqliteWALStoreConfig(raftLogEntryValue.query.rootFolder);
+    --     self.db:connect(raftLogEntryValue.query.rootFolder, cbFunc);
+    -- else
+    --     if raftLogEntryValue.enableSyncMode then
+    --         self.db:EnableSyncMode(true);
+    --     end
+    --     -- self.db:connect(raftLogEntryValue.collection.db);
+    --     local collection = self.db[raftLogEntryValue.collection.name];
         
-        --add to collections
-        if not self.collections[raftLogEntryValue.collection.name] then
-            local collectionPath = raftLogEntryValue.collection.db .. raftLogEntryValue.collection.name;
-            self.logger.trace("add collection %s->%s", raftLogEntryValue.collection.name, collectionPath)
-            self.collections[raftLogEntryValue.collection.name] = collectionPath;
-        -- self.collections[raftLogEntryValue.collection.name] = collection
-        end
+    --     --add to collections
+    --     if not self.collections[raftLogEntryValue.collection.name] then
+    --         local collectionPath = raftLogEntryValue.collection.db .. raftLogEntryValue.collection.name;
+    --         self.logger.trace("add collection %s->%s", raftLogEntryValue.collection.name, collectionPath)
+    --         self.collections[raftLogEntryValue.collection.name] = collectionPath;
+    --     -- self.collections[raftLogEntryValue.collection.name] = collection
+    --     end
         
-        -- NOTE: this may not work when the query field named "update" or "replacement"
-        if raftLogEntryValue.query.update or raftLogEntryValue.query.replacement then
-            if raftLogEntryValue.enableSyncMode then
-                cbFunc(collection[raftLogEntryValue.query_type](collection, raftLogEntryValue.query.query,
-                    raftLogEntryValue.query.update or raftLogEntryValue.query.replacement));
-            else
-                collection[raftLogEntryValue.query_type](collection, raftLogEntryValue.query.query,
-                    raftLogEntryValue.query.update or raftLogEntryValue.query.replacement,
-                    cbFunc);
-            end
-        else
-            if raftLogEntryValue.enableSyncMode then
-                cbFunc(collection[raftLogEntryValue.query_type](collection, raftLogEntryValue.query));
-            else
-                collection[raftLogEntryValue.query_type](collection, raftLogEntryValue.query, cbFunc);
-            end
-        end
-    end
+    --     -- NOTE: this may not work when the query field named "update" or "replacement"
+    --     if raftLogEntryValue.query.update or raftLogEntryValue.query.replacement then
+    --         if raftLogEntryValue.enableSyncMode then
+    --             cbFunc(collection[raftLogEntryValue.query_type](collection, raftLogEntryValue.query.query,
+    --                 raftLogEntryValue.query.update or raftLogEntryValue.query.replacement));
+    --         else
+    --             collection[raftLogEntryValue.query_type](collection, raftLogEntryValue.query.query,
+    --                 raftLogEntryValue.query.update or raftLogEntryValue.query.replacement,
+    --                 cbFunc);
+    --         end
+    --     else
+    --         if raftLogEntryValue.enableSyncMode then
+    --             cbFunc(collection[raftLogEntryValue.query_type](collection, raftLogEntryValue.query));
+    --         else
+    --             collection[raftLogEntryValue.query_type](collection, raftLogEntryValue.query, cbFunc);
+    --         end
+    --     end
+    -- end
     
-    self.latestCommand = raftLogEntryValue.cb_index;
-    self.commitIndex = logIndex;
+    -- self.latestCommand = raftLogEntryValue.cb_index;
+    -- self.commitIndex = logIndex;
 end
 
 --[[
@@ -442,7 +454,7 @@ function RaftTableDBStateMachine:createSnapshot(snapshot)
         -- in case of error
         -- if (NPL.activate_with_timeout(self.MaxWaitSeconds, address, msg) ~= 0) then
             -- self.logger.error("what's wrong with the snapshot thread?? we do backup in main")
-            success = do_backup(msg);
+            success = do_backup(msg, self);
         -- end
     -- end;
     
@@ -529,7 +541,7 @@ function getLatestSnapshotName(snapshotStore, collection_name)
 end
 
 
-function do_backup(msg)
+function do_backup(msg, stateMachine)
     local backup_success = true;
     local snapshot = msg.snapshot
     local collections = msg.collections
@@ -539,6 +551,10 @@ function do_backup(msg)
         local srcDBPath = collection .. ".db";
         logger.info("backing up %s to %s", name, filePath);
 
+
+        -- local originDB = stateMachine.db[name];
+        -- originDB:close();
+        
         local backupDB = sqlite3.open(filePath)
         local srcDB = sqlite3.open(srcDBPath)
         -- local srcDB = collection.storageProvider._db

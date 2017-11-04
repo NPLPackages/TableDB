@@ -333,18 +333,18 @@ function RaftServer:handleClientRequest(request)
         return response
     end
     
-    -- local term = self.state.term
+    local term = self.state.term
     
     -- the leader executes the SQL, but the followers just append to WAL
     if request.logEntries and #request.logEntries > 0 then
         for i, v in ipairs(request.logEntries) do
-            -- local logEntry = LogEntry:new(term, v.value)
-            -- local logIndex = self.logStore:append(logEntry)
+            local logEntry = LogEntry:new(term, v.value)
+            local logIndex = self.logStore:append(logEntry)
             self.stateMachine:preCommit(logIndex, v.value);
         end
     end
     
-    -- self:requestAllAppendEntries();
+    self:requestAllAppendEntries();
     response.accepted = true;
     -- nextIndex is not used in RaftClient for now
     response.nextIndex = self.logStore:getFirstAvailableIndex();

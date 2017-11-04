@@ -110,63 +110,66 @@ local function executeInServerMode(stateMachine)
 end
 
 
-local function executeAsClient()
+local function executeAsClient(stateMachine)
+  NPL.load("(gl)npl_mod/TableDB/RaftSqliteStore.lua");
+  local RaftSqliteStore = commonlib.gettable("TableDB.RaftSqliteStore");
+  if clientMode == "appendEntries" then
+    NPL.load("(gl)npl_mod/TableDB/RaftSqliteWALStore.lua");
+    local RaftSqliteWALStore = commonlib.gettable("TableDB.RaftSqliteWALStore");
+    stateMachine:start2(RaftSqliteWALStore)
+    NPL.load("(gl)npl_mod/TableDB/test/test_TableDatabase.lua");
+    -- TestSQLOperations();
+    TestInsertThroughputNoIndex()
+    -- TestPerformance()
+    -- TestBulkOperations()
+    -- TestTimeout()
+    -- TestBlockingAPI()
+    -- TestBlockingAPILatency()
+    -- TestConnect()
+    -- TestRemoveIndex()
+    -- TestTable()
+    -- TestTableDatabase();
+    -- TestRangedQuery();
+    -- TestPagination()
+    -- TestCompoundIndex()
+    -- TestCountAPI()
+    -- TestDelete()
+  
+  else
 
-    if clientMode == "appendEntries" then
-      NPL.load("(gl)npl_mod/TableDB/test/test_TableDatabase.lua");
-      TestSQLOperations();
-      -- TestInsertThroughputNoIndex()
-      -- TestPerformance()
-      -- TestBulkOperations()
-      -- TestTimeout()
-      -- TestBlockingAPI()
-      -- TestBlockingAPILatency()
-      -- TestConnect()
-      -- TestRemoveIndex()
-      -- TestTable()
-      -- TestTableDatabase();
-      -- TestRangedQuery();
-      -- TestPagination()
-      -- TestCompoundIndex()
-      -- TestCountAPI()
-      -- TestDelete()
-    
-    else
-      NPL.load("(gl)npl_mod/TableDB/RaftSqliteStore.lua");
-      local RaftSqliteStore = commonlib.gettable("TableDB.RaftSqliteStore");
-      local param = {
-        baseDir = "./",
-        host = "localhost",
-        port = "9004",
-        id = "server4:",
-        threadName = "rtdb",
-        rootFolder = "temp/test_raft_database",
-        useFile = useFileStateManager,
+    local param = {
+      baseDir = "./",
+      host = "localhost",
+      port = "9004",
+      id = "server4:",
+      threadName = "rtdb",
+      rootFolder = "temp/test_raft_database",
+      useFile = useFileStateManager,
+    }
+    RaftSqliteStore:createRaftClient(param.baseDir, param.host, param.port, param.id, param.threadName, param.rootFolder, param.useFile);
+    local raftClient = RaftSqliteStore:getRaftClient();
+
+    if clientMode == "addServer" then
+      local serverToJoin = {
+        id = serverId,
+        endpoint = "tcp://localhost:900"..serverId,
       }
-      RaftSqliteStore:createRaftClient(param.baseDir, param.host, param.port, param.id, param.threadName, param.rootFolder, param.useFile);
-      local raftClient = RaftSqliteStore:getRaftClient();
 
-      if clientMode == "addServer" then
-        local serverToJoin = {
-          id = serverId,
-          endpoint = "tcp://localhost:900"..serverId,
-        }
-
-        raftClient:addServer(ClusterServer:new(serverToJoin), function (response, err)
-          local result = (err == nil and response.accepted and "accepted") or "denied"
-          logger.info("the addServer request has been %s", result)
-        end)
-      
-      elseif clientMode == "removeServer" then
-        local serverIdToRemove = serverId;
-        raftClient:removeServer(serverIdToRemove, function (response, err)
-          local result = (err == nil and response.accepted and "accepted") or "denied"
-          logger.info("the removeServer request has been %s", result)
-        end)
-      else
-        logger.error("unknown client command:%s", clientMode)
-      end
+      raftClient:addServer(ClusterServer:new(serverToJoin), function (response, err)
+        local result = (err == nil and response.accepted and "accepted") or "denied"
+        logger.info("the addServer request has been %s", result)
+      end)
+    
+    elseif clientMode == "removeServer" then
+      local serverIdToRemove = serverId;
+      raftClient:removeServer(serverIdToRemove, function (response, err)
+        local result = (err == nil and response.accepted and "accepted") or "denied"
+        logger.info("the removeServer request has been %s", result)
+      end)
+    else
+      logger.error("unknown client command:%s", clientMode)
     end
+  end
 end
 
 local vfileID = format("(%s)npl_mod/TableDBApp/App.lua", raftThreadName);
@@ -184,7 +187,7 @@ local function activate()
       -- executeInServerMode(mp)
       executeInServerMode(rtdb)
     elseif raftMode:lower() == "client" then
-      executeAsClient()
+      executeAsClient(rtdb)
     end
   end
 end

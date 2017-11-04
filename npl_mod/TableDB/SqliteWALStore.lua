@@ -28,21 +28,21 @@ end
 
 function SqliteWALStore:init(collection, init_args)
     SqliteWALStore._super.init(self, collection);
-    local dbName = self.kFileName
-    self._db:set_wal_page_hook(function(page_data, pgno, nTruncate, isCommit)
-        local msg = {
-            rootFolder = collection:GetParent():GetRootFolder(),
-            collectionName = collection:GetName(),
-            page_data = page_data,
-            pgno = pgno,
-            nTruncate = nTruncate,
-            isCommit = isCommit,
-        }
+    -- local dbName = self.kFileName
+    -- self._db:set_wal_page_hook(function(page_data, pgno, nTruncate, isCommit)
+    --     local msg = {
+    --         rootFolder = collection:GetParent():GetRootFolder(),
+    --         collectionName = collection:GetName(),
+    --         page_data = page_data,
+    --         pgno = pgno,
+    --         nTruncate = nTruncate,
+    --         isCommit = isCommit,
+    --     }
         
-        NPL.activate(self:GetReplyAddress(cb_thread or "main"), msg);
-        self.logger.trace("pgSize %d, pgno %d, nTruncate %d, isCommit %d", #page_data, pgno, nTruncate, isCommit);
-        return 1
-    end)
+    --     NPL.activate(self:GetReplyAddress(cb_thread or "main"), msg);
+    --     self.logger.trace("pgSize %d, pgno %d, nTruncate %d, isCommit %d", #page_data, pgno, nTruncate, isCommit);
+    --     return 1
+    -- end)
 
     return self;
 end
