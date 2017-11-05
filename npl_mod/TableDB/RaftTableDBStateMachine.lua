@@ -155,7 +155,7 @@ end
 function RaftTableDBStateMachine:commit(logIndex, data, isLeader)
     -- if logIndex % 10 == 0 then
         self.logger.info("commit:%d", logIndex);
-        -- end
+    -- end
     
     local data = RaftWALLogEntryValue:fromBytes(data);
     data.logIndex = logIndex;
@@ -477,7 +477,7 @@ end
 
 
 function RaftTableDBStateMachine:processMessage(message)
-    self.logger.info("Got message " .. util.table_tostring(message));
+    self.logger.info("Got a message");-- .. util.table_tostring(message));
     return self.messageSender:appendEntries(message);
 end
 

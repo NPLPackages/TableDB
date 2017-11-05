@@ -14,7 +14,7 @@ local RaftWALLogEntryValue = commonlib.gettable("TableDB.RaftWALLogEntryValue");
 NPL.load("(gl)script/ide/commonlib.lua");
 local RaftWALLogEntryValue = commonlib.gettable("TableDB.RaftWALLogEntryValue");
 
-local memoryFile = ParaIO.open("<memory>", "w");
+local memoryFile = ParaIO.open("<memory>", "rw");
 
 function RaftWALLogEntryValue:new(rootFolder, collectionName, page_data, pgno, nTruncate, isCommit)
     local o = {
@@ -39,34 +39,42 @@ end
 
 
 function RaftWALLogEntryValue:fromBytes(bytes)
-    local file = ParaIO.open("<memory>", "rw");
     local o = {}
-    if (file:IsValid()) then
+    if (memoryFile:IsValid()) then
+        memoryFile:seek(0)
         -- local bytes = {bytes:byte(1, -1)}
         -- write not worked! use error ? string:char maybe
-        file:write(bytes, #bytes)
-        -- file:WriteBytes(#bytes, bytes)
-        file:seek(0)
+        -- memoryFile:write(bytes, #bytes)
+        -- memoryFile:WriteBytes(#bytes, bytes)
+
+        if type(bytes) == "string" then
+            -- file:WriteBytes(#bytes, {bytes:byte(1, -1)});
+            memoryFile:write(bytes, #bytes);
+        elseif type(bytes) == "table" then
+            memoryFile:WriteBytes(#bytes, bytes);
+        end
+
+
+        memoryFile:seek(0)
         
         -- rootFolder
-        local rootFolderLen = file:ReadInt()
-        o.rootFolder = file:ReadString(rootFolderLen)
+        local rootFolderLen = memoryFile:ReadInt()
+        o.rootFolder = memoryFile:ReadString(rootFolderLen)
         -- collectionName
-        local collectionNameLen = file:ReadInt()
-        o.collectionName = file:ReadString(collectionNameLen)
+        local collectionNameLen = memoryFile:ReadInt()
+        o.collectionName = memoryFile:ReadString(collectionNameLen)
         -- page_data
-        local page_data_len = file:ReadInt()
+        local page_data_len = memoryFile:ReadInt()
         o.page_data = {}
-        file:ReadBytes(page_data_len, o.page_data)
+        memoryFile:ReadBytes(page_data_len, o.page_data)
         o.page_data = string.char(unpack(o.page_data))
         -- pgno
-        o.pgno = file:ReadInt()
+        o.pgno = memoryFile:ReadInt()
         -- nTruncate
-        o.nTruncate = file:ReadInt()
+        o.nTruncate = memoryFile:ReadInt()
         -- isCommit
-        o.isCommit = file:ReadInt()
+        o.isCommit = memoryFile:ReadInt()
         
-        file:close()
         setmetatable(o, self);
         return o;
     end
@@ -74,29 +82,31 @@ end
 
 
 function RaftWALLogEntryValue:toBytes()
-    local file = ParaIO.open("<memory>", "rw");
     local bytes;
-    if (file:IsValid()) then
+    if (memoryFile:IsValid()) then
+        memoryFile:seek(0)
         
         -- rootFolder
-        file:WriteInt(#self.rootFolder)
-        file:WriteString(self.rootFolder)
+        memoryFile:WriteInt(#self.rootFolder)
+        memoryFile:WriteString(self.rootFolder)
         -- collectionName
-        file:WriteInt(#self.collectionName)
-        file:WriteString(self.collectionName)
+        memoryFile:WriteInt(#self.collectionName)
+        memoryFile:WriteString(self.collectionName)
         -- page_data
-        local page_data_bytes = {self.page_data:byte(1, -1)}
-        file:WriteInt(#page_data_bytes)
-        file:WriteBytes(#page_data_bytes, page_data_bytes)
-        -- pgno
-        file:WriteInt(self.pgno)
-        -- nTruncate
-        file:WriteInt(self.nTruncate)
-        -- isCommit
-        file:WriteInt(self.isCommit)
+        -- local page_data_bytes = {self.page_data:byte(1, -1)}
+        -- memoryFile:WriteInt(#page_data_bytes)
+        -- memoryFile:WriteBytes(#page_data_bytes, page_data_bytes)
+        memoryFile:WriteInt(#self.page_data)
+        memoryFile:write(self.page_data, #self.page_data)
         
-        bytes = file:GetText(0, -1)
-        file:close()
+        -- pgno
+        memoryFile:WriteInt(self.pgno)
+        -- nTruncate
+        memoryFile:WriteInt(self.nTruncate)
+        -- isCommit
+        memoryFile:WriteInt(self.isCommit)
+        
+        bytes = memoryFile:GetText(0, -1)
     end
     return bytes;
 end

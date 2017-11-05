@@ -251,16 +251,17 @@ function RaftServer:handleAppendEntriesRequest(request)
                 self.configChanging = false;
             end
             
-            self.logStore:writeAt(index, logEntries[logIndex]);
+            local logEntry = logEntries[logIndex];
+            self.logStore:writeAt(index, logEntry);
             if (logEntry.valueType == LogValueType.Application) then
-                -- self.stateMachine:preCommit(index, logEntry.value);
-                elseif (logEntry.valueType == LogValueType.Configuration) then
+                self.stateMachine:preCommit(index, logEntry.value);
+            elseif (logEntry.valueType == LogValueType.Configuration) then
                 self.logger.info("received a configuration change at index %d from leader", index);
                 self.configChanging = true;
-                end
+            end
                 
-                logIndex = logIndex + 1;
-                index = index + 1;
+            logIndex = logIndex + 1;
+            index = index + 1;
         end
         self.logger.trace("Oite>%d entries, confirmedIndex:%d, entryIndex:%d", #logEntries, index, logIndex)
         -- append the new log entries
@@ -273,7 +274,7 @@ function RaftServer:handleAppendEntriesRequest(request)
                 self.logger.info("received a configuration change at index %d from leader", indexForEntry);
                 self.configChanging = true;
             elseif (logEntry.valueType == LogValueType.Application) then
-                -- self.stateMachine:preCommit(indexForEntry, logEntry.value);
+                self.stateMachine:preCommit(indexForEntry, logEntry.value);
             end
         end
     end

@@ -34,6 +34,7 @@ RaftSqliteStore.name = "raft";
 RaftSqliteStore.thread_name = format("(%s)", __rts__:GetName());
 
 function RaftSqliteStore:createRaftClient(baseDir, host, port, id, threadName, rootFolder, useFile)
+  RaftSqliteStore.responseThreadName = self.thread_name;
   local ServerStateManager;
   if useFile then
     NPL.load("(gl)npl_mod/Raft/FileBasedServerStateManager.lua");
@@ -60,10 +61,9 @@ function RaftSqliteStore:createRaftClient(baseDir, host, port, id, threadName, r
   end
 
   rtdb = RaftTableDBStateMachine:new(baseDir, threadName)
-  
-  NPL.StartNetServer(localAddress.host, localAddress.port);
-
+  -- NPL.StartNetServer(localAddress.host, localAddress.port);
   rtdb:start2(self)
+
   raftClient = RaftClient:new(localAddress, RTDBRequestRPC, config, LoggerFactory)
 
   self:connect(self, {rootFolder = rootFolder});
@@ -302,7 +302,7 @@ function RaftSqliteStore:Send(query_type, query, callbackFunc)
   if(index) then
     local raftLogEntryValue = RaftLogEntryValue:new(query_type, self.collection, query,
                                                     index, raftClient.localAddress.id,
-                                                    RaftSqliteStore.EnableSyncMode, RaftSqliteStore.thread_name);
+                                                    RaftSqliteStore.EnableSyncMode, RaftSqliteStore.responseThreadName);
     local bytes = raftLogEntryValue:toBytes();
 
     raftClient:appendEntries(bytes, function (response, err)

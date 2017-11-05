@@ -66,7 +66,6 @@ function RaftSqliteWALStore:createRaftClient(baseDir, host, port, id, threadName
     rtdb:start2(self)
     
     raftClient = RaftClient:new(localAddress, RTDBRequestRPC, config, LoggerFactory)
-    raftClient2 = RaftClient:new(localAddress, ConnectRequestRPC, config, LoggerFactory)
     
     self:connect(self, {rootFolder = rootFolder});
 
@@ -135,7 +134,7 @@ function RaftSqliteWALStore:OneTimeInit()
     self.mytimer = commonlib.Timer:new({callbackFunc = function(timer)
         self:CheckTimedOutRequests();
     end})
-    -- self.mytimer:Change(self.monitorPeriod, self.monitorPeriod);
+-- self.mytimer:Change(self.monitorPeriod, self.monitorPeriod);
 end
 
 -- remove any timed out request.
@@ -245,17 +244,17 @@ end
 
 
 function RaftSqliteWALStore:connect(db, data, callbackFunc)
-  local rootFolder = self:GetCollection():GetParent():GetRootFolder();
-  local collectionName = self:GetCollection():GetName();
-  local page_data = "not valid page data"
-  local pgno = -1;
-  local nTruncate = 1;
-  local isCommit = 1;
-  local raftWALLogEntryValue = RaftWALLogEntryValue:new(rootFolder, collectionName, page_data, pgno, nTruncate, isCommit)
-  
-  local bytes = raftWALLogEntryValue:toBytes();
-
-  raftClient:setRequestRPC(ConnectRequestRPC)
+    local rootFolder = self:GetCollection():GetParent():GetRootFolder();
+    local collectionName = self:GetCollection():GetName();
+    local page_data = "not valid page data"
+    local pgno = -1;
+    local nTruncate = 1;
+    local isCommit = 1;
+    local raftWALLogEntryValue = RaftWALLogEntryValue:new(rootFolder, collectionName, page_data, pgno, nTruncate, isCommit)
+    
+    local bytes = raftWALLogEntryValue:toBytes();
+    
+    raftClient:setRequestRPC(ConnectRequestRPC)
     raftClient:appendEntries(bytes, function(response, err)
         local result = (err == nil and response.accepted and "accepted") or "denied"
         logger.info("the CONNECT request has been %s", result)
@@ -265,6 +264,6 @@ function RaftSqliteWALStore:connect(db, data, callbackFunc)
     end)
     
     self:WaitForSyncModeReply(5000);
-  raftClient:setRequestRPC(RTDBRequestRPC)
-  
+    raftClient:setRequestRPC(RTDBRequestRPC)
+
 end

@@ -152,8 +152,12 @@ function FileBasedSequentialLogStore:append(logEntry)
         -- valueBytes = walMsgToBytes(logEntry.value)
     -- end
     -- WriteBytes didn't work! BUG?
-    -- self.dataFile:WriteBytes(#valueBytes, valueBytes);
-    self.dataFile:write(valueBytes, #valueBytes);
+    
+    if type(valueBytes) == "string" then
+        self.dataFile:write(valueBytes, #valueBytes);
+    elseif type(valueBytes) == "table" then
+        self.dataFile:WriteBytes(#valueBytes, valueBytes);
+    end
     
     self.entriesInStore = self.entriesInStore + 1;
     self.buffer:append(logEntry);
@@ -203,7 +207,11 @@ function FileBasedSequentialLogStore:writeAt(logIndex, logEntry)
     -- end
     -- WriteBytes didn't work! BUG?
     -- self.dataFile:WriteBytes( #valueBytes, valueBytes);
-    self.dataFile:write(valueBytes, #valueBytes);
+    if type(valueBytes) == "string" then
+        self.dataFile:write(valueBytes, #valueBytes);
+    elseif type(valueBytes) == "table" then
+        self.dataFile:WriteBytes(#valueBytes, valueBytes);
+    end
     
     -- trim the files if necessary
     if (indexFileSize > self.indexFile:getpos()) then
