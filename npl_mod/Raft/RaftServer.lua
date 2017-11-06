@@ -1585,7 +1585,6 @@ function RaftServer:termForLastLog(logIndex)
 end
 
 
--- TODO: resemble IOThread in TableDB ? this may cause synchronize issue
 function real_commit(server)
     local currentCommitIndex = server.state.commitIndex;
     if server.quickCommitIndex <= currentCommitIndex or
@@ -1607,8 +1606,7 @@ function real_commit(server)
             server.logger.error("committed an empty LogEntry at %d !!", currentCommitIndex)
         elseif (logEntry.valueType == LogValueType.Application) then
             -- if server.role ~= ServerRole.Leader then
-                -- only commit follower, leader committed in preCommit
-                server.stateMachine:commit(currentCommitIndex, logEntry.value, server.role == ServerRole.Leader);
+                server.stateMachine:commit(currentCommitIndex, logEntry.value);
             -- end
         
         elseif (logEntry.valueType == LogValueType.Configuration) then
