@@ -134,7 +134,7 @@ function RaftTableDBStateMachine:start2(RaftSqliteStore)
 
     RTDBRequestRPC.remoteThread = self.threadName;
     RTDBRequestRPC:MakePublic();
-
+    
     Rpc:new():init("ConnectRequestRPC", function(self, msg)
         this.logger.debug(format("Connect Response:%s", util.table_tostring(msg)))
         RaftSqliteStore:handleResponse(msg)
@@ -152,7 +152,7 @@ end
 * @param data
 ]]
 --
-function RaftTableDBStateMachine:commit(logIndex, data, isLeader)
+function RaftTableDBStateMachine:commit(logIndex, data)
     -- if logIndex % 10 == 0 then
         self.logger.info("commit:%d", logIndex);
     -- end
@@ -168,10 +168,6 @@ function RaftTableDBStateMachine:commit(logIndex, data, isLeader)
         end);
     end
 
-    if data.pgno < 0 then
-        return;
-    end
-
     --add to collections
     if not self.collections[data.collectionName] then
         local collectionPath = data.rootFolder .. data.collectionName;
@@ -179,11 +175,8 @@ function RaftTableDBStateMachine:commit(logIndex, data, isLeader)
         self.collections[data.collectionName] = collectionPath;
     end
 
-    -- if not isLeader then
-        local collection = self.db[data.collectionName];
-        collection:injectWALPage(data);
-    -- end
-
+    local collection = self.db[data.collectionName];
+    collection:injectWALPage(data);
 
     self.commitIndex = logIndex;
 end
