@@ -69,66 +69,8 @@ function TestSQLOperations()
 	db.User:find({ ["+name"] = {"1", limit=2} }, function(err, rows) assert(#rows==2); end);
 	-- return at most 1 row whose id is greater than -1
 	db.User:find({ _id = { gt = -1, limit = 1, skip == 1} }, function(err, rows) assert(#rows==1); echo("all tests succeed!") end);
-	-- db.User:close();
+	db.User:close();
 
-
-	-- Note: `db.User2` will automatically create the `User2` collection table if not.
-	-- clear all data
-	db.User2:makeEmpty({}, function(err, count) echo("deleted"..(count or 0)) end);
-	-- insert 1
-	db.User2:insertOne(nil, {name="1", email="1@1",}, function(err, data)  assert(data.email=="1@1") 	end)
-	-- insert 1 with duplicate name
-	db.User2:insertOne(nil, {name="1", email="1@1.dup",}, function(err, data)  assert(data.email=="1@1.dup") 	end)
-	
-	-- find or findOne will automatically create index on `name` and `email` field.
-	-- indices are NOT forced to be unique. The caller needs to ensure this see `insertOne` below. 
-	db.User2:find({name="1",}, function(err, rows) assert(#rows==2); end);
-	db.User2:find({name="1", email="1@1"}, function(err, rows) assert(rows[1].email=="1@1"); end);
-	-- find with compound index of name and email
-	db.User2:find({ ["+name+email"] = {"1", "1@1"} }, function(err, rows) assert(#rows==1); end);
-	
-	-- force insert
-	db.User2:insertOne(nil, {name="LXZ", password="123"}, function(err, data)  assert(data.password=="123") 	end)
-	-- this is an update or insert command, if the query has result, it will actually update first matching row rather than inserting one. 
-	-- this is usually a good way to force uniqueness on key or compound keys, 
-	db.User2:insertOne({name="LXZ"}, {name="LXZ", password="1", email="lixizhi@yeah.net"}, function(err, data)  assert(data.password=="1") 	end)
-
-	-- insert another one
-	db.User2:insertOne({name="LXZ2"}, {name="LXZ2", password="123", email="lixizhi@yeah.net"}, function(err, data)  assert(data.password=="123") 	end)
-	-- update one
-	db.User2:updateOne({name="LXZ2",}, {name="LXZ2", password="2", email="lixizhi@yeah.net"}, function(err, data)  assert(data.password=="2") end)
-	-- remove and update fields
-	db.User2:updateOne({name="LXZ2",}, {_unset = {"password"}, updated="with unset"}, function(err, data)  assert(data.password==nil and data.updated=="with unset") end)
-	-- replace the entire document
-	db.User2:replaceOne({name="LXZ2",}, {name="LXZ2", email="lixizhi@yeah.net"}, function(err, data)  assert(data.updated==nil) end)
-	-- force flush to disk, otherwise the db IO thread will do this at fixed interval
-    db.User2:flush({}, function(err, bFlushed) assert(bFlushed==true) end);
-	-- select one, this will automatically create `name` index
-	db.User2:findOne({name="LXZ"}, function(err, user) assert(user.password=="1");	end)
-	-- array field such as {"password", "1"} are additional checks, but does not use index. 
-	db.User2:findOne({name="LXZ", {"password", "1"}, {"email", "lixizhi@yeah.net"}}, function(err, user) assert(user.password=="1");	end)
-	-- search on non-unqiue-indexed rows, this will create index `email` (not-unique index)
-	db.User2:find({email="lixizhi@yeah.net"}, function(err, rows) assert(#rows==2); end);
-	-- search and filter result with password=="1"
-	db.User2:find({name="LXZ", email="lixizhi@yeah.net", {"password", "1"}, }, function(err, rows) assert(#rows==1 and rows[1].password=="1"); end);
-	-- find all rows with custom timeout 1 second
-	db.User2:find({}, function(err, rows) assert(#rows==4); end, 1000);
-	-- remove item
-	db.User2:deleteOne({name="LXZ2"}, function(err, count) assert(count==1);	end);
-	-- wait flush may take up to 3 seconds
-	db.User2:waitflush({}, function(err, bFlushed) assert(bFlushed==true) end);
-	-- set cache to 2000KB
-	db.User2:exec({CacheSize=-2000}, function(err, data) end);
-	-- run select command from Collection 
-	db.User2:exec("Select * from Collection", function(err, rows) assert(#rows==3) end);
-	-- remove index fields
-	db.User2:removeIndex({"email", "name"}, function(err, bSucceed) assert(bSucceed == true) end)
-	-- full table scan without using index by query with array items.
-	db.User2:find({ {"name", "LXZ"}, {"password", "1"} }, function(err, rows) assert(#rows==1 and rows[1].name=="LXZ"); end);
-	-- find with left subset of previously created compound key "+name+email"
-	db.User2:find({ ["+name"] = {"1", limit=2} }, function(err, rows) assert(#rows==2); end);
-	-- return at most 1 row whose id is greater than -1
-	db.User2:find({ _id = { gt = -1, limit = 1, skip == 1} }, function(err, rows) assert(#rows==1); echo("all tests succeed!") end);
 end
 
 
@@ -157,14 +99,16 @@ function TestInsertThroughputNoIndex()
 	p:RunManyTimes(function(count)
 		db.insertNoIndex:insertOne(nil, {count=count, data=math.random()}, function(err, data)
 			if(err) then
-				-- echo({err, data});
+				echo({err, data, count});
 			end
 			p:Next();
 		end)
 	end, total_times, max_jobs):OnFinished(function(total)
 		npl_profiler.perf_end("tableDB_InsertThroughputNoIndex", true)
 		log(commonlib.serialize(npl_profiler.perf_get(), true));		
-		echo({"finished",total})	
+		echo({"finished",total})
+		db.insertNoIndex:flush({});
+		db.insertNoIndex:close()
 	end);
 end
 
@@ -765,5 +709,72 @@ function TestOpenDatabase()
 	db = nil;
 end
 
--- TestOpenDatabase()
--- ParaGlobal.Exit(0)
+
+function createStoreConfig(rootFolder, name, type, file)
+	NPL.load("(gl)script/ide/commonlib.lua");
+	NPL.load("(gl)script/ide/LuaXML.lua");
+	local config = { 
+		name = "tabledb", 
+		{
+			name = "providers", 
+			{ name = "provider", attr = { name = name, type = type, file = file }, "" }
+		},
+		{
+			name = "tables",
+			{ name = "table", attr = { provider = name, name = "default" } }, 
+		}
+	}
+
+	local config_path = rootFolder .. "/tabledb.config.xml";
+	local str = commonlib.Lua2XmlString(config, true);
+	ParaIO.CreateDirectory(config_path);
+	local file = ParaIO.open(config_path, "w");
+	if (file:IsValid()) then
+		file:WriteString(str);
+		file:close();
+	end
+end
+
+function TestSqliteWALStore()
+	local rootFolder = "temp/test_sqlite_wal_store/"
+	local cloneRootFolder = "temp/test_sqlite_wal_store_clone/"
+	local config_path = rootFolder .. "/tabledb.config.xml";
+	createStoreConfig(rootFolder, "testSqliteWAL", "TableDB.test.TestSqliteWALStore", "(g1)npl_mod/TableDB/test/TestSqliteWALStore.lua");
+	createStoreConfig(cloneRootFolder, "sqliteWAL", "TableDB.SqliteWALStore", "(g1)npl_mod/TableDB/SqliteWALStore.lua");
+
+	NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
+	local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
+
+    -- this will start both db client and db server if not.
+	local db = TableDatabase:new():connect(rootFolder);
+	
+	db.insertNoIndex:makeEmpty({});
+	db.insertNoIndex:flush({});
+		
+	NPL.load("(gl)script/ide/Debugger/NPLProfiler.lua");
+	local npl_profiler = commonlib.gettable("commonlib.npl_profiler");
+	npl_profiler.perf_reset();
+
+	npl_profiler.perf_begin("tableDB_InsertThroughputNoIndex", true)
+	local total_times = 1000000; -- a million non-indexed insert operation
+	local max_jobs = 1000; -- concurrent jobs count
+	NPL.load("(gl)script/ide/System/Concurrent/Parallel.lua");
+	local Parallel = commonlib.gettable("System.Concurrent.Parallel");
+	local p = Parallel:new():init()
+
+	p:RunManyTimes(function(count)
+		db.insertNoIndex:insertOne(nil, {count=count, data=math.random()}, function(err, data)
+			if(err) then
+				echo({err, data, count});
+			end
+			p:Next();
+		end)
+	end, total_times, max_jobs):OnFinished(function(total)
+		npl_profiler.perf_end("tableDB_InsertThroughputNoIndex", true)
+		log(commonlib.serialize(npl_profiler.perf_get(), true));		
+		echo({"finished",total})
+		db.insertNoIndex:flush({});
+		db.insertNoIndex:close()
+	end);
+
+end
