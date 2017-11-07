@@ -97,7 +97,7 @@ local function executeInServerMode(stateMachine)
     raftParameters.maximumAppendingSize = 200;
     raftParameters.logSyncBatchSize = 5;
     raftParameters.logSyncStopGap = 5;
-    raftParameters.snapshotDistance = 5000;
+    raftParameters.snapshotDistance = 50000;
     raftParameters.snapshotBlockSize = 0;
 
     local rpcListener = RpcListener:new(listenIp, listenPort, thisServer.id, config.servers, raftThreadName)
