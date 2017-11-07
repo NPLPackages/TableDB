@@ -24,7 +24,6 @@ local RaftTableDBStateMachine = commonlib.gettable("TableDB.RaftTableDBStateMach
 NPL.load("(gl)npl_mod/Raft/RaftClient.lua");
 local RaftClient = commonlib.gettable("Raft.RaftClient");
 local LoggerFactory = NPL.load("(gl)npl_mod/Raft/LoggerFactory.lua");
-local logger = LoggerFactory.getLogger("RaftSqliteWALStore")
 
 local RaftSqliteWALStore = commonlib.inherit(commonlib.gettable("System.Database.SqliteStore"), commonlib.gettable("TableDB.RaftSqliteWALStore"));
 
@@ -33,6 +32,7 @@ local raftClient;
 
 RaftSqliteWALStore.name = "raft";
 RaftSqliteWALStore.thread_name = format("(%s)", __rts__:GetName());
+RaftSqliteWALStore.logger = LoggerFactory.getLogger("RaftSqliteWALStore")
 
 function RaftSqliteWALStore:createRaftClient(baseDir, host, port, id, threadName, rootFolder, useFile)
     RaftSqliteWALStore.responseThreadName = self.thread_name;
@@ -80,6 +80,7 @@ function RaftSqliteWALStore:getRaftClient()
     return raftClient;
 end
 
+local entries = {}
 function RaftSqliteWALStore:init(collection, init_args)
     print(util.table_tostring(init_args))
     RaftSqliteWALStore._super.init(self, collection);
@@ -90,25 +91,30 @@ function RaftSqliteWALStore:init(collection, init_args)
     end
     
     local dbName = self.kFileName
+    local this = self
     self._db:set_wal_page_hook(function(page_data, pgno, nTruncate, isCommit)
         local rootFolder = collection:GetParent():GetRootFolder();
         local collectionName = collection:GetName();
         local raftWALLogEntryValue = RaftWALLogEntryValue:new(rootFolder, collectionName, page_data, pgno, nTruncate, isCommit)
         
         local bytes = raftWALLogEntryValue:toBytes();
+        entries[#entries + 1] = bytes;
+        this.logger.info("%d entries, pgSize %d, pgno %d, nTruncate %d, isCommit %d", #entries, #page_data, pgno, nTruncate, isCommit);
         
-        raftClient:appendEntries(bytes, function(response, err)
-            local result = (err == nil and response.accepted and "accepted") or "denied"
-            if not (err == nil and response.accepted) then
-                logger.error("the %s WAL appendEntries request has been %s", collectionName, result)
-            else
-                logger.debug("the %s WAL appendEntries request has been %s", collectionName, result)
-            end
-        -- if callbackFunc then
-        -- 	callbackFunc(err);
-        -- end
-        end)
-        self.logger.trace("pgSize %d, pgno %d, nTruncate %d, isCommit %d", #page_data, pgno, nTruncate, isCommit);
+        if isCommit == 1 then
+            raftClient:appendEntries(entries, function(response, err)
+                local result = (err == nil and response.accepted and "accepted") or "denied"
+                if not (err == nil and response.accepted) then
+                    this.logger.error("the %s WAL appendEntries request has been %s", collectionName, result)
+                else
+                    this.logger.debug("the %s WAL appendEntries request has been %s", collectionName, result)
+                end
+            -- if callbackFunc then
+            -- 	callbackFunc(err);
+            -- end
+            end)
+            entries = {}
+        end
         return 1
     end)
     
@@ -196,7 +202,7 @@ function RaftSqliteWALStore:WaitForSyncModeReply(timeout, cb_index)
             if (msg.filename == "Rpc/RTDBRequestRPC.lua" or msg.filename == "Rpc/ConnectRequestRPC.lua") then
                 local msg = thread:PopMessageAt(i, {filename = true, msg = true});
                 local out_msg = msg.msg;
-                logger.trace("recv msg:%s", util.table_tostring(out_msg));
+                self.logger.trace("recv msg:%s", util.table_tostring(out_msg));
                 -- we use this only in connect and we should ensure connect's cb_index should be -1
                 if not RaftSqliteWALStore.EnableSyncMode then
                     raftClient.HandleResponse(nil, out_msg.msg);
@@ -205,7 +211,7 @@ function RaftSqliteWALStore:WaitForSyncModeReply(timeout, cb_index)
                 end
                 if (cb_index and out_msg.msg and out_msg.msg.cb_index == cb_index) or
                     (cb_index == nil and out_msg.msg and out_msg.msg.destination and out_msg.msg.destination ~= -1) then
-                    logger.debug("got the correct msg");
+                    self.logger.debug("got the correct msg");
                     reply_msg = out_msg.msg;
                     break;
                 end
@@ -257,12 +263,13 @@ function RaftSqliteWALStore:connect(db, data, callbackFunc)
     raftClient:setRequestRPC(ConnectRequestRPC)
     raftClient:appendEntries(bytes, function(response, err)
         local result = (err == nil and response.accepted and "accepted") or "denied"
-        logger.info("the CONNECT request has been %s", result)
+        self.logger.info("the CONNECT request has been %s", result)
         if callbackFunc then
             callbackFunc(err, response.data);
         end
     end)
     
+    self.logger.info("waiting for Connect");
     self:WaitForSyncModeReply(5000);
     raftClient:setRequestRPC(RTDBRequestRPC)
 

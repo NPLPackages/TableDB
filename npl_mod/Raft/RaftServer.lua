@@ -182,7 +182,7 @@ function RaftServer:processRequest(request)
             response.destination,
             (response.accepted and "true") or "false",
             response.term,
-            response.nextIndex);
+            response.nextIndex or -1);
     else
         self.logger.error("why goes here?? response is nil")
         self.stateMachine:exit(-1);
@@ -336,9 +336,10 @@ function RaftServer:handleClientRequest(request)
     
     local term = self.state.term
     
+    self.logger.info("ClientRequest start with logIndex %d, %d entries", self.logStore:getFirstAvailableIndex(), #request.logEntries)
     -- the leader executes the SQL, but the followers just append to WAL
     if request.logEntries and #request.logEntries > 0 then
-        for i, v in ipairs(request.logEntries) do
+        for _, v in ipairs(request.logEntries) do
             local logEntry = LogEntry:new(term, v.value)
             local logIndex = self.logStore:append(logEntry)
             self.stateMachine:preCommit(logIndex, v.value);
@@ -542,7 +543,7 @@ function RaftServer:handleAppendEntriesResponse(response)
     -- and the role was updated by UpdateTerm call
     -- Try to match up the logs for this peer
     if (self.role == ServerRole.Leader and needToCatchup) then
-        self.logger.debug("Server %d needToCatchup %d < %d", peer:getId(), peer.nextLogIndex, self.logStore:getFirstAvailableIndex())
+        self.logger.debug("Server %d needToCatchup", peer:getId())
         self:requestAppendEntries(peer);
     end
 end

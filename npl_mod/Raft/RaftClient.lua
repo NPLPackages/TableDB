@@ -42,7 +42,7 @@ function RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory)
 	-- att:SetField("KeepAlive", false);
 	att:SetField("IdleTimeout", true);
 	att:SetField("IdleTimeoutPeriod", 1200000);
-    __rts__:SetMsgQueueSize(50000);
+    __rts__:SetMsgQueueSize(5000000);
 
     NPL.StartNetServer(localAddress.host, localAddress.port);
     
@@ -84,6 +84,7 @@ function RaftClient:appendEntries(values, callbackFunc)
         logEntries = logEntries,
     }
     
+    self.logger.trace("send %d logEntries", #request.logEntries);
     self:tryCurrentLeader(request, callbackFunc, 0, 0)
 end
 
@@ -182,10 +183,10 @@ function RaftClient:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry)
                 callbackFunc(response, err)
             end
         elseif err == "timeout" then
-            self.logger.debug("the request is timeout")
+            self.logger.error("the request is timeout")
         -- backoff_retry_func()
         else
-            self.logger.debug("rpc error, failed(%d) to send request to remote server, err:%s. tried %d, no more try here", activate_result, err, retry);
+            self.logger.error("rpc error, failed(%d) to send request to remote server, err:%s. tried %d, no more try here", activate_result, err, retry);
         end
     end
     
@@ -193,7 +194,7 @@ function RaftClient:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry)
     
     local activate_result = self.RequestRPC(self.localAddress, "server" .. self.leaderId .. ":", request, HandleResponse, nil);
     if (activate_result ~= 0) then
-        self.logger.debug("rpc error, failed(%d) to send request to remote server. tried %dth", activate_result, retry);
+        self.logger.error("rpc error, failed(%d) to send request to remote server. tried %dth", activate_result, retry);
         if (retry > 3 * #self.configuration.servers) then
             self.logger.error("FAILED. reach to the max retry. tried %ds", retry);
             if callbackFunc then

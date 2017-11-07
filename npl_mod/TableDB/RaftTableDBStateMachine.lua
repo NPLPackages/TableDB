@@ -86,8 +86,7 @@ function RaftTableDBStateMachine:start(raftMessageSender)
 
     local this = self;
     Rpc:new():init("RTDBRequestRPC", function(self, msg)
-        msg = this:processMessage(msg)
-        return msg;
+        return this:processMessage(msg)
     end)
     RTDBRequestRPC.remoteThread = self.threadName;
     RTDBRequestRPC:MakePublic();
@@ -470,7 +469,7 @@ end
 
 
 function RaftTableDBStateMachine:processMessage(message)
-    self.logger.info("Got a message");-- .. util.table_tostring(message));
+    -- self.logger.info("Got a message");-- .. util.table_tostring(message));
     return self.messageSender:appendEntries(message);
 end
 
