@@ -11,7 +11,8 @@ local SqliteWALStore = commonlib.gettable("TableDB.SqliteWALStore");
 ]]
 NPL.load("(gl)script/ide/commonlib.lua");
 NPL.load("(gl)script/sqlite/sqlite3.lua");
-
+NPL.load("(gl)script/ide/System/Compiler/lib/util.lua");
+local util = commonlib.gettable("System.Compiler.lib.util")
 NPL.load("(gl)script/ide/System/Database/SqliteStore.lua");
 local SqliteStore = commonlib.gettable("System.Database.SqliteStore");
 local SqliteWALStore = commonlib.inherit(SqliteStore, commonlib.gettable("TableDB.SqliteWALStore"));
@@ -48,6 +49,7 @@ function SqliteWALStore:init(collection, init_args)
 end
 
 function SqliteWALStore:injectWALPage(query, callbackFunc)
+    self.logger.info("logIndex:%d, pgSize %d, pgno %d, nTruncate %d, isCommit %d", query.logIndex, #query.page_data, query.pgno, query.nTruncate, query.isCommit)
     local r = self._db:wal_inject_page(query.page_data, query.pgno, query.nTruncate, query.isCommit)
     if r ~= 0 then
       self.logger.error("%d inject failed, %d", query.logIndex, r);
