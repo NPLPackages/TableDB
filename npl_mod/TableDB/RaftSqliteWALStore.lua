@@ -3,8 +3,24 @@ Title: RaftSqliteWALStore
 Author(s): liuluheng,
 Date: 2017/7/31
 Desc:
+This Store makes client get WAL page data and send directly to raft cluster,
+the throughput is awesome, much like local mode tabledb.
 
-use the lib:
+However use this store client can not be scaled, since each client maintains its local collections' db.
+so this store can only be used when we are sure about there is only one client.
+
+
+Use the lib:
+need some modifications in
+
+RaftServer.lua: real_commit -- comment out the third augment
+    server.stateMachine:commit(currentCommitIndex, logEntry.value) --, server.role == ServerRole.Leader);
+RaftTableDBStateMachine.lua: commit -- uncomment below code
+    local data = RaftWALLogEntryValue:fromBytes(data);
+SqliteWALStore.lua: init -- uncomment set_wal_page_hook
+
+FileBasedSequentialLogStore.lua: -- comment all the walMsgFromBytes/walMsgToBytes
+
 ------------------------------------------------------------
 NPL.load("(gl)npl_mod/TableDB/RaftSqliteWALStore.lua");
 local RaftSqliteWALStore = commonlib.gettable("TableDB.RaftSqliteWALStore");
@@ -82,7 +98,7 @@ end
 
 local entries = {}
 function RaftSqliteWALStore:init(collection, init_args)
-    print(util.table_tostring(init_args))
+    self.logger.info(util.table_tostring(init_args))
     RaftSqliteWALStore._super.init(self, collection);
     
     self.collection = collection;
