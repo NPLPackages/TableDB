@@ -13,6 +13,9 @@ so this store can only be used when we are sure about there is only one client.
 Use the lib:
 need some modifications in
 
+tabledb.config.xml: -- RaftSqliteWALStore and raft thread
+	<provider type="TableDB.RaftSqliteWALStore" name="raft" file="(g1)npl_mod/TableDB/RaftSqliteWALStore.lua">./,localhost,9004,4,raft,temp/test_raft_database/
+	</provider>
 RaftServer.lua: real_commit -- comment out the third augment
     server.stateMachine:commit(currentCommitIndex, logEntry.value) --, server.role == ServerRole.Leader);
 RaftTableDBStateMachine.lua: commit -- uncomment below code
