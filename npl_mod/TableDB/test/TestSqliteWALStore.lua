@@ -62,6 +62,7 @@ local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
 local rootFolderClone = "temp/test_sqlite_wal_store_clone/"
 local collectionClone = TableDatabase:new():connect(rootFolderClone)["insertNoIndexClone"];
 
+local logIndex = 1;
 -- TODO:checkout why init is called so many times
 function TestSqliteWALStore:init(collection, init_args)
     TestSqliteWALStore._super.init(self, collection);
@@ -80,6 +81,8 @@ function TestSqliteWALStore:init(collection, init_args)
         }
         print(format("wal_page_hook: pgSize %d, pgno %d, nTruncate %d, isCommit %d", #page_data, pgno, nTruncate, isCommit))
 
+        msg.logIndex = logIndex;
+        logIndex = logIndex + 1;
         this:InjectWALPage(msg);
         return 1
     end)
