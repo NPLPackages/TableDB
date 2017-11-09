@@ -13,6 +13,8 @@ local RaftLogEntryValue = commonlib.gettable("TableDB.RaftLogEntryValue");
 --
 NPL.load("(gl)script/ide/commonlib.lua");
 local RaftLogEntryValue = commonlib.gettable("TableDB.RaftLogEntryValue");
+NPL.load("(gl)npl_mod/TableDB/VectorPool.lua");
+local VectorPool = commonlib.gettable("TableDB.VectorPool");
 
 local memoryFile;
 -- set this to true, if one wants to use binary format (currently slower than text format)
@@ -33,6 +35,21 @@ function RaftLogEntryValue:new(query_type, collection, query, index, serverId, e
     };
     setmetatable(o, self);
     return o;
+end
+
+function RaftLogEntryValue:new_from_pool(query_type, collection, query, index, serverId, enableSyncMode, callbackThread)
+	return VectorPool.GetSingleton():GetVector(query_type, collection, query, index, serverId, enableSyncMode, callbackThread);	
+end
+
+
+function RaftLogEntryValue:set(query_type, collection, query, index, serverId, enableSyncMode, callbackThread)
+    self.query_type = query_type;
+    self.collection = collection:ToData();
+    self.query = query;
+    self.cb_index = index;
+    self.serverId = serverId;
+    self.callbackThread = callbackThread;
+    self.enableSyncMode = enableSyncMode;
 end
 
 function RaftLogEntryValue:__index(name)
