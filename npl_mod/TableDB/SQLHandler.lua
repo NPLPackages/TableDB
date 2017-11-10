@@ -126,11 +126,11 @@ function SQLHandler:processMessage(request)
     end
 
     -- the leader executes the SQL, but the followers just append to WAL
-    -- if request.logEntries and #request.logEntries > 0 then
-    --     for i, v in ipairs(request.logEntries) do
-    --         self:handle(v.value);
-    --     end
-    -- end
+    if request.logEntries and #request.logEntries > 0 then
+        for i, v in ipairs(request.logEntries) do
+            self:handle(v.value);
+        end
+    end
     
     response.accepted = true;
     return response
@@ -184,15 +184,15 @@ function SQLHandler:handle(data, callbackFunc)
             self.db:EnableSyncMode(true);
         end
         -- self.db:connect(raftLogEntryValue.collection.db);
-        local collection = self.db[raftLogEntryValue.collection.name];
+        local collection = self.db[raftLogEntryValue.collectionName];
         
         --add to collections
-        if not self.collections[raftLogEntryValue.collection.name] then
-            local collectionPath = raftLogEntryValue.collection.db .. raftLogEntryValue.collection.name;
-            self.logger.trace("add collection %s->%s", raftLogEntryValue.collection.name, collectionPath)
-            self.collections[raftLogEntryValue.collection.name] = collectionPath;
-            -- self.db.collections:insertOne(nil, {name=raftLogEntryValue.collection.name,path=collectionPath});
-        -- self.collections[raftLogEntryValue.collection.name] = collection
+        if not self.collections[raftLogEntryValue.collectionName] then
+            local collectionPath = raftLogEntryValue.db .. raftLogEntryValue.collectionName;
+            self.logger.trace("add collection %s->%s", raftLogEntryValue.collectionName, collectionPath)
+            self.collections[raftLogEntryValue.collectionName] = collectionPath;
+            -- self.db.collections:insertOne(nil, {name=raftLogEntryValue.collectionName,path=collectionPath});
+        -- self.collections[raftLogEntryValue.collectionName] = collection
         end
         
         -- NOTE: this may not work when the query field named "update" or "replacement"
