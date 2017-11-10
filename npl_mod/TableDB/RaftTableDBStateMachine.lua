@@ -151,12 +151,12 @@ end
 * @param data
 ]]
 --
-function RaftTableDBStateMachine:commit(logIndex, data)
+function RaftTableDBStateMachine:commit(logIndex, data, isLeader)
     -- if logIndex % 10 == 0 then
         self.logger.info("commit:%d", logIndex);
     -- end
     
-    local data = RaftWALLogEntryValue:fromBytes(data);
+    -- local data = RaftWALLogEntryValue:fromBytes(data);
     data.logIndex = logIndex;
     
 	local config_path = data.rootFolder .. "/tabledb.config.xml";
@@ -174,8 +174,10 @@ function RaftTableDBStateMachine:commit(logIndex, data)
         self.collections[data.collectionName] = collectionPath;
     end
 
-    local collection = self.db[data.collectionName];
-    collection:injectWALPage(data);
+    if not isLeader then
+        local collection = self.db[data.collectionName];
+        collection:injectWALPage(data);
+    end
 
     self.commitIndex = logIndex;
 end

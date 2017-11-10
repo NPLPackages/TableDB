@@ -1607,7 +1607,7 @@ function real_commit(server)
             server.logger.error("committed an empty LogEntry at %d !!", currentCommitIndex)
         elseif (logEntry.valueType == LogValueType.Application) then
             -- if server.role ~= ServerRole.Leader then
-                server.stateMachine:commit(currentCommitIndex, logEntry.value);
+                server.stateMachine:commit(currentCommitIndex, logEntry.value, server.role == ServerRole.Leader);
             -- end
         
         elseif (logEntry.valueType == LogValueType.Configuration) then

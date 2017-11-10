@@ -71,7 +71,7 @@ function RpcListener:startListening(messageHandler)
 	-- att:SetField("KeepAlive", false);
 	att:SetField("IdleTimeout", true);
 	att:SetField("IdleTimeoutPeriod", 1200000);
-    __rts__:SetMsgQueueSize(50000);
+    __rts__:SetMsgQueueSize(5000000);
 
     NPL.StartNetServer(self.ip, self.port);
     

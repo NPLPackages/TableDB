@@ -148,9 +148,9 @@ function FileBasedSequentialLogStore:append(logEntry)
     -- self.dataFile:WriteBytes(#logEntry.value, {logEntry.value:byte(1, -1)});
     -- self.dataFile:write(logEntry.value, #logEntry.value);
     local valueBytes = logEntry.value
-    -- if logEntry.valueType == LogValueType.Application then
-        -- valueBytes = walMsgToBytes(logEntry.value)
-    -- end
+    if logEntry.valueType == LogValueType.Application then
+        valueBytes = walMsgToBytes(logEntry.value)
+    end
     -- WriteBytes didn't work! BUG?
     
     if type(valueBytes) == "string" then
@@ -202,9 +202,9 @@ function FileBasedSequentialLogStore:writeAt(logIndex, logEntry)
     -- self.dataFile:WriteBytes(#logEntry.value, {logEntry.value:byte(1, -1)});
     -- self.dataFile:write(logEntry.value, #logEntry.value);
     local valueBytes = logEntry.value
-    -- if logEntry.valueType == LogValueType.Application then
-    --     valueBytes = walMsgToBytes(logEntry.value)
-    -- end
+    if logEntry.valueType == LogValueType.Application then
+        valueBytes = walMsgToBytes(logEntry.value)
+    end
     -- WriteBytes didn't work! BUG?
     -- self.dataFile:WriteBytes( #valueBytes, valueBytes);
     if type(valueBytes) == "string" then
@@ -646,7 +646,7 @@ function FileBasedSequentialLogStore:readEntry(size)
     -- util.table_print(valueBytes)
     local value = valueBytes;
     if valueType == LogValueType.Application then
-    --     value = walMsgFromBytes(valueBytes)
+        value = walMsgFromBytes(valueBytes)
     else
         value = string.char(unpack(valueBytes))
     end
