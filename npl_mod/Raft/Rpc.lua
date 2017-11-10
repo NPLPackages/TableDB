@@ -39,20 +39,84 @@ local logger = LoggerFactory.getLogger("Rpc")
 local Rpc = commonlib.gettable("Raft.Rpc");
 
 local rpc_instances = {};
+local callbackQueue = {};
 
+-- default time out for a given request. default to 10 seconds
 Rpc.DefaultTimeout = 10000;
+-- internal timer period
+Rpc.monitorPeriod = 10000;
 
 function Rpc:new(o)
   o = o or {};
   o.logger = logger;
-  o.run_callbacks = {};
-  o.next_run_id = 0;
   o.thread_name = format("(%s)", __rts__:GetName());
   o.MaxWaitSeconds = 3;
   
   setmetatable(o, Rpc);
   return o;
 end
+
+
+function Rpc:OneTimeInit()
+	if(self.inited) then
+		return;
+	end
+	self.inited = true;
+	NPL.load("(gl)script/ide/timer.lua");
+	self.mytimer = commonlib.Timer:new({callbackFunc = function(timer)
+		self:CheckTimedOutRequests();
+	end})
+	self.mytimer:Change(self.monitorPeriod, self.monitorPeriod);
+end
+
+-- remove any timed out request.
+function Rpc:CheckTimedOutRequests()
+	local curTime = ParaGlobal.timeGetTime();
+	local timeout_pool;
+	for i, cb in pairs(callbackQueue) do
+		if((curTime - cb.startTime) > (cb.timeout or self.DefaultTimeout) ) then
+			timeout_pool = timeout_pool or {};
+			timeout_pool[i] = cb;
+		end
+	end
+	if(timeout_pool) then
+		for i, cb in pairs(timeout_pool) do
+			callbackQueue[i] = nil;
+			if(cb.callbackFunc) then
+				cb.callbackFunc("timeout", nil);
+			end
+		end
+	end
+end
+
+local next_id = 0;
+function getNextId()
+	next_id = next_id + 1;
+	return next_id;
+end
+-- get next callback pool index. may return nil if max queue size is reached. 
+-- @return index or nil
+function Rpc:PushCallback(callbackFunc, timeout)
+	if(not callbackFunc) then
+		return -1;
+	end
+	local index = getNextId();
+	callbackQueue[index] = {callbackFunc = callbackFunc, startTime = ParaGlobal.timeGetTime(), timeout=timeout};
+	return index;
+end
+
+function Rpc:PopCallback(index)
+	if(index) then
+		local cb = callbackQueue[index];
+		if(cb) then
+			callbackQueue[index] = nil;
+			return cb;
+		end
+	end
+end
+
+
+
 
 
 -- @param funcName: global function name, such as "API.Auth"
@@ -85,19 +149,19 @@ function Rpc:SetPublicFile(filename)
   filename = filename or format("Rpc/%s.lua", self.fullname);
   self.filename = filename;
 
-  if self.filename == "RaftRequestRPC" then
-    NPL.this(function() 
-      self:OnActivated(msg);
-    end, {PreemptiveCount = 2000, MsgQueueSize=50000, filename = self.filename});
-  elseif self.filename == "RTDBRequestRPC" then
-    NPL.this(function() 
-      self:OnActivated(msg);
-    end, {PreemptiveCount = 1000, filename = self.filename}); 
-  else
+  -- if self.filename == "RaftRequestRPC" then
+  --   NPL.this(function() 
+  --     self:OnActivated(msg);
+  --   end, {PreemptiveCount = 2000, MsgQueueSize=50000, filename = self.filename});
+  -- elseif self.filename == "RTDBRequestRPC" then
+  --   NPL.this(function() 
+  --     self:OnActivated(msg);
+  --   end, {PreemptiveCount = 1000, filename = self.filename}); 
+  -- else
     NPL.this(function() 
         self:OnActivated(msg);
       end, {filename = self.filename});
-  end
+  -- end
 
   self.logger.info("%s installed to file %s", self.fullname, self.filename);
 end
@@ -215,24 +279,14 @@ function Rpc:OnActivated(msg)
       end
 
     elseif(msg.type== "result" and msg.callbackId) then
-      self:InvokeCallback(msg.callbackId, msg.err, msg.msg);
+      local cb = self:PopCallback(msg.callbackId);
+      if(cb and cb.callbackFunc) then
+        cb.callbackFunc(msg.err, msg.msg);
+      end
     end
   end
 end
 
--- private invoke callback and remove from queue, 
-function Rpc:InvokeCallback(callbackId, err, msg)
-  local callback = self.run_callbacks[callbackId];
-  if(callback) then
-    if(callback.timer) then
-      callback.timer:Change();
-    end
-    self.run_callbacks[callbackId] = nil;
-    if(type(callback.callbackFunc) == "function") then
-      callback.callbackFunc(err, msg);
-    end
-  end
-end
 
 -- smallest short value to avoid conflicts with manual id. 
 local min_short_value = 100000;
@@ -279,21 +333,9 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
   -- end
 
   -- TTL Cache
-  local timeout = timeout or self.DefaultTimeout;
+  self:OneTimeInit();
+	local callbackId = self:PushCallback(callbackFunc);
 
-  local callbackId = self.next_run_id + 1;
-  self.next_run_id = callbackId
-  local callback = {
-    callbackFunc = callbackFunc,
-    timeout = timeout,
-  };
-  self.run_callbacks[callbackId] = callback;
-  if(timeout and timeout>0) then
-    callback.timer = callback.timer or commonlib.Timer:new({callbackFunc = function(timer)
-      self:InvokeCallback(callbackId, "timeout", nil);
-    end});
-    callback.timer:Change(timeout, nil)
-  end
 
   local vFileId = format("(%s)%s%s", self.remoteThread or "main", self.remoteAddress or "", self.filename)
   if string.match(self.remoteAddress, "%(%a+%)")  then 
@@ -303,7 +345,7 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
     type="run", 
     msg = msg, 
     name = self.fullname,
-    callbackId = self.next_run_id, 
+    callbackId = callbackId, 
     callbackThread = self.thread_name,
     remoteAddress = self.localAddress,
   }
@@ -315,7 +357,7 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
   if activate_result ~= 0 then
     -- activate_result = NPL.activate_with_timeout(self.MaxWaitSeconds, vFileId, msg)
     -- if activate_result ~= 0 then
-      self.run_callbacks[callbackId] = nil
+      callbackQueue[callbackId] = nil
       self.logger.error("activate on %s failed %d, msg type:%s", vFileId, activate_result, msg.type)
     -- end
   end
