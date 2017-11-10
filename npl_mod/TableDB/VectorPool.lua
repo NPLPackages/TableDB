@@ -15,6 +15,7 @@ vecPool:CleanPool();
 -------------------------------------------------------
 ]]
 NPL.load("(gl)script/ide/STL.lua");
+local LoggerFactory = NPL.load("(gl)npl_mod/Raft/LoggerFactory.lua");
 
 NPL.load("(gl)npl_mod/TableDB/RaftLogEntryValue.lua");
 local RaftLogEntryValue = commonlib.gettable("TableDB.RaftLogEntryValue");
@@ -29,7 +30,7 @@ VectorPool.maxNumCleansToShrink = 30*30;
 VectorPool.numEntriesToRemove = 500;
 -- we will automatically reuse from beginning when reaching this value. 
 -- such that CleanPool() is not a must-call function. Depending on usage pattern.
-VectorPool.maxPoolSize = 20;
+VectorPool.maxPoolSize = 200;
 
 function VectorPool:new()
 	local o = {};
@@ -43,7 +44,8 @@ function VectorPool:new()
 	o.maxPoolIndex = 0;
 	-- Largest index reached by this Pool since last Shrink operation. 
 	o.maxPoolIndexFromLastShrink = 0;
-
+	o.logger = LoggerFactory.getLogger("VectorPool"),
+	
 	setmetatable(o, self);
 	return o;
 end
@@ -68,20 +70,20 @@ end
 -- Creates a new Vector, or reuses one that's no longer in use. 
 -- @param x,y,z:
 -- returns from this function should only be used for one frame or tick, as after that they will be reused.
-function VectorPool:GetVector(query_type, collection, query, index, serverId, enableSyncMode, callbackThread)
+function VectorPool:GetVector(query_type, db, collectionName, query, index, serverId, enableSyncMode, callbackThread)
     local raftLogEntryValue;
 
     if (self.nextPoolIndex > self.listVectorRaftLogEntry:size()) then
-		raftLogEntryValue = RaftLogEntryValue:new(query_type, collection, query, index, serverId, enableSyncMode, callbackThread);
+		raftLogEntryValue = RaftLogEntryValue:new(query_type, db, collectionName, query, index, serverId, enableSyncMode, callbackThread);
         self.listVectorRaftLogEntry:add(raftLogEntryValue);
     else
         raftLogEntryValue = self.listVectorRaftLogEntry:get(self.nextPoolIndex);
-		raftLogEntryValue:set(query_type, collection, query, index, serverId, enableSyncMode, callbackThread)
+		raftLogEntryValue:set(query_type, db, collectionName, query, index, serverId, enableSyncMode, callbackThread)
     end
 
     self.nextPoolIndex = self.nextPoolIndex + 1;
 	if(self.nextPoolIndex > self.maxPoolSize) then
-		LOG.std(nil, "debug", "VectorPool", "maxPoolSize reached %d", self.maxPoolSize);
+		self.logger.debug("maxPoolSize reached %d", self.maxPoolSize);
 		self.maxPoolIndex = self.maxPoolSize;
 		self.nextPoolIndex = 1;
 	end

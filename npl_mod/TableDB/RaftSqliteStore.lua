@@ -65,7 +65,7 @@ function RaftSqliteStore:createRaftClient(baseDir, host, port, id, threadName, r
     
     raftClient = RaftClient:new(localAddress, RTDBRequestRPC, config, LoggerFactory)
     
-    self:connect(self, {rootFolder = rootFolder});
+    self:connect(rootFolder);
 
 
 end
@@ -99,7 +99,7 @@ function RaftSqliteStore:init(collection, init_args)
 end
 
 
-
+RaftSqliteStore.EnableSyncMode = false;
 -- how many seconds to wait on busy database, before we send "queue_full" error. This parameter only takes effect when self.WaitOnBusyDB is true.
 RaftSqliteStore.MaxWaitSeconds = 5;
 -- default time out for a given request. default to 5 seconds
@@ -262,25 +262,20 @@ function RaftSqliteStore:InvokeCallback(callbackFunc, err, data)
 end
 
 
-function RaftSqliteStore:connect(db, data, callbackFunc)
+function RaftSqliteStore:connect(rootFolder, callbackFunc)
     local query_type = "connect"
-    local collection = {
-        ToData = function(...) end,
-    }
     
-    local query = {
-        rootFolder = data.rootFolder,
-    }
-    
-    local raftLogEntryValue = RaftLogEntryValue:new_from_pool(query_type, collection, query, -1,
+    local raftLogEntryValue = RaftLogEntryValue:new_from_pool(
+        query_type,
+        rootFolder,
+        nil,
+        nil,
+        -1,
         raftClient.localAddress.id,
         RaftSqliteStore.EnableSyncMode,
-        RaftSqliteStore.thread_name);
+        RaftSqliteStore.responseThreadName);
     local bytes = raftLogEntryValue:toBytes();
     
-    -- if not raftClient then
-    --   self:createRaftClient()
-    -- end
     raftClient:appendEntries(bytes, function(response, err)
         local result = (err == nil and response.accepted and "accepted") or "denied"
         logger.info("the %s request has been %s", query_type, result)
@@ -297,9 +292,15 @@ function RaftSqliteStore:Send(query_type, query, callbackFunc)
     self:OneTimeInit();
     local index = self:PushCallback(callbackFunc);
     if (index) then
-        local raftLogEntryValue = RaftLogEntryValue:new_from_pool(query_type, self.collection, query,
-            index, raftClient.localAddress.id,
-            RaftSqliteStore.EnableSyncMode, RaftSqliteStore.responseThreadName);
+        local raftLogEntryValue = RaftLogEntryValue:new_from_pool(
+            query_type,
+            self.collection.parent:GetRootFolder(),
+            self.collection.name,
+            query,
+            index,
+            raftClient.localAddress.id,
+            RaftSqliteStore.EnableSyncMode,
+            RaftSqliteStore.responseThreadName);
         local bytes = raftLogEntryValue:toBytes();
         
         raftClient:appendEntries(bytes, function(response, err)

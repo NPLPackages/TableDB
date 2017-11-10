@@ -32,6 +32,10 @@ local SQLHandler = commonlib.gettable("TableDB.SQLHandler");
 
 local g_threadName = __rts__:GetName();
 
+local response = {
+    messageType = RaftMessageType.AppendEntriesResponse,
+}
+
 -- for function not in class
 local logger = LoggerFactory.getLogger("SQLHandler");
 
@@ -50,7 +54,7 @@ function SQLHandler:new(baseDir, useFile)
     local o = {
         baseDir = baseDir,
         stateManager = ServerStateManager:new(baseDir),
-        monitorPeriod = 5000;
+        monitorPeriod = 50000;
         threadName = g_threadName,
         logger = LoggerFactory.getLogger("SQLHandler"),
         latestCommand = -2,
@@ -113,12 +117,9 @@ function SQLHandler:processMessage(request)
         end
     end
 
-    local response = {
-        messageType = RaftMessageType.AppendEntriesResponse,
-        source = self.stateManager.serverId,
-        destination = self.state.votedFor, -- use destination to indicate the leadId
-        term = self.state.term,
-    }
+    response.source = self.stateManager.serverId;
+    response.destination = self.state.votedFor; -- use destination to indicate the leadId
+    response.term = self.state.term;
     
     if self.state.votedFor ~= self.stateManager.serverId then
         response.accepted = false
@@ -127,7 +128,7 @@ function SQLHandler:processMessage(request)
 
     -- the leader executes the SQL, but the followers just append to WAL
     if request.logEntries and #request.logEntries > 0 then
-        for i, v in ipairs(request.logEntries) do
+        for _, v in ipairs(request.logEntries) do
             self:handle(v.value);
         end
     end
@@ -141,7 +142,7 @@ function SQLHandler:handle(data, callbackFunc)
     -- data is logEntry.value
     local raftLogEntryValue = RaftLogEntryValue:fromBytes(data);
 
-    self.logger.trace("SQL:%s", util.table_tostring(raftLogEntryValue))
+    -- self.logger.trace("SQL:%s", util.table_tostring(raftLogEntryValue))
 
     local this = self;
     local cbFunc = function(err, data, re_exec)
@@ -151,7 +152,7 @@ function SQLHandler:handle(data, callbackFunc)
             cb_index = raftLogEntryValue.cb_index,
         }
 
-        this.logger.trace("Result:%s", util.table_tostring(msg))
+        -- this.logger.trace("Result:%s", util.table_tostring(msg))
 
         local remoteAddress = format("%s%s", raftLogEntryValue.callbackThread, raftLogEntryValue.serverId)
         if not re_exec then
@@ -163,9 +164,9 @@ function SQLHandler:handle(data, callbackFunc)
     end;
 
     -- for test
-    if callbackFunc then
-        cbFunc = callbackFunc;
-    end
+    -- if callbackFunc then
+    --     cbFunc = callbackFunc;
+    -- end
 
     if raftLogEntryValue.cb_index <= self.latestCommand then
         self.logger.info("got a retry msg, %d <= %d", raftLogEntryValue.cb_index, self.latestCommand);
@@ -175,15 +176,14 @@ function SQLHandler:handle(data, callbackFunc)
     
     -- a dedicated IOThread
     if raftLogEntryValue.query_type == "connect" then
-        -- raftLogEntryValue.collection.db is nil when query_type is connect
+        -- raftLogEntryValue.db is nil when query_type is connect
         -- we should create tabledb.config.xml here and make the storageProvider to SqliteWALStore
-        self:createSqliteWALStoreConfig(raftLogEntryValue.query.rootFolder);
-        self.db:connect(raftLogEntryValue.query.rootFolder, cbFunc);
+        self:createSqliteWALStoreConfig(raftLogEntryValue.db);
+        self.db:connect(raftLogEntryValue.db, cbFunc);
     else
         if raftLogEntryValue.enableSyncMode then
             self.db:EnableSyncMode(true);
         end
-        -- self.db:connect(raftLogEntryValue.collection.db);
         local collection = self.db[raftLogEntryValue.collectionName];
         
         --add to collections
@@ -191,8 +191,6 @@ function SQLHandler:handle(data, callbackFunc)
             local collectionPath = raftLogEntryValue.db .. raftLogEntryValue.collectionName;
             self.logger.trace("add collection %s->%s", raftLogEntryValue.collectionName, collectionPath)
             self.collections[raftLogEntryValue.collectionName] = collectionPath;
-            -- self.db.collections:insertOne(nil, {name=raftLogEntryValue.collectionName,path=collectionPath});
-        -- self.collections[raftLogEntryValue.collectionName] = collection
         end
         
         -- NOTE: this may not work when the query field named "update" or "replacement"

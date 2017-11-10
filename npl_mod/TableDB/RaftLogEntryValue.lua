@@ -23,33 +23,35 @@ if(is_binary_format) then
     memoryFile = ParaIO.open("<memory>", "w");
 end
 
-function RaftLogEntryValue:new(query_type, collection, query, index, serverId, enableSyncMode, callbackThread)
+function RaftLogEntryValue:new(query_type, db, collectionName, query, index, serverId, enableSyncMode, callbackThread)
     local o = {
         query_type = query_type,
-        collection = collection:ToData(),
+        db = db,
+        collectionName = collectionName,
         query = query,
         cb_index = index,
         serverId = serverId,
-        callbackThread = callbackThread,
         enableSyncMode = enableSyncMode,
+        callbackThread = callbackThread,
     };
     setmetatable(o, self);
     return o;
 end
 
-function RaftLogEntryValue:new_from_pool(query_type, collection, query, index, serverId, enableSyncMode, callbackThread)
-	return VectorPool.GetSingleton():GetVector(query_type, collection, query, index, serverId, enableSyncMode, callbackThread);	
+function RaftLogEntryValue:new_from_pool(query_type, db, collectionName, query, index, serverId, enableSyncMode, callbackThread)
+	return VectorPool.GetSingleton():GetVector(query_type, db, collectionName, query, index, serverId, enableSyncMode, callbackThread);	
 end
 
 
-function RaftLogEntryValue:set(query_type, collection, query, index, serverId, enableSyncMode, callbackThread)
+function RaftLogEntryValue:set(query_type, db, collectionName, query, index, serverId, enableSyncMode, callbackThread)
     self.query_type = query_type;
-    self.collection = collection:ToData();
+    self.db = db
+    self.collectionName = collectionName;
     self.query = query;
     self.cb_index = index;
     self.serverId = serverId;
-    self.callbackThread = callbackThread;
     self.enableSyncMode = enableSyncMode;
+    self.callbackThread = callbackThread;
 end
 
 function RaftLogEntryValue:__index(name)
@@ -88,14 +90,17 @@ function RaftLogEntryValue:fromBytes(bytes)
         local t = NPL.LoadTableFromString(bytes)
         if(t) then
             -- decode from msg_
+            -- this is slow.. why?
+            -- return RaftLogEntryValue:new_from_pool(t[1], t[2], t[3], t[4], t[5], t[6], t[7], t[8])
             local o = {
                 query_type = t[1],
-                collection = t[2],
-                query = t[3],
-                cb_index = t[4],
-                serverId = t[5],
-                callbackThread =t[6],
+                db = t[2],
+                collectionName = t[3],
+                query = t[4],
+                cb_index = t[5],
+                serverId = t[6],
                 enableSyncMode = t[7],
+                callbackThread =t[8],
             }
             setmetatable(o, self);
             return o;
@@ -132,12 +137,13 @@ function RaftLogEntryValue:toBytes()
     else
         -- encode into msg_
         msg_[1] = self.query_type;
-        msg_[2] = self.collection;
-        msg_[3] = self.query;
-        msg_[4] = self.cb_index;
-        msg_[5] = self.serverId;
-        msg_[6] = self.callbackThread;
+        msg_[2] = self.db;
+        msg_[3] = self.collectionName;
+        msg_[4] = self.query;
+        msg_[5] = self.cb_index;
+        msg_[6] = self.serverId;
         msg_[7] = self.enableSyncMode;
+        msg_[8] = self.callbackThread;
         return commonlib.serialize_compact(msg_);
     end
 end
