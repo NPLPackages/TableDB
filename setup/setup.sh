@@ -1,6 +1,5 @@
 #!/bin/sh
 
-
 debug() { echo -e "\033[0;37m$*\033[0m"; }
 info() { echo -e "\033[0;36m$*\033[0m"; }
 error() { >&2  echo -e "\033[0;31m$*\033[0m"; }
@@ -9,9 +8,14 @@ fail() { error ${1}; exit ${2:-1}; }
 
 cd /mnt/d/code/npl/TableDB/setup
 CURDIR=`pwd`
+
 info "current directory $CURDIR, start $1"
 
 setupServer() {
+    ./stop.sh npl
+    rm -rf server*
+    rm -f client/log.txt
+
     for i in 1 2 3; do
         cd "$CURDIR"
         mkdir -p "$CURDIR/server$i"
