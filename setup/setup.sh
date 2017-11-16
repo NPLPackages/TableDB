@@ -13,6 +13,7 @@ info "current directory $CURDIR, start $1"
 
 setupServer() {
     for i in 1 2 3; do
+        cd "$CURDIR"
         mkdir -p "$CURDIR/server$i"
         cp -f init-cluster.json "$CURDIR/server$i/cluster.json"
         # cp -f "../libsqlite.so" "$CURDIR/server$i/libsqlite.so"
