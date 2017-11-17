@@ -3,6 +3,10 @@ cd /d d:/code/npl/TableDB/docker
 set curdir=%~dp0
 if "%1" == "client" goto setupClient
 
+REM use
+REM `docker network create --gateway 172.16.0.1 --subnet 172.16.0.0/21 mynet`
+REM to create a subnet for the use of --ip in docker run
+
 for %%i in (11 12 13) do (
     echo start server%%i
     rm -r %curdir%\server%%i\

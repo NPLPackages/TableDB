@@ -7,6 +7,8 @@ MAINTAINER xuntian "li.zq@foxmail.com"
 RUN mkdir -p /app/tabledb
 RUN mkdir -p /app/tabledb/setup/server
 
+# below copy need add link to the ../npl_mod and ../npl_packages dir
+# in windows it's `mklink /J npl_packages ..\npl_packages\` 
 ADD ./npl_mod  /app/tabledb/npl_mod/
 ADD ./npl_packages  /app/tabledb/npl_packages/
 
