@@ -109,15 +109,20 @@ function SQLHandler:start()
 end
 
 function SQLHandler:processMessage(request)
+    response.source = self.stateManager.serverId;
+
     if not self.state then
         self.logger.debug("reading server state")
         self.state = self.stateManager:readState();
         if not self.state then
-            return;
+            self.logger.error("read server state failed!")
+            response.accepted = false
+            response.destination = -1
+            response.term = -1
+            return response
         end
     end
 
-    response.source = self.stateManager.serverId;
     response.destination = self.state.votedFor; -- use destination to indicate the leadId
     response.term = self.state.term;
     

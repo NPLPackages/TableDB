@@ -73,6 +73,7 @@ logger.info("config:%s", util.table_tostring(config))
 local thisServer = config:getServer(stateManager.serverId)
 if not thisServer then
   -- perhaps thisServer has been removed last time
+  logger.error("thisServer is nil!")
   ParaGlobal.Exit(0);
   --- C/C++ API call is counted as one instruction, so Exit does not block
   return;
