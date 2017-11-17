@@ -279,3 +279,4 @@ start*.bat
 RpcClient.lua
 temp/*
 *.dll
+docker/npl_*
