@@ -8,8 +8,9 @@ to create a subnet for the use of --ip in docker run
 first U need 
 `mklink /J npl_packages ..\npl_packages\`
 `mklink /J npl_mod ..\npl_mod\`
-and 
-use cmd `docker build -t tableDB .` to make tabledb image
+and
+use cmd `docker build -t tabledb .` to make tabledb image
+or use `ln -s` and `tar -czh . | docker build tabledb -` in linux
 
 ### start 3 servers in windows
 run `setup_docker.bat`
