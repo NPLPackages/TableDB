@@ -147,7 +147,8 @@ function SQLHandler:handle(data, callbackFunc)
     -- data is logEntry.value
     local raftLogEntryValue = RaftLogEntryValue:fromBytes(data);
 
-    -- self.logger.trace("SQL:%s", util.table_tostring(raftLogEntryValue))
+    self.logger.trace("SQL:")
+    self.logger.trace(raftLogEntryValue)
 
     local this = self;
     local cbFunc = function(err, data, re_exec)
@@ -157,7 +158,8 @@ function SQLHandler:handle(data, callbackFunc)
             cb_index = raftLogEntryValue.cb_index,
         }
 
-        -- this.logger.trace("Result:%s", util.table_tostring(msg))
+        this.logger.trace("Result:")
+        this.logger.trace(msg)
 
         local remoteAddress = format("%s%s", raftLogEntryValue.callbackThread, raftLogEntryValue.serverId)
         if not re_exec then
@@ -173,11 +175,12 @@ function SQLHandler:handle(data, callbackFunc)
     --     cbFunc = callbackFunc;
     -- end
 
-    if raftLogEntryValue.cb_index <= self.latestCommand then
-        self.logger.info("got a retry msg, %d <= %d", raftLogEntryValue.cb_index, self.latestCommand);
-        cbFunc(this.latestError, this.latestData, true);
-        return;
-    end
+    -- TODO: handle retry from the same client
+    -- if raftLogEntryValue.cb_index <= self.latestCommand then
+    --     self.logger.info("got a retry msg, %d <= %d", raftLogEntryValue.cb_index, self.latestCommand);
+    --     cbFunc(this.latestError, this.latestData, true);
+    --     return;
+    -- end
     
     -- a dedicated IOThread
     if raftLogEntryValue.query_type == "connect" then

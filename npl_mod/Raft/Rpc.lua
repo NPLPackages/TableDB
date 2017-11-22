@@ -196,7 +196,8 @@ local added_runtime = {}
 function Rpc:OnActivated(msg)
   -- this is for tracing raft client
   -- if type(self.localAddress) == "table" then
-  --   self.logger.trace(msg)
+    -- self.logger.trace("recv:")
+    -- self.logger.trace(msg)
   -- end
   if (msg.tid) then
     -- unauthenticated? reject as early as possible or accept it.
@@ -215,8 +216,8 @@ function Rpc:OnActivated(msg)
           -- local nid = "server" .. remoteAddress.id;
           self.logger.info("accepted nid is %s", nid)
           NPL.AddNPLRuntimeAddress({host = remoteAddress.host, port = remoteAddress.port, nid = nid})
-          RaftRequestRPCInit(nil, remoteAddress.id, {})
         end
+        RaftRequestRPCInit(nil, remoteAddress.id, {})
         NPL.accept(msg.tid, remoteAddress.id or "default_user")
         msg.nid = remoteAddress.id or "default_user"
         self.logger.info("connection %s is established and accepted as %s, a client request", msg.tid, msg.nid)
@@ -255,6 +256,7 @@ function Rpc:OnActivated(msg)
     if (msg.type == "run") then
       local result, err = self:handle_request(msg.msg)
       if not result then
+        self.logger.trace("result is null")
         return
       end
       if type(msg.remoteAddress) == "table" and msg.remoteAddress.id then
@@ -275,10 +277,10 @@ function Rpc:OnActivated(msg)
 
       if activate_result ~= 0 then
         if added_runtime[msg.nid] then
-          activate_result = NPL.activate_with_timeout(self.MaxWaitSeconds, vFileId, response)
+          activate_result = NPL.activate_with_timeout(self.MaxWaitSeconds, vFileId, self.response)
         end
         if activate_result ~= 0 then
-          self.logger.error("activate on %s failed %d, msg type:%s", vFileId, activate_result, response.type)
+          self.logger.error("activate on %s failed %d, msg type:%s", vFileId, activate_result, self.response.type)
           if result.callbackFunc then
             result.callbackFunc()
           end
@@ -348,7 +350,7 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
   self.request.callbackId = callbackId
   self.request.remoteAddress = self.localAddress
   -- if type(self.localAddress) == "table" then
-  -- self.logger.trace("activate on %s, msg:%s", vFileId, util.table_tostring(msg))
+  --   self.logger.trace("activate on %s, msg:%s", vFileId, util.table_tostring(msg))
   -- end
   local activate_result = NPL.activate(vFileId, self.request)
   -- handle memory leak
