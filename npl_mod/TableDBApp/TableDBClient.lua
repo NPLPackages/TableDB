@@ -62,6 +62,9 @@ local function executeAsClient()
         endpoint = "tcp://localhost:900" .. serverId
       }
 
+      NPL.load("(gl)npl_mod/Raft/ClusterServer.lua")
+      local ClusterServer = commonlib.gettable("Raft.ClusterServer")
+      
       raftClient:addServer(
         ClusterServer:new(serverToJoin),
         function(response, err)
