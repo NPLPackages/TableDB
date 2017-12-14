@@ -16,52 +16,77 @@ NPL.load("(gl)script/ide/System/Compiler/lib/util.lua")
 local util = commonlib.gettable("System.Compiler.lib.util")
 NPL.load("(gl)npl_mod/TableDB/RaftLogEntryValue.lua")
 local RaftLogEntryValue = commonlib.gettable("TableDB.RaftLogEntryValue")
+NPL.load("(gl)script/ide/Json.lua")
+NPL.load("(gl)npl_mod/Raft/ClusterConfiguration.lua")
+local ClusterConfiguration = commonlib.gettable("Raft.ClusterConfiguration")
 
 NPL.load("(gl)npl_mod/TableDB/RaftTableDBStateMachine.lua")
-local RaftTableDBStateMachine =
-  commonlib.gettable("TableDB.RaftTableDBStateMachine")
+local RaftTableDBStateMachine = commonlib.gettable("TableDB.RaftTableDBStateMachine")
 NPL.load("(gl)npl_mod/Raft/RaftClient.lua")
 local RaftClient = commonlib.gettable("Raft.RaftClient")
 local LoggerFactory = NPL.load("(gl)npl_mod/Raft/LoggerFactory.lua")
 local logger = LoggerFactory.getLogger("RaftSqliteStore")
 
 local RaftSqliteStore =
-  commonlib.inherit(
-  commonlib.gettable("System.Database.Store"),
-  commonlib.gettable("TableDB.RaftSqliteStore")
-)
+  commonlib.inherit(commonlib.gettable("System.Database.Store"), commonlib.gettable("TableDB.RaftSqliteStore"))
 
 local callbackQueue = {}
 local raftClient
 
+local CLUSTER_CONFIG_FILE = "cluster.json"
+local function loadClusterConfiguration(confDir)
+  local filename = confDir .. CLUSTER_CONFIG_FILE
+  local configFile = ParaIO.open(filename, "r")
+  if configFile:IsValid() then
+    local text = configFile:GetText()
+    local config = commonlib.Json.Decode(text)
+    return ClusterConfiguration:new(config)
+  else
+    logger.error("%s path error", filename)
+  end
+end
+
+NPL.load("(gl)npl_mod/Raft/Rpc.lua")
+local Rpc = commonlib.gettable("Raft.Rpc")
+local function setupRPC(RaftSqliteStore, threadName)
+  -- for init connect
+  Rpc:new():init("RaftRequestRPCInit")
+  RaftRequestRPCInit.remoteThread = threadName
+  RaftRequestRPCInit:MakePublic()
+
+  Rpc:new():init(
+    "RTDBRequestRPC",
+    function(self, msg)
+      logger.debug("Response:")
+      logger.debug(msg)
+      RaftSqliteStore:handleResponse(msg)
+    end
+  )
+
+  RTDBRequestRPC.remoteThread = threadName
+  RTDBRequestRPC:MakePublic()
+
+  -- TODO: remove this
+  Rpc:new():init(
+    "ConnectRequestRPC",
+    function(self, msg)
+      logger.debug(format("Connect Response:%s", util.table_tostring(msg)))
+      RaftSqliteStore:handleResponse(msg)
+    end
+  )
+
+  ConnectRequestRPC.remoteThread = "rtdb"
+  ConnectRequestRPC:MakePublic()
+end
+
 RaftSqliteStore.name = "raft"
 RaftSqliteStore.thread_name = format("(%s)", __rts__:GetName())
 
-function RaftSqliteStore:createRaftClient(
-  baseDir,
-  host,
-  port,
-  id,
-  threadName,
-  rootFolder,
-  useFile)
+function RaftSqliteStore:createRaftClient(baseDir, host, port, id, threadName, rootFolder)
   RaftSqliteStore.responseThreadName = self.thread_name
-  local ServerStateManager
-  if useFile then
-    NPL.load("(gl)npl_mod/Raft/FileBasedServerStateManager.lua")
-    local FileBasedServerStateManager =
-      commonlib.gettable("Raft.FileBasedServerStateManager")
-    ServerStateManager = FileBasedServerStateManager
-  else
-    NPL.load("(gl)npl_mod/Raft/SqliteBasedServerStateManager.lua")
-    local SqliteBasedServerStateManager =
-      commonlib.gettable("Raft.SqliteBasedServerStateManager")
-    ServerStateManager = SqliteBasedServerStateManager
-  end
 
   local baseDir = baseDir or "./"
-  local stateManager = ServerStateManager:new(baseDir)
-  local config = stateManager:loadClusterConfiguration()
+  local config = loadClusterConfiguration(baseDir)
 
   local localAddress = {
     host = host or "localhost",
@@ -73,12 +98,9 @@ function RaftSqliteStore:createRaftClient(
     localAddress.id = format("server%s:", localAddress.id)
   end
 
-  rtdb = RaftTableDBStateMachine:new(baseDir, threadName)
-  -- NPL.StartNetServer(localAddress.host, localAddress.port);
-  rtdb:start2(self)
+  setupRPC(self, threadName)
 
-  raftClient =
-    RaftClient:new(localAddress, RTDBRequestRPC, config, LoggerFactory)
+  raftClient = RaftClient:new(localAddress, RTDBRequestRPC, config, LoggerFactory)
 
   self:connect(rootFolder)
 end
@@ -211,8 +233,7 @@ function RaftSqliteStore:WaitForSyncModeReply(timeout, cb_index)
         end
         if
           (cb_index and out_msg.msg and out_msg.msg.cb_index == cb_index) or
-            (cb_index == nil and out_msg.msg and out_msg.msg.destination and
-              out_msg.msg.destination ~= -1)
+            (cb_index == nil and out_msg.msg and out_msg.msg.destination and out_msg.msg.destination ~= -1)
          then
           logger.debug("got the correct msg")
           reply_msg = out_msg.msg
@@ -225,10 +246,7 @@ function RaftSqliteStore:WaitForSyncModeReply(timeout, cb_index)
       return "timeout", nil
     end
     if (reply_msg == nil) then
-      if
-        (ParaEngine.GetAttributeObject():GetField("HasClosingRequest", false) ==
-          true)
-       then
+      if (ParaEngine.GetAttributeObject():GetField("HasClosingRequest", false) == true) then
         return "app_exit", nil
       end
       if (thread:GetCurrentQueueSize() == nSize) then
@@ -307,8 +325,7 @@ function RaftSqliteStore:connect(rootFolder, callbackFunc)
   raftClient:appendEntries(
     bytes,
     function(response, err)
-      local result =
-        (err == nil and response.accepted and "accepted") or "denied"
+      local result = (err == nil and response.accepted and "accepted") or "denied"
       logger.info("the %s request has been %s", query_type, result)
       if callbackFunc then
         callbackFunc(err, response.data)
@@ -339,8 +356,7 @@ function RaftSqliteStore:Send(query_type, query, callbackFunc)
     raftClient:appendEntries(
       bytes,
       function(response, err)
-        local result =
-          (err == nil and response.accepted and "accepted") or "denied"
+        local result = (err == nil and response.accepted and "accepted") or "denied"
         if not (err == nil and response.accepted) then
           logger.error("the %s request has been %s", query_type, result)
         else
@@ -399,11 +415,7 @@ end
 -- @param query: key, value pair table, such as {name="abc"}.
 -- @param replacement: wholistic fields to be replace any existing doc.
 function RaftSqliteStore:replaceOne(query, replacement, callbackFunc)
-  return self:Send(
-    "replaceOne",
-    {query = query, replacement = replacement},
-    callbackFunc
-  )
+  return self:Send("replaceOne", {query = query, replacement = replacement}, callbackFunc)
 end
 
 -- update multiple records, see also updateOne()
@@ -458,14 +470,7 @@ function RaftSqliteStore:exec(query, callbackFunc)
       local value = query.QueueSize * 2
       if (__rts__:GetMsgQueueSize() < value) then
         __rts__:SetMsgQueueSize(value)
-        LOG.std(
-          nil,
-          "system",
-          "NPL",
-          "NPL input queue size of thread (%s) is changed to %d",
-          __rts__:GetName(),
-          value
-        )
+        LOG.std(nil, "system", "NPL", "NPL input queue size of thread (%s) is changed to %d", __rts__:GetName(), value)
       end
     end
     if (query.SyncMode ~= nil) then
