@@ -234,7 +234,7 @@ function RaftSqliteWALStore:WaitForSyncModeReply(timeout, cb_index)
     local nSize = thread:GetCurrentQueueSize()
     for i = 0, nSize - 1 do
       local msg = thread:PeekMessage(i, {filename = true})
-      if (msg.filename == "Rpc/RTDBRequestRPC.lua" or msg.filename == "Rpc/ConnectRequestRPC.lua") then
+      if (msg.filename == "Rpc/RTDBRequestRPC.lua") then
         local msg = thread:PopMessageAt(i, {filename = true, msg = true})
         local out_msg = msg.msg
         self.logger.trace("recv msg:%s", util.table_tostring(out_msg))
@@ -295,7 +295,7 @@ function RaftSqliteWALStore:connect(db, data, callbackFunc)
 
   local bytes = raftWALLogEntryValue:toBytes()
 
-  raftClient:setRequestRPC(ConnectRequestRPC)
+  raftClient:setRequestRPC(RTDBRequestRPC)
   raftClient:appendEntries(
     bytes,
     function(response, err)
@@ -309,5 +309,4 @@ function RaftSqliteWALStore:connect(db, data, callbackFunc)
 
   self.logger.info("waiting for Connect")
   self:WaitForSyncModeReply(5000)
-  raftClient:setRequestRPC(RTDBRequestRPC)
 end

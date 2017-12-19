@@ -66,17 +66,6 @@ local function setupRPC(RaftSqliteStore, threadName)
   RTDBRequestRPC.remoteThread = threadName
   RTDBRequestRPC:MakePublic()
 
-  -- TODO: remove this
-  Rpc:new():init(
-    "ConnectRequestRPC",
-    function(self, msg)
-      logger.debug(format("Connect Response:%s", util.table_tostring(msg)))
-      RaftSqliteStore:handleResponse(msg)
-    end
-  )
-
-  ConnectRequestRPC.remoteThread = "rtdb"
-  ConnectRequestRPC:MakePublic()
 end
 
 RaftSqliteStore.name = "raft"
