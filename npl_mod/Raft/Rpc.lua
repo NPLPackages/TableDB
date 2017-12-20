@@ -204,39 +204,25 @@ function Rpc:OnActivated(msg)
     local messageType = msg.msg.messageType
     if (messageType) then
       local remoteAddress = msg.remoteAddress
-      if
-        messageType.int == RaftMessageType.ClientRequest.int or messageType.int == RaftMessageType.AddServerRequest.int or
-          messageType.int == RaftMessageType.RemoveServerRequest.int
-       then
-        -- we got a client request
-        if not added_runtime[remoteAddress.id] then
-          added_runtime[remoteAddress.id] = true
-          -- can not contain ':'
-          -- local nid = string.sub(remoteAddress.id, 1, #remoteAddress.id - 1)
-          local nid = remoteAddress.id
-          -- local nid = "server" .. remoteAddress.id;
-          self.logger.info("accepted nid is %s", nid)
-          NPL.AddNPLRuntimeAddress({host = remoteAddress.host, port = remoteAddress.port, nid = nid})
-        end
-        RaftRequestRPCInit(nil, remoteAddress.id, {})
-        NPL.accept(msg.tid, remoteAddress.id or "default_user")
-        msg.nid = remoteAddress.id or "default_user"
-        self.logger.info("connection %s is established and accepted as %s, a client request", msg.tid, msg.nid)
-      else
-        -- this must be Raft internal message exclude the above 3
-        if msg.msg.source then
-          remoteAddress = "server" .. msg.msg.source
-        end
-        self.logger.trace("recv msg %s", util.table_tostring(msg))
-        NPL.accept(msg.tid, remoteAddress or "default_user")
-        msg.nid = remoteAddress or "default_user"
-        self.logger.info("connection %s is established and accepted as %s, raft internal request", msg.tid, msg.nid)
+      local server_id = (msg.msg.source and format("server%d", msg.msg.source)) or (remoteAddress and remoteAddress.id)
+      local nid = server_id or "default_user"
+
+      if not added_runtime[nid] and type(remoteAddress) == "table" then
+        added_runtime[nid] = true
+
+        self.logger.info("accepted nid is %s", nid)
+        NPL.AddNPLRuntimeAddress({host = remoteAddress.host, port = remoteAddress.port, nid = nid})
+        RaftRequestRPCInit(nil, nid, {})
       end
+      NPL.accept(msg.tid, nid)
+      msg.nid = nid
+      self.logger.info("connection %s is established and accepted as %s", msg.tid, msg.nid)
     else
-      if msg.name then
+      if msg.name and msg.remoteAddress then
         -- for client rsp in state machine
-        NPL.accept(msg.tid, msg.tid)
-        self.logger.info("connection %s is established and accepted as %s, client response", msg.tid, msg.nid)
+        local nid = format("server%d", msg.remoteAddress)
+        NPL.accept(msg.tid, nid)
+        self.logger.info("connection %s is established and accepted as %s, client response", msg.tid, nid)
       else
         self.logger.info("who r u? msg:%s", util.table_tostring(msg))
         NPL.reject(msg.tid)
@@ -257,14 +243,10 @@ function Rpc:OnActivated(msg)
     if (msg.type == "run") then
       local result, err = self:handle_request(msg.msg)
       if not result then
-        self.logger.trace("result is null")
+        -- self.logger.trace("result is null")
         return
       end
-      if type(msg.remoteAddress) == "table" and msg.remoteAddress.id then
-        msg.remoteAddress = msg.remoteAddress.id
-      end
-      -- here we could use msg.nid or msg.remoteAddress
-      -- be clear about the nid!
+
       local vFileId = format("%s%s:%s", msg.callbackThread, msg.nid, self.filename)
       self.response.name = self.fullname
       self.response.msg = result

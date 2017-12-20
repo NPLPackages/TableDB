@@ -100,17 +100,6 @@ function SQLHandler:start()
   RTDBRequestRPC.remoteThread = self.threadName
   RTDBRequestRPC:MakePublic()
 
-  Rpc:new():init(
-    "ConnectRequestRPC",
-    function(self, msg)
-      msg = this:processMessage(msg)
-      return msg
-    end
-  )
-
-  ConnectRequestRPC.remoteThread = self.threadName
-  ConnectRequestRPC:MakePublic()
-
   self.db = TableDatabase:new()
 
   self.logger.info("SQLHandler started")
@@ -175,7 +164,7 @@ function SQLHandler:handle(data, callbackFunc)
       this.latestData = data
     end
 
-    RTDBRequestRPC(nil, remoteAddress, msg)
+    RTDBRequestRPC(self.stateManager.serverId, remoteAddress, msg)
   end
 
   -- for test
@@ -190,7 +179,8 @@ function SQLHandler:handle(data, callbackFunc)
   --     return;
   -- end
 
-  -- a dedicated IOThread
+  -- TODO: handle leader transfer
+  local config_path = raftLogEntryValue.db .. "/tabledb.config.xml"
   if raftLogEntryValue.query_type == "connect" then
     -- raftLogEntryValue.db is nil when query_type is connect
     -- we should create tabledb.config.xml here and make the storageProvider to SqliteWALStore
