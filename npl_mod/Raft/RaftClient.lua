@@ -131,12 +131,10 @@ function RaftClient:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry)
 
   local this = self
 
-  local backoff_retry_func =
-    function(...)
+  local backoff_retry_func = function(...)
     if this.randomLeader then
       -- try a random server as leader
-      this.leaderId =
-        this.configuration.servers[math.random(#this.configuration.servers)].id
+      this.leaderId = this.configuration.servers[math.random(#this.configuration.servers)].id
       this.logger.debug("next should try server: %d", this.leaderId)
       this.randomLeader = true
     end
@@ -155,10 +153,7 @@ function RaftClient:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry)
     function(err, response)
     if not err then
       -- this random leader is the true leader
-      if
-        response.destination == nil and response.accepted == nil and
-          response.cb_index == -1
-       then
+      if response.destination == nil and response.accepted == nil and response.cb_index == -1 then
         response.destination = self.leaderId
         response.accepted = true
       end
@@ -175,13 +170,8 @@ function RaftClient:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry)
         else
           if response.destination == -1 then
             -- try a random server as leader
-            this.logger.debug(
-              "there is not a leader in the cluster, try a random one"
-            )
-            this.leaderId =
-              this.configuration.servers[
-              math.random(#this.configuration.servers)
-            ].id
+            this.logger.debug("there is not a leader in the cluster, try a random one")
+            this.leaderId = this.configuration.servers[math.random(#this.configuration.servers)].id
             this.logger.debug("next should try server: %d", this.leaderId)
             this.randomLeader = true
           else
@@ -189,11 +179,7 @@ function RaftClient:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry)
             this.leaderId = response.destination
           end
 
-          this.logger.debug(
-            "tried %ds, server len:%d",
-            retry,
-            #self.configuration.servers
-          )
+          this.logger.debug("tried %ds, server len:%d", retry, #self.configuration.servers)
           if (retry <= 3 * #self.configuration.servers) then
             -- return this:tryCurrentLeader(request, callbackFunc, rpcBackoff + 5000, retry + 1);
             return backoff_retry_func()
@@ -219,20 +205,9 @@ function RaftClient:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry)
 
   self.HandleResponse = HandleResponse
 
-  local activate_result =
-    self.RequestRPC(
-    self.localAddress,
-    "server" .. self.leaderId .. ":",
-    request,
-    HandleResponse,
-    nil
-  )
+  local activate_result = self.RequestRPC(self.localAddress, "server" .. self.leaderId, request, HandleResponse, nil)
   if (activate_result ~= 0) then
-    self.logger.error(
-      "rpc error, failed(%d) to send request to remote server. tried %dth",
-      activate_result,
-      retry
-    )
+    self.logger.error("rpc error, failed(%d) to send request to remote server. tried %dth", activate_result, retry)
     if (retry > 3 * #self.configuration.servers) then
       self.logger.error("FAILED. reach to the max retry. tried %ds", retry)
       if callbackFunc then

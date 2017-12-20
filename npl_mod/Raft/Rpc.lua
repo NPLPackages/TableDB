@@ -196,8 +196,8 @@ local added_runtime = {}
 function Rpc:OnActivated(msg)
   -- this is for tracing raft client
   -- if type(self.localAddress) == "table" then
-    -- self.logger.trace("recv:")
-    -- self.logger.trace(msg)
+  -- self.logger.trace("recv:")
+  -- self.logger.trace(msg)
   -- end
   if (msg.tid) then
     -- unauthenticated? reject as early as possible or accept it.
@@ -212,7 +212,8 @@ function Rpc:OnActivated(msg)
         if not added_runtime[remoteAddress.id] then
           added_runtime[remoteAddress.id] = true
           -- can not contain ':'
-          local nid = string.sub(remoteAddress.id, 1, #remoteAddress.id - 1)
+          -- local nid = string.sub(remoteAddress.id, 1, #remoteAddress.id - 1)
+          local nid = remoteAddress.id
           -- local nid = "server" .. remoteAddress.id;
           self.logger.info("accepted nid is %s", nid)
           NPL.AddNPLRuntimeAddress({host = remoteAddress.host, port = remoteAddress.port, nid = nid})
@@ -224,7 +225,7 @@ function Rpc:OnActivated(msg)
       else
         -- this must be Raft internal message exclude the above 3
         if msg.msg.source then
-          remoteAddress = "server" .. msg.msg.source .. ":"
+          remoteAddress = "server" .. msg.msg.source
         end
         self.logger.trace("recv msg %s", util.table_tostring(msg))
         NPL.accept(msg.tid, remoteAddress or "default_user")
@@ -264,7 +265,7 @@ function Rpc:OnActivated(msg)
       end
       -- here we could use msg.nid or msg.remoteAddress
       -- be clear about the nid!
-      local vFileId = format("%s%s%s", msg.callbackThread, msg.nid, self.filename)
+      local vFileId = format("%s%s:%s", msg.callbackThread, msg.nid, self.filename)
       self.response.name = self.fullname
       self.response.msg = result
       self.response.err = err
@@ -341,9 +342,9 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
   self:OneTimeInit()
   local callbackId = self:PushCallback(callbackFunc)
 
-  local vFileId = format("(%s)%s%s", self.remoteThread or "main", self.remoteAddress or "", self.filename)
+  local vFileId = format("(%s)%s:%s", self.remoteThread or "main", self.remoteAddress or "", self.filename)
   if string.match(self.remoteAddress, "%(%a+%)") then
-    vFileId = format("%s%s", self.remoteAddress or "", self.filename)
+    vFileId = format("%s:%s", self.remoteAddress or "", self.filename)
   end
   self.request.msg = msg
   self.request.name = self.fullname
