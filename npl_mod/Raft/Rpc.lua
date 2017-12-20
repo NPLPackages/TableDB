@@ -222,6 +222,7 @@ function Rpc:OnActivated(msg)
         -- for client rsp in state machine
         local nid = format("server%d", msg.remoteAddress)
         NPL.accept(msg.tid, nid)
+        msg.nid = nid
         self.logger.info("connection %s is established and accepted as %s, client response", msg.tid, nid)
       else
         self.logger.info("who r u? msg:%s", util.table_tostring(msg))
@@ -324,6 +325,7 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
   self:OneTimeInit()
   local callbackId = self:PushCallback(callbackFunc)
 
+  --TODO: unify localAddress and remoteAddress format
   local vFileId = format("(%s)%s:%s", self.remoteThread or "main", self.remoteAddress or "", self.filename)
   if string.match(self.remoteAddress, "%(%a+%)") then
     vFileId = format("%s:%s", self.remoteAddress or "", self.filename)
