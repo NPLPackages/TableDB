@@ -34,7 +34,7 @@ function RpcListener:new(ip, port, serverId, servers, threadName)
   }
 
   for _, server in ipairs(o.servers) do
-    Rutils.addServerToNPLRuntime(o.thisServerId, server)
+    Rutils.addServerToNPLRuntime(server)
   end
 
   setmetatable(o, self)

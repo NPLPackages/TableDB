@@ -47,7 +47,7 @@ function RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory)
   NPL.StartNetServer(localAddress.host, localAddress.port)
 
   for _, server in ipairs(configuration.servers) do
-    Rutils.addServerToNPLRuntime(localAddress.id, server)
+    Rutils.addServerToNPLRuntime(server)
     Rutils.initConnect(localAddress.id, server)
   end
 

@@ -994,7 +994,7 @@ function RaftServer:reconfigure(newConfig)
       self.peers[server.id] = peer
       self.logger.info("server %d is added to cluster", peer:getId())
       -- add server to NPL
-      Rutils.addServerToNPLRuntime(self.id, server)
+      Rutils.addServerToNPLRuntime(server)
       if (self.role == ServerRole.Leader) then
         self.logger.info("enable heartbeating for server %d", peer:getId())
         self:enableHeartbeatForPeer(peer)
@@ -1439,7 +1439,7 @@ function RaftServer:handleAddServerRequest(request)
   )
 
   -- add server to NPL
-  Rutils.addServerToNPLRuntime(self.id, server)
+  Rutils.addServerToNPLRuntime(server)
 
   self:inviteServerToJoinCluster()
   response.accepted = true

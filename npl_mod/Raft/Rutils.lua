@@ -33,7 +33,7 @@ function Rutils.table_size(t)
   return i
 end
 
-function Rutils.addServerToNPLRuntime(thisId, server)
+function Rutils.addServerToNPLRuntime(server)
   local parsed_url = url.parse(server.endpoint)
   NPL.AddNPLRuntimeAddress({host = parsed_url.host, port = tostring(parsed_url.port), nid = "server" .. server.id})
 end
