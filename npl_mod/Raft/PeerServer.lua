@@ -93,9 +93,8 @@ function PeerServer:SendRequest(request, callbackFunc)
 
   local o = self
 
-  -- local source = "server"..request.source..":";
-  local source = request.source
-  local destination = "server" .. request.destination
+	local source = request.source
+  local destination = request.destination
 
   local function error_handler(msg, err, activate_result)
     o:slowDownHeartbeating()

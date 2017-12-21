@@ -82,8 +82,6 @@ function RaftSqliteStore:createRaftClient(baseDir, host, port, id, threadName, r
     id = id or "4"
   }
 
-  localAddress.id = format("server%s", localAddress.id)
-
   setupRPC(self, threadName)
 
   raftClient = RaftClient:new(localAddress, RTDBRequestRPC, config, LoggerFactory)

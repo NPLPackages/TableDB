@@ -16,7 +16,6 @@ local url = commonlib.gettable("commonlib.socket.url")
 
 local Rutils = commonlib.gettable("Raft.Rutils")
 
-
 --- total number of elements in this table.
 -- Note that this is distinct from `#t`, which is the number
 -- of values in the array part; this value will always
@@ -42,8 +41,7 @@ end
 function Rutils.initConnect(thisId, server)
   -- local vFileId = format("%s%s:Rpc/RaftRequestRPC.lua", msg.callbackThread, "server"..server.id)
 
-  local activate_result =
-    RaftRequestRPCInit("server" .. thisId, "server" .. server.id, {serverId = "server" .. server.id})
+  local activate_result = RaftRequestRPCInit(thisId, server.id, {serverId = server.id})
   -- if ( activate_result ~= 0) then
   -- end
 end

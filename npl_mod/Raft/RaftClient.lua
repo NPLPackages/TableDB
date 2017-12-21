@@ -205,7 +205,7 @@ function RaftClient:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry)
 
   self.HandleResponse = HandleResponse
 
-  local activate_result = self.RequestRPC(self.localAddress, "server" .. self.leaderId, request, HandleResponse, nil)
+  local activate_result = self.RequestRPC(self.localAddress, self.leaderId, request, HandleResponse, nil)
   if (activate_result ~= 0) then
     self.logger.error("rpc error, failed(%d) to send request to remote server. tried %dth", activate_result, retry)
     if (retry > 3 * #self.configuration.servers) then

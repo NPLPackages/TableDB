@@ -204,15 +204,15 @@ function Rpc:OnActivated(msg)
     local messageType = msg.msg.messageType
     if (messageType) then
       local remoteAddress = msg.remoteAddress
-      local server_id = (msg.msg.source and format("server%d", msg.msg.source)) or (remoteAddress and remoteAddress.id)
-      local nid = server_id or "default_user"
+      local server_id = msg.msg.source or (remoteAddress and remoteAddress.id)
+      local nid = format("server%s", server_id) or "default_user"
 
       if not added_runtime[nid] and type(remoteAddress) == "table" then
         added_runtime[nid] = true
 
         self.logger.info("accepted nid is %s", nid)
         NPL.AddNPLRuntimeAddress({host = remoteAddress.host, port = remoteAddress.port, nid = nid})
-        RaftRequestRPCInit(nil, nid, {})
+        RaftRequestRPCInit(nil, server_id, {})
       end
       NPL.accept(msg.tid, nid)
       msg.nid = nid
@@ -220,7 +220,7 @@ function Rpc:OnActivated(msg)
     else
       if msg.name and msg.remoteAddress then
         -- for client rsp in state machine
-        local nid = format("server%d", msg.remoteAddress)
+        local nid = format("server%s", msg.remoteAddress)
         NPL.accept(msg.tid, nid)
         msg.nid = nid
         self.logger.info("connection %s is established and accepted as %s, client response", msg.tid, nid)
@@ -326,8 +326,9 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
   local callbackId = self:PushCallback(callbackFunc)
 
   --TODO: unify localAddress and remoteAddress format
-  local vFileId = format("(%s)%s:%s", self.remoteThread or "main", self.remoteAddress or "", self.filename)
+  local vFileId = format("(%s)server%s:%s", self.remoteThread or "main", self.remoteAddress or "", self.filename)
   if string.match(self.remoteAddress, "%(%a+%)") then
+    -- this is used for response to client
     vFileId = format("%s:%s", self.remoteAddress or "", self.filename)
   end
   self.request.msg = msg
