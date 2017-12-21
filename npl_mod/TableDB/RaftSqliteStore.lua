@@ -68,7 +68,7 @@ local function setupRPC(RaftSqliteStore, threadName)
 end
 
 RaftSqliteStore.name = "raft"
-RaftSqliteStore.thread_name = format("(%s)", __rts__:GetName())
+RaftSqliteStore.thread_name = format("%s", __rts__:GetName())
 
 function RaftSqliteStore:createRaftClient(baseDir, host, port, id, threadName, rootFolder)
   RaftSqliteStore.responseThreadName = self.thread_name

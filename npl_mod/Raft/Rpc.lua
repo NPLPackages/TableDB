@@ -48,7 +48,7 @@ Rpc.monitorPeriod = 10000
 function Rpc:new(o)
   o = o or {}
   o.logger = logger
-  o.thread_name = format("(%s)", __rts__:GetName())
+  o.thread_name = format("%s", __rts__:GetName())
   o.MaxWaitSeconds = 3
   o.request = {
     type = "run",
@@ -191,14 +191,9 @@ function Rpc.GetInstance(name)
   return rpc_instances[name or ""]
 end
 
-local added_runtime = {}
 -- private: whenever a message arrives
+local added_runtime = {}
 function Rpc:OnActivated(msg)
-  -- this is for tracing raft client
-  -- if type(self.localAddress) == "table" then
-  -- self.logger.trace("recv:")
-  -- self.logger.trace(msg)
-  -- end
   if (msg.tid) then
     -- unauthenticated? reject as early as possible or accept it.
     local messageType = msg.msg.messageType
@@ -250,15 +245,13 @@ function Rpc:OnActivated(msg)
         return
       end
 
-      local vFileId = format("%s%s:%s", msg.callbackThread, msg.nid, self.filename)
+      local vFileId = format("(%s)%s:%s", msg.callbackThread, msg.nid, self.filename)
       self.response.name = self.fullname
       self.response.msg = result
       self.response.err = err
-      self.response.remoteAddress = self.localAddress -- on the server side the local address is nil
+      self.response.remoteAddress = msg.localAddress
       self.response.callbackId = msg.callbackId
-      -- if type(self.localAddress) == "table" then
-      -- self.logger.trace("activate on %s, msg:%s", vFileId, util.table_tostring(response))
-      -- end
+
       local activate_result = NPL.activate(vFileId, self.response)
 
       if activate_result ~= 0 then
@@ -296,44 +289,32 @@ function Rpc:MakePublic()
   NPL.AddPublicFile(self.filename, shortValue)
 end
 
--- @param address: if nil, it is current NPL thread. it can be thread name like "(worker1)"
--- if NPL thread worker1 is not created, it will be automatically created.
--- Because NPL thread is reused, it is good practice to use only limited number of NPL threads per process.
--- for complete format, please see NPL.activate function.
--- @param msg: any table object
--- @param callbackFunc: result from the Rpc, function(err, msg) end
--- @param timeout:  time out in milliseconds. if nil, there is no timeout
--- if timed out callbackFunc("timeout", nil) is invoked on timeout
-function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
-
-  self.localAddress = localAddress
-  self.remoteAddress = remoteAddress
-  -- if type(self.localAddress) == "table" then
-  --   self.localAddress.id = format("server%s:", self.localAddress.id);
-  -- end
+function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, remoteThread)
   -- TTL Cache
   self:OneTimeInit()
   local callbackId = self:PushCallback(callbackFunc)
 
-  --TODO: unify localAddress and remoteAddress format
-  local vFileId = format("(%s)server%s:%s", self.remoteThread or "main", self.remoteAddress, self.filename)
-  if string.match(self.remoteAddress, "%(%a+%)") then
-    -- this is used for response to client
-    vFileId = format("%s:%s", self.remoteAddress, self.filename)
-  end
+  local vFileId = format("(%s)server%s:%s", remoteThread or self.remoteThread or "main", remoteAddress, self.filename)
+
   self.request.msg = msg
   self.request.name = self.fullname
   self.request.callbackId = callbackId
-  self.request.remoteAddress = self.localAddress
-  -- if string.match(self.remoteAddress, "%(%a+%)") then
+  self.request.remoteAddress = localAddress
+  self.request.localAddress = remoteAddress
+
+  -- if remoteThread then
+  --   this is a client response
   --   self.logger.trace("activate on %s, request:%s", vFileId, util.table_tostring(self.request))
   -- end
+
   local activate_result = NPL.activate(vFileId, self.request)
   -- handle memory leak
   if activate_result ~= 0 then
     -- activate_result = NPL.activate_with_timeout(self.MaxWaitSeconds, vFileId, msg)
     -- if activate_result ~= 0 then
-    callbackQueue[callbackId] = nil
+    if callbackId ~= -1 then
+      callbackQueue[callbackId] = nil
+    end
     self.logger.error("activate on %s failed %d, msg type:%s", vFileId, activate_result, msg.type)
   -- end
   end

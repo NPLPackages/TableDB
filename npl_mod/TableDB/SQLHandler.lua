@@ -158,13 +158,12 @@ function SQLHandler:handle(data, callbackFunc)
     this.logger.trace("Result:")
     this.logger.trace(msg)
 
-    local remoteAddress = format("%sserver%s", raftLogEntryValue.callbackThread, raftLogEntryValue.serverId)
     if not re_exec then
       this.latestError = err
       this.latestData = data
     end
 
-    RTDBRequestRPC(self.stateManager.serverId, remoteAddress, msg)
+    RTDBRequestRPC(self.stateManager.serverId, raftLogEntryValue.serverId, msg, nil, raftLogEntryValue.callbackThread)
   end
 
   -- for test
