@@ -216,6 +216,7 @@ function Rpc:OnActivated(msg)
       end
       NPL.accept(msg.tid, nid)
       msg.nid = nid
+      msg.tid = nil
       self.logger.info("connection %s is established and accepted as %s", msg.tid, msg.nid)
     else
       if msg.name and msg.remoteAddress then
@@ -223,6 +224,7 @@ function Rpc:OnActivated(msg)
         local nid = format("server%s", msg.remoteAddress)
         NPL.accept(msg.tid, nid)
         msg.nid = nid
+        msg.tid = nil
         self.logger.info("connection %s is established and accepted as %s, client response", msg.tid, nid)
       else
         self.logger.info("who r u? msg:%s", util.table_tostring(msg))
@@ -303,19 +305,7 @@ end
 -- @param timeout:  time out in milliseconds. if nil, there is no timeout
 -- if timed out callbackFunc("timeout", nil) is invoked on timeout
 function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
-  -- local address = remoteAddress
-  -- if(type(address) == "string") then
-  --   local thread_name = address:match("^%((.+)%)$");
-  --   if (thread_name) then
-  --     self.workers = self.workers or {};
-  --     if(not self.workers[address]) then
-  --       self.workers[address] = true;
-  --       NPL.CreateRuntimeState(thread_name, 0):Start();
-  --     end
-  --   end
-  -- end
-  -- thread_name = thread_name or "osAsync";
-  -- NPL.CreateRuntimeState(thread_name, 0):Start();
+
   self.localAddress = localAddress
   self.remoteAddress = remoteAddress
   -- if type(self.localAddress) == "table" then
@@ -326,17 +316,17 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, timeout)
   local callbackId = self:PushCallback(callbackFunc)
 
   --TODO: unify localAddress and remoteAddress format
-  local vFileId = format("(%s)server%s:%s", self.remoteThread or "main", self.remoteAddress or "", self.filename)
+  local vFileId = format("(%s)server%s:%s", self.remoteThread or "main", self.remoteAddress, self.filename)
   if string.match(self.remoteAddress, "%(%a+%)") then
     -- this is used for response to client
-    vFileId = format("%s:%s", self.remoteAddress or "", self.filename)
+    vFileId = format("%s:%s", self.remoteAddress, self.filename)
   end
   self.request.msg = msg
   self.request.name = self.fullname
   self.request.callbackId = callbackId
   self.request.remoteAddress = self.localAddress
-  -- if type(self.localAddress) == "table" then
-  --   self.logger.trace("activate on %s, msg:%s", vFileId, util.table_tostring(msg))
+  -- if string.match(self.remoteAddress, "%(%a+%)") then
+  --   self.logger.trace("activate on %s, request:%s", vFileId, util.table_tostring(self.request))
   -- end
   local activate_result = NPL.activate(vFileId, self.request)
   -- handle memory leak
