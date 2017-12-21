@@ -199,23 +199,27 @@ function Rpc:OnActivated(msg)
     local messageType = msg.msg.messageType
     if (messageType) then
       local remoteAddress = msg.remoteAddress
-      local server_id = msg.msg.source or (remoteAddress and remoteAddress.id)
-      local nid = format("server%s", server_id) or "default_user"
+      local serverId = msg.msg.source
+      local nid = serverId and format("server%s", serverId) or nil
+      if type(remoteAddress) == "table" then
+        -- a client request
+        serverId = remoteAddress.id
+        nid = format("server%s", serverId)
+        if not added_runtime[nid] then
+          added_runtime[nid] = true
 
-      if not added_runtime[nid] and type(remoteAddress) == "table" then
-        added_runtime[nid] = true
-
-        self.logger.info("accepted nid is %s", nid)
-        NPL.AddNPLRuntimeAddress({host = remoteAddress.host, port = remoteAddress.port, nid = nid})
-        RaftRequestRPCInit(nil, server_id, {})
+          NPL.AddNPLRuntimeAddress({host = remoteAddress.host, port = remoteAddress.port, nid = nid})
+          RaftRequestRPCInit(nil, serverId, {})
+        end
       end
+
       NPL.accept(msg.tid, nid)
       self.logger.info("connection %s is established and accepted as %s", msg.tid, nid)
       msg.nid = nid
       msg.tid = nil
     else
       if msg.name and msg.remoteAddress then
-        -- for client rsp in state machine
+        -- a client response
         local nid = format("server%s", msg.remoteAddress)
         NPL.accept(msg.tid, nid)
         self.logger.info("connection %s is established and accepted as %s, client response", msg.tid, nid)
