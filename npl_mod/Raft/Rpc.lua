@@ -215,17 +215,17 @@ function Rpc:OnActivated(msg)
         RaftRequestRPCInit(nil, server_id, {})
       end
       NPL.accept(msg.tid, nid)
+      self.logger.info("connection %s is established and accepted as %s", msg.tid, nid)
       msg.nid = nid
       msg.tid = nil
-      self.logger.info("connection %s is established and accepted as %s", msg.tid, msg.nid)
     else
       if msg.name and msg.remoteAddress then
         -- for client rsp in state machine
         local nid = format("server%s", msg.remoteAddress)
         NPL.accept(msg.tid, nid)
+        self.logger.info("connection %s is established and accepted as %s, client response", msg.tid, nid)
         msg.nid = nid
         msg.tid = nil
-        self.logger.info("connection %s is established and accepted as %s, client response", msg.tid, nid)
       else
         self.logger.info("who r u? msg:%s", util.table_tostring(msg))
         NPL.reject(msg.tid)
