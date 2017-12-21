@@ -109,7 +109,7 @@ end
 -- @return index or nil
 function Rpc:PushCallback(callbackFunc, timeout)
   if (not callbackFunc) then
-    return -1
+    return
   end
   local index = getNextId()
   callbackQueue[index] = {callbackFunc = callbackFunc, startTime = ParaGlobal.timeGetTime(), timeout = timeout}
@@ -289,6 +289,14 @@ function Rpc:MakePublic()
   NPL.AddPublicFile(self.filename, shortValue)
 end
 
+-- localAddress is server id for raft internal msg, and a table for client request
+-- for client request the table looks like below
+--   local localAddress = {
+--     host = host or "localhost",
+--     port = port or "9004",
+--     id = id or "4"
+--   }
+-- remoteAddress is always a server id
 function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, remoteThread)
   -- TTL Cache
   self:OneTimeInit()
@@ -312,7 +320,7 @@ function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, remoteThre
   if activate_result ~= 0 then
     -- activate_result = NPL.activate_with_timeout(self.MaxWaitSeconds, vFileId, msg)
     -- if activate_result ~= 0 then
-    if callbackId ~= -1 then
+    if callbackId then
       callbackQueue[callbackId] = nil
     end
     self.logger.error("activate on %s failed %d, msg type:%s", vFileId, activate_result, msg.type)
