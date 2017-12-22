@@ -133,8 +133,6 @@ function RaftTableDBStateMachine:start2(RaftSqliteStore)
 
   RTDBRequestRPC.remoteThread = self.threadName
   RTDBRequestRPC:MakePublic()
-
-
 end
 
 --[[
@@ -176,10 +174,10 @@ function RaftTableDBStateMachine:commit(logIndex, data, isLeader)
   end
 
   -- we can inject in leader now
-  -- if not isLeader then
-  local collection = self.db[data.collectionName]
-  collection:injectWALPage(data)
-  -- end
+  if not isLeader then
+    local collection = self.db[data.collectionName]
+    collection:injectWALPage(data)
+  end
 
   self.commitIndex = logIndex
 end
