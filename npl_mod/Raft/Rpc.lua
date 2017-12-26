@@ -200,18 +200,7 @@ function Rpc:OnActivated(msg)
     if (messageType) then
       local remoteAddress = msg.remoteAddress
       local serverId = msg.msg.source
-      local nid = serverId and format("server%s", serverId) or nil
-      if type(remoteAddress) == "table" then
-        -- a client request
-        serverId = remoteAddress.id
-        nid = format("server%s", serverId)
-        if not added_runtime[nid] then
-          added_runtime[nid] = true
-
-          NPL.AddNPLRuntimeAddress({host = remoteAddress.host, port = remoteAddress.port, nid = nid})
-          RaftRequestRPCInit(nil, serverId, {})
-        end
-      end
+      local nid = (serverId and format("server%s", serverId)) or (remoteAddress and format("server%s", remoteAddress))
 
       NPL.accept(msg.tid, nid)
       self.logger.info("connection %s is established and accepted as %s", msg.tid, nid)
