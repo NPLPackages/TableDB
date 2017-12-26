@@ -9,8 +9,11 @@ Desc:
 function TestSQLOperations()
 	NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
 	local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
-	-- this will start both db client and db server if not.
-	local db = TableDatabase:new():connect("temp/test_raft_database/", function() end);
+	local db = TableDatabase:new();
+	-- make client run in main thread
+	db:SetWriterTheadName("main");
+	db:open("temp/test_raft_database/");
+	db:connect("temp/test_raft_database/", function() end);
 	
 	-- Note: `db.User` will automatically create the `User` collection table if not.
 	-- clear all data
@@ -69,7 +72,7 @@ function TestSQLOperations()
 	db.User:find({ ["+name"] = {"1", limit=2} }, function(err, rows) assert(#rows==2); end);
 	-- return at most 1 row whose id is greater than -1
 	db.User:find({ _id = { gt = -1, limit = 1, skip == 1} }, function(err, rows) assert(#rows==1); echo("all tests succeed!") end);
-	db.User:close();
+	-- db.User:close();
 
 end
 
@@ -90,13 +93,15 @@ function TestInsertThroughputNoIndex()
 	npl_profiler.perf_reset();
 
 	npl_profiler.perf_begin("tableDB_InsertThroughputNoIndex", true)
-	local total_times = 1000000; -- a million non-indexed insert operation
+	local total_times = 100000; -- a million non-indexed insert operation
 	local max_jobs = 1000; -- concurrent jobs count
 	NPL.load("(gl)script/ide/System/Concurrent/Parallel.lua");
 	local Parallel = commonlib.gettable("System.Concurrent.Parallel");
 	local p = Parallel:new():init()
 
 	p:RunManyTimes(function(count)
+		-- LOG.std(nil, "info", "", "before insert");
+		
 		db.insertNoIndex:insertOne(nil, {count=count, data=math.random()}, function(err, data)
 			if(err) then
 				echo({err, data, count});
@@ -122,7 +127,7 @@ function TestPerformance()
 	
 	-- how many times for each CRUD operations.
 	local nTimes = 10000; 
-	local max_jobs = 100; -- concurrent jobs count
+	local max_jobs = 1000; -- concurrent jobs count
 	local insertFlush, testRoundTrip, randomCRUD, findMany;
 	
 	-- this will start both db client and db server if not.
@@ -735,6 +740,8 @@ function createStoreConfig(rootFolder, name, type, file)
 	end
 end
 
+
+-- should comment set_wal_page_hook in SqliteWALStore
 function TestSqliteWALStore()
 	local rootFolder = "temp/test_sqlite_wal_store/"
 	local cloneRootFolder = "temp/test_sqlite_wal_store_clone/"
@@ -756,8 +763,8 @@ function TestSqliteWALStore()
 	npl_profiler.perf_reset();
 
 	npl_profiler.perf_begin("tableDB_InsertThroughputNoIndex", true)
-	local total_times = 1000000; -- a million non-indexed insert operation
-	local max_jobs = 1000; -- concurrent jobs count
+	local total_times = 100; -- a million non-indexed insert operation
+	local max_jobs = 1; -- concurrent jobs count
 	NPL.load("(gl)script/ide/System/Concurrent/Parallel.lua");
 	local Parallel = commonlib.gettable("System.Concurrent.Parallel");
 	local p = Parallel:new():init()
