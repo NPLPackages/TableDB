@@ -192,7 +192,6 @@ function Rpc.GetInstance(name)
 end
 
 -- private: whenever a message arrives
-local added_runtime = {}
 function Rpc:OnActivated(msg)
   if (msg.tid) then
     -- unauthenticated? reject as early as possible or accept it.
@@ -248,15 +247,13 @@ function Rpc:OnActivated(msg)
       local activate_result = NPL.activate(vFileId, self.response)
 
       if activate_result ~= 0 then
-        if added_runtime[msg.nid] then
-          activate_result = NPL.activate_with_timeout(self.MaxWaitSeconds, vFileId, self.response)
+        -- activate_result = NPL.activate_with_timeout(self.MaxWaitSeconds, vFileId, self.response)
+        -- if activate_result ~= 0 then
+        self.logger.error("activate on %s failed %d, msg type:%s", vFileId, activate_result, self.response.type)
+        if result.callbackFunc then
+          result.callbackFunc()
         end
-        if activate_result ~= 0 then
-          self.logger.error("activate on %s failed %d, msg type:%s", vFileId, activate_result, self.response.type)
-          if result.callbackFunc then
-            result.callbackFunc()
-          end
-        end
+      -- end
       end
     elseif (msg.type == "result" and msg.callbackId) then
       local cb = self:PopCallback(msg.callbackId)
