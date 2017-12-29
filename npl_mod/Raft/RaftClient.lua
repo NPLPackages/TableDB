@@ -130,12 +130,11 @@ function RaftClient:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry)
   )
 
   local this = self
-
   local backoff_retry_func = function(...)
     if this.randomLeader then
       -- try a random server as leader
       this.leaderId = this.configuration.servers[math.random(#this.configuration.servers)].id
-      this.logger.debug("next should try server: %d", this.leaderId)
+      this.logger.debug("next will try server:%d", this.leaderId)
       this.randomLeader = true
     end
 
@@ -187,16 +186,18 @@ function RaftClient:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry)
         end
       end
 
+      retry = 0
+
       if callbackFunc then
         callbackFunc(response, err)
       end
     elseif err == "timeout" then
       -- backoff_retry_func()
-      self.logger.error("the request is timeout")
+      self.logger.error("the request to remote server %d is TIMEOUT, tried %d", self.leaderId, retry)
     else
       self.logger.error(
-        "rpc error, failed(%d) to send request to remote server, err:%s. tried %d, no more try here",
-        activate_result,
+        "rpc error, failed to send request to remote server:%d, err:%s. tried %d, no more try",
+        self.leaderId,
         err,
         retry
       )
@@ -207,7 +208,12 @@ function RaftClient:tryCurrentLeader(request, callbackFunc, rpcBackoff, retry)
 
   local activate_result = self.RequestRPC(self.localAddress.id, self.leaderId, request, HandleResponse)
   if (activate_result ~= 0) then
-    self.logger.error("rpc error, failed(%d) to send request to remote server. tried %dth", activate_result, retry)
+    self.logger.error(
+      "rpc error, failed(%d) to send request to remote server:%d. tried %ds",
+      activate_result,
+      self.leaderId,
+      retry
+    )
     if (retry > 3 * #self.configuration.servers) then
       self.logger.error("FAILED. reach to the max retry. tried %ds", retry)
       if callbackFunc then
