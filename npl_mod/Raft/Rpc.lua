@@ -196,27 +196,16 @@ function Rpc:OnActivated(msg)
   if (msg.tid) then
     -- unauthenticated? reject as early as possible or accept it.
     local messageType = msg.msg.messageType
-    if (messageType) then
-      local remoteAddress = msg.remoteAddress
-      local serverId = msg.msg.source
-      local nid = (serverId and format("server%s", serverId)) or (remoteAddress and format("server%s", remoteAddress))
-
+    if (messageType or (msg.name and msg.remoteServerId)) then
+      -- if messageType is nil, this is a client response on client side
+      local nid = format("server%s", msg.remoteServerId)
       NPL.accept(msg.tid, nid)
       self.logger.info("connection %s is established and accepted as %s", msg.tid, nid)
       msg.nid = nid
       msg.tid = nil
     else
-      if msg.name and msg.remoteAddress then
-        -- a client response
-        local nid = format("server%s", msg.remoteAddress)
-        NPL.accept(msg.tid, nid)
-        self.logger.info("connection %s is established and accepted as %s, client response", msg.tid, nid)
-        msg.nid = nid
-        msg.tid = nil
-      else
-        self.logger.info("who r u? msg:%s", util.table_tostring(msg))
-        NPL.reject(msg.tid)
-      end
+      self.logger.info("who r u? msg:%s", util.table_tostring(msg))
+      NPL.reject(msg.tid)
     end
   end
 
@@ -241,7 +230,6 @@ function Rpc:OnActivated(msg)
       self.response.name = self.fullname
       self.response.msg = result
       self.response.err = err
-      self.response.remoteAddress = msg.localAddress
       self.response.callbackId = msg.callbackId
 
       local activate_result = NPL.activate(vFileId, self.response)
@@ -279,19 +267,18 @@ function Rpc:MakePublic()
   NPL.AddPublicFile(self.filename, shortValue)
 end
 
--- localAddress and remoteAddress is always a server id
-function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, remoteThread)
+-- localServerId and remoteServerId is always a server id
+function Rpc:activate(localServerId, remoteServerId, msg, callbackFunc, remoteThread)
   -- TTL Cache
   self:OneTimeInit()
   local callbackId = self:PushCallback(callbackFunc)
 
-  local vFileId = format("(%s)server%s:%s", remoteThread or self.remoteThread or "main", remoteAddress, self.filename)
+  local vFileId = format("(%s)server%s:%s", remoteThread or self.remoteThread or "main", remoteServerId, self.filename)
 
   self.request.msg = msg
   self.request.name = self.fullname
   self.request.callbackId = callbackId
-  self.request.remoteAddress = localAddress
-  self.request.localAddress = remoteAddress
+  self.request.remoteServerId = localServerId
 
   -- if remoteThread then
   --   this is a client response
