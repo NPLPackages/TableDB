@@ -279,14 +279,7 @@ function Rpc:MakePublic()
   NPL.AddPublicFile(self.filename, shortValue)
 end
 
--- localAddress is server id for raft internal msg, and a table for client request
--- for client request the table looks like below
---   local localAddress = {
---     host = host or "localhost",
---     port = port or "9004",
---     id = id or "4"
---   }
--- remoteAddress is always a server id
+-- localAddress and remoteAddress is always a server id
 function Rpc:activate(localAddress, remoteAddress, msg, callbackFunc, remoteThread)
   -- TTL Cache
   self:OneTimeInit()
