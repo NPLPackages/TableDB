@@ -79,7 +79,7 @@ function RaftClient:appendEntries(values, callbackFunc)
     logEntries[#logEntries + 1] = LogEntry:new(0, values)
   end
 
-  request = {
+  local request = {
     messageType = RaftMessageType.ClientRequest,
     logEntries = logEntries
   }
