@@ -7,22 +7,30 @@ Internally it will use an existing or a virtual NPL activation file that can be 
 One particular Rpc instance is dedicated to one NPL thread. No need to worry about concurrency problem.
 use the lib:
 ------------------------------------------------------------
-NPL.load("(gl)npl_mod/Raft/Rpc.lua");
-local Rpc = commonlib.gettable("Raft.Rpc");
-Rpc:new():init("Test.testRPC", function(self, msg)
-LOG.std(nil, "info", "category", msg);
-msg.output=true;
-ParaEngine.Sleep(1);
-return msg;
-end)
+NPL.load("(gl)npl_mod/Raft/Rpc.lua")
+local Rpc = commonlib.gettable("Raft.Rpc")
+Rpc:new():init(
+  "Test.testRPC",
+  function(self, msg)
+    LOG.std(nil, "info", "category", msg)
+    msg.output = true
+    ParaEngine.Sleep(1)
+    return msg
+  end
+)
 
-Test.testRPC:MakePublic();
+Test.testRPC:MakePublic()
 
--- now we can invoke it anywhere in any thread or remote address.
-Test.testRPC("(worker1)", {"input"}, function(err, msg)
-assert(msg.output == true and msg[1] == "input")
-echo(msg);
-end);
+-- send msg from server1 to server2
+Test.testRPC(
+  "1",
+  "2"
+  {"input"},
+  function(err, msg)
+    assert(msg.output == true and msg[1] == "input")
+    echo(msg)
+  end
+)
 
 ------------------------------------------------------------
 ]]
