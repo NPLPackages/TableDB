@@ -1,8 +1,10 @@
 --[[
 Title: remote procedure call
-Author(s): LiXizhi@yeah.net
+Author(s): LiXizhi@yeah.net, liuluheng
 Date: 2017.03.25 2017/2/8
-Desc: Create RPC in current NPL thread. Internally it will use an existing or a virtual NPL activation file that can be invoked from any thread.
+Desc: Create RPC in current NPL thread. 
+Internally it will use an existing or a virtual NPL activation file that can be invoked from any thread.
+One particular Rpc instance is dedicated to one NPL thread. No need to worry about concurrency problem.
 use the lib:
 ------------------------------------------------------------
 NPL.load("(gl)npl_mod/Raft/Rpc.lua");
@@ -22,11 +24,6 @@ assert(msg.output == true and msg[1] == "input")
 echo(msg);
 end);
 
--- time out in 500ms
-Test.testRPC("(worker1)", {"input"}, function(err, msg)
-assert(err == "timeout" and msg==nil)
-echo(err);
-end, 500);
 ------------------------------------------------------------
 ]]
 NPL.load("(gl)script/ide/System/Compiler/lib/util.lua")
