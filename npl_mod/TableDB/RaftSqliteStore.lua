@@ -56,8 +56,8 @@ function RaftSqliteStore:setupRPC(remoteThreadName)
   Rpc:new():init(
     "RTDBRequestRPC",
     function(self, msg)
-      this.logger.debug("Response:")
-      this.logger.debug(msg)
+      logger.debug("Response:")
+      logger.debug(msg)
       this:handleResponse(msg)
     end
   )
