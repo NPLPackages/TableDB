@@ -5,7 +5,8 @@ Date: 2017.03.25
 Desc:
 
 Peer server in the same cluster for local server
-this represents a peer for local server, it could be a leader, however, if local server is not a leader, though it has a list of peer servers, they are not used
+this represents a peer for local server, 
+it could be a leader, however, if local server is not a leader, though it has a list of peer servers, they are not used
 
 ------------------------------------------------------------
 NPL.load("(gl)npl_mod/Raft/PeerServer.lua");
@@ -88,12 +89,12 @@ end
 
 function PeerServer:SendRequest(request, callbackFunc)
   local isAppendRequest =
-    request.messageType == RaftMessageType.AppendEntriesRequest or
-    request.messageType == RaftMessageType.InstallSnapshotRequest
+    request.messageType.int == RaftMessageType.AppendEntriesRequest.int or
+    request.messageType.int == RaftMessageType.InstallSnapshotRequest.int
 
   local o = self
 
-	local source = request.source
+  local source = request.source
   local destination = request.destination
 
   local function error_handler(msg, err, activate_result)
