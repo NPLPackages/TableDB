@@ -10,8 +10,6 @@ NPL.load("(gl)npl_mod/TableDB/RaftSqliteStore.lua");
 local RaftSqliteStore = commonlib.gettable("TableDB.RaftSqliteStore");
 ------------------------------------------------------------
 ]]
-NPL.load("(gl)script/ide/System/Database/StorageProvider.lua")
-local StorageProvider = commonlib.gettable("System.Database.StorageProvider")
 NPL.load("(gl)script/ide/System/Compiler/lib/util.lua")
 local util = commonlib.gettable("System.Compiler.lib.util")
 NPL.load("(gl)npl_mod/TableDB/RaftLogEntryValue.lua")
@@ -48,29 +46,29 @@ end
 
 NPL.load("(gl)npl_mod/Raft/Rpc.lua")
 local Rpc = commonlib.gettable("Raft.Rpc")
-local function setupRPC(RaftSqliteStore, threadName)
+function RaftSqliteStore:setupRPC(remoteThreadName)
   -- for init connect
   Rpc:new():init("RaftRequestRPCInit")
-  RaftRequestRPCInit.remoteThread = threadName
+  RaftRequestRPCInit.remoteThread = remoteThreadName
   RaftRequestRPCInit:MakePublic()
 
+  local this = self
   Rpc:new():init(
     "RTDBRequestRPC",
     function(self, msg)
-      logger.debug("Response:")
-      logger.debug(msg)
-      RaftSqliteStore:handleResponse(msg)
+      this.logger.debug("Response:")
+      this.logger.debug(msg)
+      this:handleResponse(msg)
     end
   )
-
-  RTDBRequestRPC.remoteThread = threadName
+  RTDBRequestRPC.remoteThread = remoteThreadName
   RTDBRequestRPC:MakePublic()
 end
 
 RaftSqliteStore.name = "raft"
 RaftSqliteStore.thread_name = format("%s", __rts__:GetName())
 
-function RaftSqliteStore:createRaftClient(baseDir, host, port, id, threadName, rootFolder)
+function RaftSqliteStore:createRaftClient(baseDir, host, port, id, remoteThreadName, rootFolder)
   RaftSqliteStore.responseThreadName = self.thread_name
 
   local baseDir = baseDir or "./"
@@ -82,7 +80,7 @@ function RaftSqliteStore:createRaftClient(baseDir, host, port, id, threadName, r
     id = id or "4"
   }
 
-  setupRPC(self, threadName)
+  self:setupRPC(remoteThreadName)
 
   raftClient = RaftClient:new(localAddress, RTDBRequestRPC, config, LoggerFactory)
 
@@ -104,8 +102,6 @@ function RaftSqliteStore:ctor()
     insert = 0,
     delete = 0
   }
-
-  -- StorageProvider:RegisterStorageClass(self.name, self)
 end
 
 function RaftSqliteStore:init(collection, init_args)
