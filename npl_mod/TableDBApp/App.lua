@@ -134,7 +134,7 @@ local function executeAsClient(stateMachine)
       baseDir = "./",
       host = "localhost",
       port = "9004",
-      id = "server4:",
+      id = "4",
       threadName = "rtdb",
       rootFolder = "temp/test_raft_database",
       useFile = useFileStateManager
