@@ -139,6 +139,14 @@ end
 * Commit the log data at the {@code logIndex}
 * @param logIndex the log index in the logStore
 * @param data
+
+-- for the write request. i.e insertOne
+--   we can response to client here
+--   to make linearizability from the client view
+-- for read request. i.e findOne
+--   we make use the heatbeat (https://pdos.csail.mit.edu/6.824/papers/raft2-faq.txt)
+--     > there could be a convention that the leader can't change
+--     > for a known period of time after each heartbeat (the lease).
 ]]
 --
 function RaftTableDBStateMachine:commit(logIndex, data, isLeader)
