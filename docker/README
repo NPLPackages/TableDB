@@ -1,0 +1,19 @@
+cd to this(TableDB/docker) directory
+
+use
+`docker network create --gateway 172.16.0.1 --subnet 172.16.0.0/21 mynet`
+to create a subnet for the use of --ip in docker run
+
+### BUILD docker image
+first U need 
+`mklink /J npl_packages ..\npl_packages\`
+`mklink /J npl_mod ..\npl_mod\`
+and
+use cmd `docker build -t tabledb .` to make tabledb image
+or use `ln -s` and `tar -czh . | docker build tabledb -` in linux
+
+### start 3 servers in windows
+run `setup_docker.bat`
+
+### start client
+run `setup_docker.bat client`

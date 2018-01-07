@@ -5,11 +5,15 @@ if "%1" == "dummy" goto setupDummy
 if "%1" == "client" goto setupClient
 
 for %%i in (1 2 3) do (
+    rm -r "%curdir%\server%%i"
     mkdir "%curdir%\server%%i"
     copy /Y init-cluster.json "%curdir%\server%%i\cluster.json"
+    copy /Y "..\sqlite.dll" "%curdir%\server%%i\sqlite.dll"
     echo server.id=%%i> "%curdir%\server%%i\config.properties"
     echo start server%%i
-    start "server%%i" /D "%curdir%\server%%i" npl -d bootstrapper="npl_mod/TableDBApp/App.lua" servermode="true" dev="../../" raftMode="server" threadName="rtdb" baseDir="./"
+    REM use paraengineclient.exe
+    REM start "server%%i" /D "%curdir%\server%%i" npl -d bootstrapper="npl_mod/TableDBApp/App.lua" servermode="true" dev="../../" raftMode="server" threadName="rtdb" baseDir="./"
+    start "server%%i" /D "%curdir%\server%%i" npl bootstrapper="npl_mod/TableDBApp/App.lua" servermode="true" dev="../../" raftMode="server" threadName="rtdb" baseDir="./"
 )
 
 goto done
@@ -17,8 +21,14 @@ goto done
 echo start a client
 mkdir client
 copy /Y init-cluster.json "%curdir%\client\cluster.json"
+copy /Y "..\sqlite.dll" "%curdir%\client\sqlite.dll"
 copy /Y "%curdir%\server1\config.properties" "%curdir%\client\config.properties"
-start "client" /D "%curdir%\client" npl -d bootstrapper="npl_mod/TableDBApp/App.lua" servermode="true" dev="../../" raftMode="client" baseDir="./" clientMode="%2" serverId="%3"
+REM use paraengineclient.exe
+REM start "client" /D "%curdir%\client" npl -d bootstrapper="npl_mod/TableDBApp/App.lua" servermode="true" dev="../../" raftMode="client" baseDir="./" clientMode="%2" serverId="%3"
+REM use paraengineserver.exe and App.lua
+REM start "client" /D "%curdir%\client" npl bootstrapper="npl_mod/TableDBApp/App.lua" servermode="true" dev="../../" raftMode="client" baseDir="./" clientMode="%2" serverId="%3"
+REM use paraengineserver.exe and TableDBClient
+start "client" /D "%curdir%\client" npl bootstrapper="npl_mod/TableDBApp/TableDBClient.lua" servermode="true" dev="../../" clientMode="%2" serverId="%3"
 
 
 goto done
