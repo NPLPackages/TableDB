@@ -128,14 +128,7 @@ function RaftServer:new(ctx)
     end
   end
   o.quickCommitIndex = o.state.commitIndex
-  -- what's wrong with o.logger.debug
-  -- o.logger.debug(o.peers)
-  -- dedicated commit thread
-  --  o.commitingThreadName = "commitingThread"..o.id;
-  --  NPL.CreateRuntimeState(o.commitingThreadName, 0):Start();
-  --  NPL.activate(format("(%s)npl_mod/Raft/RaftServer.lua", o.commitingThreadName),{
-  --      server = o,
-  --  });
+
   -- election timer
   o:restartElectionTimer()
 
