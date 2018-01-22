@@ -15,7 +15,6 @@ local serverId = tonumber(ParaEngine.GetAppCommandLineByParam("serverId", "5"))
 
 local function executeAsClient()
   if clientMode == "appendEntries" then
-    -- TestInsertThroughputNoIndex()
     -- TestPerformance()
     -- TestBulkOperations()
     -- TestTimeout()
@@ -30,8 +29,9 @@ local function executeAsClient()
     -- TestCompoundIndex()
     -- TestCountAPI()
     -- TestDelete()
-
+    
     NPL.load("(gl)npl_mod/TableDB/test/test_TableDatabase.lua")
+    -- TestInsertThroughputNoIndex()
     TestSQLOperations()
   else
     NPL.load("(gl)npl_mod/TableDB/RaftSqliteStore.lua")
@@ -40,7 +40,7 @@ local function executeAsClient()
       baseDir = "./",
       host = "localhost",
       port = "9004",
-      id = "server4:",
+      id = "4",
       threadName = "rtdb",
       rootFolder = "temp/test_raft_database",
       useFile = useFileStateManager
