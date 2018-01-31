@@ -82,9 +82,12 @@ function TestInsertThroughputNoIndex()
 	NPL.load("(gl)script/ide/System/Database/TableDatabase.lua");
 	local TableDatabase = commonlib.gettable("System.Database.TableDatabase");
 
-    -- this will start both db client and db server if not.
-	local db = TableDatabase:new():connect("temp/test_raft_database/");
-	
+	local db = TableDatabase:new();
+	-- make client run in main thread
+	db:SetWriterTheadName("main");
+	db:open("temp/test_raft_database/");
+	db:connect("temp/test_raft_database/", function() end);
+
 	db.insertNoIndex:makeEmpty({});
 	db.insertNoIndex:flush({});
 		
@@ -113,7 +116,7 @@ function TestInsertThroughputNoIndex()
 		log(commonlib.serialize(npl_profiler.perf_get(), true));		
 		echo({"finished",total})
 		db.insertNoIndex:flush({});
-		db.insertNoIndex:close()
+		-- db.insertNoIndex:close()
 	end);
 end
 
