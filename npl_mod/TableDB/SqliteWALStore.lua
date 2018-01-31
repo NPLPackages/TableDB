@@ -18,12 +18,10 @@ local SqliteStore = commonlib.gettable("System.Database.SqliteStore")
 local SqliteWALStore = commonlib.inherit(SqliteStore, commonlib.gettable("TableDB.SqliteWALStore"))
 local LoggerFactory = NPL.load("(gl)npl_mod/Raft/LoggerFactory.lua")
 
-
 NPL.load("(gl)script/sqlite/libluasqlite3-loader.lua")
 local api, ERR, TYPE, AUTH = load_libluasqlite3()
 
 NPL.load("(gl)script/sqlite/sqlite3.lua")
-
 
 local cbWALHandlerFile = "(%s)RPC/WALHandler.lua"
 local cb_thread = "raft"
@@ -57,7 +55,7 @@ function SqliteWALStore:init(collection, init_args)
 end
 
 function SqliteWALStore:injectWALPage(query, callbackFunc)
-  self.logger.info(
+  self.logger.trace(
     "logIndex:%d, pgSize %d, pgno %d, nTruncate %d, isCommit %d",
     query.logIndex,
     #query.page_data,
@@ -106,8 +104,8 @@ function SqliteWALStore:backup(query, callbackFunc)
         --     end
         -- end
       else
+        --   exit(-1)
         self.logger.error("must be a BUG!!!")
-      --   exit(-1)
       end
     end
     bu:finish()
