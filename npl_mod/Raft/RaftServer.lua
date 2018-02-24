@@ -568,6 +568,10 @@ function RaftServer:handleAppendEntriesResponse(response)
     else
       peer.nextLogIndex = peer.nextLogIndex - 1
     end
+
+    -- TODO: step down when leader recv higher term 
+    -- see https://github.com/brpc/braft/blob/master/docs/cn/raft_protocol.md#symmetric-network-partitioning
+    -- and https://github.com/brpc/braft/blob/f7b8591cca13bf8b003b87091a9495daf69c380b/src/braft/replicator.cpp#L326
   end
 
   -- This may not be a leader anymore, such as the response was sent out long time ago
