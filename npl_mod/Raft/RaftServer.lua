@@ -650,6 +650,15 @@ function RaftServer:handleInstallSnapshotResponse(response)
   end
 end
 
+-- same with kudu raft consensus implementation
+-- https://github.com/apache/kudu/blob/29dbc7e411bbd1d0e542185880163642703ca5ba/src/kudu/consensus/leader_election.h#L130
+--   > Any votes that come in after a decision has been made and the callback has
+--   > been invoked are logged but ignored. Note that this somewhat strays from the
+--   > letter of the Raft paper, in that replies that come after a "Yes" decision
+--   > do not immediately cause the candidate/leader to step down, but this keeps
+--   > our implementation and API simple, and the newly-minted leader will soon
+--   > discover that it must step down when it attempts to replicate its first
+--   > message to the peers.
 function RaftServer:handleVotingResponse(response)
   self.votesResponded = self.votesResponded + 1
   if (self.electionCompleted) then
