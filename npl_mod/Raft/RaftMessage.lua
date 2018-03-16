@@ -3,37 +3,36 @@ Title:
 Author: liuluheng
 Date: 2017.03.25
 Desc: 
-
+  not used
 
 ------------------------------------------------------------
 NPL.load("(gl)npl_mod/Raft/RaftMessage.lua");
 local RaftMessage = commonlib.gettable("Raft.RaftMessage");
 ------------------------------------------------------------
-]]--
+]] --
 
+local RaftMessage = commonlib.gettable("Raft.RaftMessage")
 
-local RaftMessage = commonlib.gettable("Raft.RaftMessage");
-
-function RaftMessage:new(subfields) 
-    local o = {
-        messageType = 0,
-        source = 0,
-        destination =  0,
-        term = 0,
-    };
-    if subfields then
-        for k,v in pairs(subfields) do
-            o[k] = v
-        end
+function RaftMessage:new(subfields)
+  local o = {
+    messageType = 0,
+    source = 0,
+    destination = 0,
+    term = 0
+  }
+  if subfields then
+    for k, v in pairs(subfields) do
+      o[k] = v
     end
-    setmetatable(o, self);
-    return o;
+  end
+  setmetatable(o, self)
+  return o
 end
 
 function RaftMessage:__index(name)
-    return rawget(self, name) or RaftMessage[name];
+  return rawget(self, name) or RaftMessage[name]
 end
 
 function RaftMessage:__tostring()
-    return util.table_tostring(self)
+  return util.table_tostring(self)
 end

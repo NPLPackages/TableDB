@@ -3,82 +3,91 @@ Title:
 Author: liuluheng
 Date: 2017.03.25
 Desc: 
-
+  StateMachine interface in Raft
 
 ------------------------------------------------------------
 NPL.load("(gl)npl_mod/Raft/StateMachine.lua");
 local StateMachine = commonlib.gettable("Raft.StateMachine");
 ------------------------------------------------------------
-]]--
+]] --
 
+local StateMachine = commonlib.gettable("Raft.StateMachine")
 
-local StateMachine = commonlib.gettable("Raft.StateMachine");
-
-function StateMachine:new() 
-    local o = {
-    };
-    setmetatable(o, self);
-    return o;
+function StateMachine:new()
+  local o = {}
+  setmetatable(o, self)
+  return o
 end
 
 function StateMachine:__index(name)
-    return rawget(self, name) or StateMachine[name];
+  return rawget(self, name) or StateMachine[name]
 end
 
 function StateMachine:__tostring()
-    return util.table_tostring(self)
+  return util.table_tostring(self)
 end
-
+ --
 
 --[[
    Starts the state machine, called by RaftConsensus, RaftConsensus will pass an instance of
    RaftMessageSender for the state machine to send logs to cluster, so that all state machines
    in the same cluster could be in synced
    @param raftMessageSender
- ]]--
-function StateMachine:start(raftMessageSender)
+ ]] function StateMachine:start(
+  raftMessageSender)
 end
+ --
 
 --[[
    Commit the log data at the {@code logIndex}
    @param logIndex the log index in the logStore
    @param data 
- ]]--
-function StateMachine:commit(logIndex, data)
+ ]] function StateMachine:commit(
+  logIndex,
+  data)
 end
+ --
 
 --[[
    Rollback a preCommit item at index {@code logIndex}
    @param logIndex log index to be rolled back
    @param data
- ]]--
-function StateMachine:rollback(logIndex, data)
+ ]] function StateMachine:rollback(
+  logIndex,
+  data)
 end
+ --
 
 --[[
    PreCommit a log entry at log index {@code logIndex}
    @param logIndex the log index to commit
    @param data
- ]]--
-function StateMachine:preCommit(logIndex, data)
+ ]] function StateMachine:preCommit(
+  logIndex,
+  data)
 end
+ --
 
- --[[
+--[[
   Save data for the snapshot
   @param snapshot the snapshot information
   @param offset offset of the data in the whole snapshot
   @param data part of snapshot data
-]]--
-function StateMachine:saveSnapshotData(snapshot, offset, data)
+]] function StateMachine:saveSnapshotData(
+  snapshot,
+  offset,
+  data)
 end
+ --
 
 --[[
    Apply a snapshot to current state machine
    @param snapshot
    @return true if successfully applied, otherwise false
- ]]--
-function StateMachine:applySnapshot(snapshot)
+ ]] function StateMachine:applySnapshot(
+  snapshot)
 end
+ --
 
 --[[
    Read snapshot data at the specified offset to buffer and return bytes read
@@ -87,16 +96,20 @@ end
    @param buffer the buffer to be filled
    @param expectedSize the expectedSize to be filled
    @return bytes read
- ]]--
-function StateMachine:readSnapshotData(snapshot, offset, buffer, expectedSize)
+ ]] function StateMachine:readSnapshotData(
+  snapshot,
+  offset,
+  buffer,
+  expectedSize)
 end
+ --
 
 --[[
    Read the last snapshot information
    @return last snapshot information in the state machine or null if none
- ]]--
-function StateMachine:getLastSnapshot()
+ ]] function StateMachine:getLastSnapshot()
 end
+ --
 
 --[[
    Create a snapshot data based on the snapshot information asynchronously
@@ -104,14 +117,15 @@ end
    set it to false
    @param snapshot the snapshot info
    @return true if snapshot is created successfully, otherwise false
- ]]--
-function StateMachine:createSnapshot(snapshot)
+ ]] function StateMachine:createSnapshot(
+  snapshot)
 end
-    
+ --
+
 --[[
    Save the state of state machine to ensure the state machine is in a good state, then exit the system
    this MUST exits the system to protect the safety of the algorithm
    @param code 0 indicates the system is gracefully shutdown, -1 indicates there are some errors which cannot be recovered
- ]]--
-function StateMachine:exit(code)
+ ]] function StateMachine:exit(
+  code)
 end

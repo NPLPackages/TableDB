@@ -8,11 +8,10 @@ Desc:
 ------------------------------------------------------------
 local ServerRole = NPL.load("(gl)npl_mod/Raft/ServerRole.lua");
 ------------------------------------------------------------
-]]--
+]] --
 
+local ServerRole = NPL.export()
 
-local ServerRole = NPL.export();
-
-ServerRole.Follower  = 0
+ServerRole.Follower = 0
 ServerRole.Candidate = 1
-ServerRole.Leader	   = 2
+ServerRole.Leader = 2
