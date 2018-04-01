@@ -5,6 +5,8 @@ Date: 2017/7/31
 Desc:
 
 use the lib:
+  used in the client side
+  
 ------------------------------------------------------------
 NPL.load("(gl)npl_mod/TableDB/RaftSqliteStore.lua");
 local RaftSqliteStore = commonlib.gettable("TableDB.RaftSqliteStore");
