@@ -474,6 +474,8 @@ function RaftServer:requestAllAppendEntries()
   end
 end
 
+-- TODO: optimistically increase peer's nextIndex to the latest entry sent
+-- https://github.com/coreos/etcd/blob/master/raft/design.md
 function RaftServer:requestAppendEntries(peer)
   if (peer:makeBusy()) then
     local o = self
