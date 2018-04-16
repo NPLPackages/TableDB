@@ -55,6 +55,7 @@ function SQLHandler:new(baseDir, useFile)
     monitorPeriod = 50000,
     threadName = g_threadName,
     logger = LoggerFactory.getLogger("SQLHandler"),
+    -- record latest command for each client
     latestCommand = -2,
     collections = {}
   }

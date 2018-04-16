@@ -320,6 +320,7 @@ function RaftSqliteStore:Send(query_type, query, callbackFunc)
   self:OneTimeInit()
   local index = self:PushCallback(callbackFunc)
   if (index) then
+    -- TODO: add raftClient uid
     local raftLogEntryValue =
       RaftLogEntryValue:new_from_pool(
       query_type,
