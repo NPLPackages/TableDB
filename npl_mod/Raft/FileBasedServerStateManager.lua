@@ -89,6 +89,7 @@ function FileBasedServerStateManager:saveClusterConfiguration(configuration)
 end
 
 function FileBasedServerStateManager:persistState(serverState)
+  self.serverStateFile:seek(0)
   self.logger.info(
     "persistState>term:%f,commitIndex:%f,votedFor:%f",
     serverState.term,
@@ -99,30 +100,19 @@ function FileBasedServerStateManager:persistState(serverState)
   self.serverStateFile:WriteDouble(serverState.commitIndex)
   self.serverStateFile:WriteInt(serverState.votedFor)
   self.serverStateFile:SetEndOfFile()
-  self.serverStateFile:seek(0)
 end
 
 function FileBasedServerStateManager:readState()
-  self.serverStateFile:close()
-
-  local serverStateFile = ParaIO.open(self.serverStateFileName, "r")
-  if (serverStateFile:GetFileSize() == 0) then
-    self.serverStateFile = ParaIO.open(self.serverStateFileName, "rw")
-    assert(self.serverStateFile:IsValid(), "serverStateFile not Valid")
-    self.serverStateFile:seek(0)
+  self.serverStateFile:seek(0)
+  if (self.serverStateFile:GetFileSize() == 0) then
     self.logger.info("state file size == 0")
     return
   end
 
-  local term = serverStateFile:ReadDouble()
-  local commitIndex = serverStateFile:ReadDouble()
-  local votedFor = serverStateFile:ReadInt()
+  local term = self.serverStateFile:ReadDouble()
+  local commitIndex = self.serverStateFile:ReadDouble()
+  local votedFor = self.serverStateFile:ReadInt()
 
-  serverStateFile:close()
-
-  self.serverStateFile = ParaIO.open(self.serverStateFileName, "rw")
-  assert(self.serverStateFile:IsValid(), "serverStateFile not Valid")
-  self.serverStateFile:seek(0)
   return ServerState:new(term, commitIndex, votedFor)
 end
 

@@ -56,7 +56,7 @@ function SQLHandler:new(baseDir, useFile)
     threadName = g_threadName,
     logger = LoggerFactory.getLogger("SQLHandler"),
     -- record latest command for each client
-    latestCommand = -2,
+    latestCommand = {},
     collections = {}
   }
 
@@ -148,8 +148,7 @@ function SQLHandler:handle(data, callbackFunc)
   self.logger.trace(raftLogEntryValue)
 
   local this = self
-  local cbFunc =
-    function(err, data, re_exec)
+  local cbFunc = function(err, data, re_exec)
     local msg = {
       err = err,
       data = data,
@@ -172,12 +171,15 @@ function SQLHandler:handle(data, callbackFunc)
   --     cbFunc = callbackFunc;
   -- end
 
-  -- TODO: handle retry from the same client
-  -- if raftLogEntryValue.cb_index <= self.latestCommand then
-  --     self.logger.info("got a retry msg, %d <= %d", raftLogEntryValue.cb_index, self.latestCommand);
-  --     cbFunc(this.latestError, this.latestData, true);
-  --     return;
-  -- end
+  if tonumber(raftLogEntryValue.cb_index) <= (self.latestCommand[raftLogEntryValue.client_uid] or -2) then
+    self.logger.info(
+      "got a retry msg, %d <= %d",
+      raftLogEntryValue.cb_index,
+      self.latestCommand[raftLogEntryValue.client_uid]
+    )
+    cbFunc(this.latestError, this.latestData, true)
+    return
+  end
 
   -- TODO: handle leader transfer
   local config_path = raftLogEntryValue.db .. "/tabledb.config.xml"
@@ -226,7 +228,7 @@ function SQLHandler:handle(data, callbackFunc)
     end
   end
 
-  self.latestCommand = raftLogEntryValue.cb_index
+  self.latestCommand[raftLogEntryValue.client_uid] = tonumber(raftLogEntryValue.cb_index)
 end
 
 function SQLHandler:exit(code)

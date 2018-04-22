@@ -25,6 +25,11 @@ local RaftClient = commonlib.gettable("Raft.RaftClient")
 local LoggerFactory = NPL.load("(gl)npl_mod/Raft/LoggerFactory.lua")
 local logger = LoggerFactory.getLogger("RaftSqliteStore")
 
+NPL.load("(g1)npl_mod/Raft/uuid.lua")
+local uuid = commonlib.gettable("Raft.uuid")
+uuid.seed()
+
+
 local RaftSqliteStore =
   commonlib.inherit(commonlib.gettable("System.Database.Store"), commonlib.gettable("TableDB.RaftSqliteStore"))
 
@@ -83,6 +88,7 @@ function RaftSqliteStore:createRaftClient(baseDir, host, port, id, remoteThreadN
   self:setupRPC(remoteThreadName)
 
   raftClient = RaftClient:new(localAddress, RTDBRequestRPC, config, LoggerFactory)
+  raftClient.uid = uuid()
 
   self:connect(rootFolder)
 end
@@ -291,6 +297,7 @@ function RaftSqliteStore:connect(rootFolder, callbackFunc)
 
   local raftLogEntryValue =
     RaftLogEntryValue:new_from_pool(
+    raftClient.uid,
     query_type,
     rootFolder,
     nil,
@@ -320,9 +327,9 @@ function RaftSqliteStore:Send(query_type, query, callbackFunc)
   self:OneTimeInit()
   local index = self:PushCallback(callbackFunc)
   if (index) then
-    -- TODO: add raftClient uid
     local raftLogEntryValue =
       RaftLogEntryValue:new_from_pool(
+      raftClient.uid,
       query_type,
       self.collection.parent:GetRootFolder(),
       self.collection.name,

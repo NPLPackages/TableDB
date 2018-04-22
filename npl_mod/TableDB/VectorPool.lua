@@ -68,16 +68,16 @@ end
 -- Creates a new Vector, or reuses one that's no longer in use.
 -- @param x,y,z:
 -- returns from this function should only be used for one frame or tick, as after that they will be reused.
-function VectorPool:GetVector(query_type, db, collectionName, query, index, serverId, enableSyncMode, callbackThread)
+function VectorPool:GetVector(client_uid, query_type, db, collectionName, query, index, serverId, enableSyncMode, callbackThread)
 	local raftLogEntryValue
 
 	if (self.nextPoolIndex > self.listVectorRaftLogEntry:size()) then
 		raftLogEntryValue =
-			RaftLogEntryValue:new(query_type, db, collectionName, query, index, serverId, enableSyncMode, callbackThread)
+			RaftLogEntryValue:new(client_uid, query_type, db, collectionName, query, index, serverId, enableSyncMode, callbackThread)
 		self.listVectorRaftLogEntry:add(raftLogEntryValue)
 	else
 		raftLogEntryValue = self.listVectorRaftLogEntry:get(self.nextPoolIndex)
-		raftLogEntryValue:set(query_type, db, collectionName, query, index, serverId, enableSyncMode, callbackThread)
+		raftLogEntryValue:set(client_uid, query_type, db, collectionName, query, index, serverId, enableSyncMode, callbackThread)
 	end
 
 	self.nextPoolIndex = self.nextPoolIndex + 1
