@@ -2,7 +2,7 @@
 
 if [ "$1" == "client" ]; then
 	echo start a client 
-	rm -r ./client
+	rm -rf ./client
 	mkdir -p ./client/temp/test_raft_database
 	cp ./init-cluster.json ./client/cluster.json
 	cp ./tabledb.config.xml ./client/temp/test_raft_database/tabledb.config.xml
@@ -13,7 +13,7 @@ else
 	for i in 11 12 13
 	do
 	echo start server$i
-	rm -r ./server$i 
+	rm -rf ./server$i 
 	mkdir ./server$i
 	cp ./init-cluster.json ./server$i/cluster.json
 	echo server.id=$i > ./server$i/config.properties
