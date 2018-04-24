@@ -10,7 +10,7 @@ first U need
 `mklink /J npl_mod ..\npl_mod\`
 and
 use cmd `docker build -t tabledb .` to make tabledb image
-or use `ln -s` and `tar -czh . | docker build tabledb -` in linux
+or use `ln -s` and `tar -czh . | docker build -t tabledb -` in linux
 
 ### start 3 servers in windows
 run `setup_docker.bat`

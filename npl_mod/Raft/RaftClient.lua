@@ -27,7 +27,6 @@ local RaftMessageType = NPL.load("(gl)npl_mod/Raft/RaftMessageType.lua")
 local RaftClient = commonlib.gettable("Raft.RaftClient")
 
 function RaftClient:new(localAddress, RequestRPC, configuration, loggerFactory)
-  -- TODO: add raft client uid
   local o = {
     localAddress = localAddress,
     RequestRPC = RequestRPC,
