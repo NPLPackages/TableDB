@@ -102,12 +102,6 @@ function RaftSqliteStore:getRaftClient()
 end
 
 function RaftSqliteStore:ctor()
-  self.stats = {
-    select = 0,
-    update = 0,
-    insert = 0,
-    delete = 0
-  }
 end
 
 function RaftSqliteStore:init(collection, init_args)
@@ -168,7 +162,7 @@ function RaftSqliteStore:CheckTimedOutRequests()
 end
 
 local next_id = 0
-function getNextId()
+local function getNextId()
   next_id = next_id + 1
   return next_id
 end
@@ -261,27 +255,6 @@ end
 
 function RaftSqliteStore:GetCollection()
   return self.collection
-end
-
-function RaftSqliteStore:GetStats()
-  return self.stats
-end
-
--- add statistics for a given name
--- @param name: such as "select", "update", "insert", "delete"
--- @param count: if nil it is 1.
-function RaftSqliteStore:AddStat(name, count)
-  name = name or "unknown"
-  local stats = self:GetStats()
-  stats[name] = (stats[name] or 0) + (count or 1)
-end
-
--- get current count for a given stats name
--- @param name: such as "select", "update", "insert", "delete"
-function RaftSqliteStore:GetStat(name)
-  name = name or "unknown"
-  local stats = self:GetStats()
-  return (stats[name] or 0)
 end
 
 function RaftSqliteStore:InvokeCallback(callbackFunc, err, data)

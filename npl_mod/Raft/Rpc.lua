@@ -106,7 +106,7 @@ function Rpc:CheckTimedOutRequests()
 end
 
 local next_id = 0
-function getNextId()
+local function getNextId()
   next_id = next_id + 1
   return next_id
 end
