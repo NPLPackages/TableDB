@@ -91,14 +91,20 @@ end
 function FileBasedServerStateManager:persistState(serverState)
   self.serverStateFile:seek(0)
   self.logger.info(
-    "persistState>term:%f,commitIndex:%f,votedFor:%f",
+    "persistState>term:%f,commitIndex:%f,votedFor:%d,isLeader:%d",
     serverState.term,
     serverState.commitIndex,
-    serverState.votedFor
+    serverState.votedFor,
+    serverState.isLeader and 1 or 0
   )
   self.serverStateFile:WriteDouble(serverState.term)
   self.serverStateFile:WriteDouble(serverState.commitIndex)
   self.serverStateFile:WriteInt(serverState.votedFor)
+  if serverState.isLeader then
+    self.serverStateFile:WriteInt(1)
+  else
+    self.serverStateFile:WriteInt(0)
+  end
   self.serverStateFile:SetEndOfFile()
 end
 
@@ -112,8 +118,9 @@ function FileBasedServerStateManager:readState()
   local term = self.serverStateFile:ReadDouble()
   local commitIndex = self.serverStateFile:ReadDouble()
   local votedFor = self.serverStateFile:ReadInt()
+  local isLeader = self.serverStateFile:ReadInt()
 
-  return ServerState:new(term, commitIndex, votedFor)
+  return ServerState:new(term, commitIndex, votedFor, isLeader == 1)
 end
 
 function FileBasedServerStateManager:close()

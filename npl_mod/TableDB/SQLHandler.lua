@@ -112,8 +112,8 @@ function SQLHandler:processMessage(request)
   if not self.state then
     self.logger.debug("reading server state")
     self.state = self.stateManager:readState()
-    if not self.state then
-      self.logger.error("read server state failed!")
+    if not (self.state and self.state.isLeader) then
+      self.logger.error("I'm not a Leader")
       response.accepted = false
       response.destination = -1
       response.term = -1

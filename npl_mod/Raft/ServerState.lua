@@ -15,11 +15,12 @@ NPL.load("(gl)script/ide/commonlib.lua")
 
 local ServerState = commonlib.gettable("Raft.ServerState")
 
-function ServerState:new(t, c, v)
+function ServerState:new(t, c, v, l)
   local o = {
     term = t or 0,
     commitIndex = c or -1,
-    votedFor = v or 0
+    votedFor = v or 0,
+    isLeader = l
   }
   setmetatable(o, self)
   return o
