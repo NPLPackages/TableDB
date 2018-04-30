@@ -109,7 +109,9 @@ end
 function SQLHandler:processMessage(request)
   response.source = self.stateManager.serverId
 
-  if not self.state then
+  -- this is ad-hoc and fragile for leader re-election
+  -- but it will hurt the performance if we read file everytime
+  if not (self.state and self.state.isLeader) then
     self.logger.debug("reading server state")
     self.state = self.stateManager:readState()
     if not (self.state and self.state.isLeader) then
