@@ -23,8 +23,18 @@ if (is_binary_format) then
   memoryFile = ParaIO.open("<memory>", "w")
 end
 
-function RaftLogEntryValue:new(query_type, db, collectionName, query, index, serverId, enableSyncMode, callbackThread)
+function RaftLogEntryValue:new(
+  client_uid,
+  query_type,
+  db,
+  collectionName,
+  query,
+  index,
+  serverId,
+  enableSyncMode,
+  callbackThread)
   local o = {
+    client_uid = client_uid,
     query_type = query_type,
     db = db,
     collectionName = collectionName,
@@ -39,6 +49,7 @@ function RaftLogEntryValue:new(query_type, db, collectionName, query, index, ser
 end
 
 function RaftLogEntryValue:new_from_pool(
+  client_uid,
   query_type,
   db,
   collectionName,
@@ -48,6 +59,7 @@ function RaftLogEntryValue:new_from_pool(
   enableSyncMode,
   callbackThread)
   return VectorPool.GetSingleton():GetVector(
+    client_uid,
     query_type,
     db,
     collectionName,
@@ -59,7 +71,17 @@ function RaftLogEntryValue:new_from_pool(
   )
 end
 
-function RaftLogEntryValue:set(query_type, db, collectionName, query, index, serverId, enableSyncMode, callbackThread)
+function RaftLogEntryValue:set(
+  client_uid,
+  query_type,
+  db,
+  collectionName,
+  query,
+  index,
+  serverId,
+  enableSyncMode,
+  callbackThread)
+  self.client_uid = client_uid
   self.query_type = query_type
   self.db = db
   self.collectionName = collectionName
@@ -109,14 +131,15 @@ function RaftLogEntryValue:fromBytes(bytes)
       -- this is slow.. why?
       -- return RaftLogEntryValue:new_from_pool(t[1], t[2], t[3], t[4], t[5], t[6], t[7], t[8])
       local o = {
-        query_type = t[1],
-        db = t[2],
-        collectionName = t[3],
-        query = t[4],
-        cb_index = t[5],
-        serverId = t[6],
-        enableSyncMode = t[7],
-        callbackThread = t[8]
+        client_uid = t[1],
+        query_type = t[2],
+        db = t[3],
+        collectionName = t[4],
+        query = t[5],
+        cb_index = t[6],
+        serverId = t[7],
+        enableSyncMode = t[8],
+        callbackThread = t[9]
       }
       setmetatable(o, self)
       return o
@@ -151,14 +174,15 @@ function RaftLogEntryValue:toBytes()
     return bytes
   else
     -- encode into msg_
-    msg_[1] = self.query_type
-    msg_[2] = self.db
-    msg_[3] = self.collectionName
-    msg_[4] = self.query
-    msg_[5] = self.cb_index
-    msg_[6] = self.serverId
-    msg_[7] = self.enableSyncMode
-    msg_[8] = self.callbackThread
+    msg_[1] = self.client_uid
+    msg_[2] = self.query_type
+    msg_[3] = self.db
+    msg_[4] = self.collectionName
+    msg_[5] = self.query
+    msg_[6] = self.cb_index
+    msg_[7] = self.serverId
+    msg_[8] = self.enableSyncMode
+    msg_[9] = self.callbackThread
     return commonlib.serialize_compact(msg_)
   end
 end

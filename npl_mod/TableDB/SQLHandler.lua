@@ -55,7 +55,8 @@ function SQLHandler:new(baseDir, useFile)
     monitorPeriod = 50000,
     threadName = g_threadName,
     logger = LoggerFactory.getLogger("SQLHandler"),
-    latestCommand = -2,
+    -- record latest command for each client
+    latestCommand = {},
     collections = {}
   }
 
@@ -108,11 +109,13 @@ end
 function SQLHandler:processMessage(request)
   response.source = self.stateManager.serverId
 
-  if not self.state then
+  -- this is ad-hoc and fragile for leader re-election
+  -- but it will hurt the performance if we read file everytime
+  if not (self.state and self.state.isLeader) then
     self.logger.debug("reading server state")
     self.state = self.stateManager:readState()
-    if not self.state then
-      self.logger.error("read server state failed!")
+    if not (self.state and self.state.isLeader) then
+      self.logger.error("I'm not a Leader")
       response.accepted = false
       response.destination = -1
       response.term = -1
@@ -147,8 +150,7 @@ function SQLHandler:handle(data, callbackFunc)
   self.logger.trace(raftLogEntryValue)
 
   local this = self
-  local cbFunc =
-    function(err, data, re_exec)
+  local cbFunc = function(err, data, re_exec)
     local msg = {
       err = err,
       data = data,
@@ -171,12 +173,15 @@ function SQLHandler:handle(data, callbackFunc)
   --     cbFunc = callbackFunc;
   -- end
 
-  -- TODO: handle retry from the same client
-  -- if raftLogEntryValue.cb_index <= self.latestCommand then
-  --     self.logger.info("got a retry msg, %d <= %d", raftLogEntryValue.cb_index, self.latestCommand);
-  --     cbFunc(this.latestError, this.latestData, true);
-  --     return;
-  -- end
+  if tonumber(raftLogEntryValue.cb_index) <= (self.latestCommand[raftLogEntryValue.client_uid] or -2) then
+    self.logger.info(
+      "got a retry msg, %d <= %d",
+      raftLogEntryValue.cb_index,
+      self.latestCommand[raftLogEntryValue.client_uid]
+    )
+    cbFunc(this.latestError, this.latestData, true)
+    return
+  end
 
   -- TODO: handle leader transfer
   local config_path = raftLogEntryValue.db .. "/tabledb.config.xml"
@@ -225,7 +230,7 @@ function SQLHandler:handle(data, callbackFunc)
     end
   end
 
-  self.latestCommand = raftLogEntryValue.cb_index
+  self.latestCommand[raftLogEntryValue.client_uid] = tonumber(raftLogEntryValue.cb_index)
 end
 
 function SQLHandler:exit(code)

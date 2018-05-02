@@ -730,7 +730,9 @@ function RaftServer:becomeLeader()
   self:stopElectionTimer()
   self.role = ServerRole.Leader
   self.leader = self.id
+  self.state.isLeader = true
   self.serverToJoin = nil
+  self.context.serverStateManager:persistState(self.state)
   for _, server in pairs(self.peers) do
     server.nextLogIndex = self.logStore:getFirstAvailableIndex()
     server.snapshotSyncContext = nil
@@ -1281,15 +1283,15 @@ function RaftServer:handleExtendedResponseError(error)
             )
 
             --[[
-                        * In case of there are only two servers in the cluster, it safe to remove the server directly from peers
-                        * as at most one config change could happen at a time
-                        *  prove:
-                        *      assume there could be two config changes at a time
-                        *      this means there must be a leader after previous leader offline, which is impossible
-                        *      (no leader could be elected after one server goes offline in case of only two servers in a cluster)
-                        * so the bug https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
-                        * does not apply to cluster which only has two members
-                        ]]
+              * In case of there are only two servers in the cluster, it safe to remove the server directly from peers
+              * as at most one config change could happen at a time
+              *  prove:
+              *      assume there could be two config changes at a time
+              *      this means there must be a leader after previous leader offline, which is impossible
+              *      (no leader could be elected after one server goes offline in case of only two servers in a cluster)
+              * so the bug https://groups.google.com/forum/#!topic/raft-dev/t4xj6dJTP6E
+              * does not apply to cluster which only has two members
+              ]]
             --
             if (Rutils.table_size(self.peers) == 1) then
               local peer = self.peers[server:getId()]

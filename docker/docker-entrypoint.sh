@@ -14,7 +14,6 @@ if [ "$TABLEDB_MODE" = 'server' ]; then
 fi
 
 if [ "$TABLEDB_MODE" = 'client' ]; then 
-
-	npl bootstrapper="npl_mod/TableDBApp/App.lua" servermode="true" dev="../../" raftMode="client" baseDir="" clientMode="appendEntries" 
+	npl bootstrapper="npl_mod/TableDBApp/TableDBClient.lua" servermode="true" dev="../../" raftMode="client" baseDir="" clientMode="appendEntries" 
 fi
 

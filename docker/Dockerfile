@@ -1,6 +1,6 @@
 # 
 
-FROM xuntian/npl-runtime:20171103
+FROM xuntian/npl-runtime:latest
 
 MAINTAINER xuntian "li.zq@foxmail.com"
 
